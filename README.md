@@ -9,6 +9,30 @@
 
 ---
 
+## 怎么跑起来
+
+两种方式，都不需要手动拼任何界面：
+
+**① 编辑器窗口（最快，不用进 Play 模式）**
+
+> 菜单 `TCGinFU → 战斗沙盒`
+
+**② 可运行场景**
+
+> 菜单 `TCGinFU → 生成战斗沙盒场景` → 自动生成并打开 `Assets/Scenes/BattleSandbox.unity` → 按 Play
+
+两边是同一套界面。可以调种子、队伍人数（1–4）、敌人预设（木桩 / 哥布林 / 石像鬼 / 深渊领主 / 哥布林小队），
+点手牌出牌或贴充能，宣告升变，敌人阶段打时机牌响应，右侧实时看战报。
+`自动出牌` 让傻瓜 AI 替当前待行动的角色打完手牌，`自动打完` 直接演完整局。
+
+**同一个种子必定重现完全相同的一局**（洗牌与骰点都是确定性的），所以发现规则问题时把种子记下来就能复现。
+
+> 沙盒刻意用 IMGUI 而不是 uGUI：同一份绘制代码在编辑器窗口和 Play 模式里都能跑，
+> 不用拼 Canvas / 预制体 / 事件系统。这是**验规则的工具，不是游戏 UI**——
+> 正式表现层等 [`rulings_v0_5.md`](Assets/docs/rulings_v0_5.md) 里标 ⚠ 的几条定稿后再做。
+
+---
+
 ## 当前进度
 
 规则书 v0.5 的**战斗核心规则引擎**已完成并通过测试（140 个单元/集成测试）。表现层尚未开始。
@@ -18,9 +42,18 @@
 | 规则引擎（轮次、出牌、升变、伤害、构筑校验） | ✅ 已完成 |
 | 样例内容（30 张卡组 + 形态组 + 三档敌人） | ✅ 已完成 |
 | 战报渲染 `BattleLog` | ✅ 已完成 |
+| 调试沙盒（编辑器窗口 + 可运行场景） | ✅ 已完成 |
 | ScriptableObject 数据层 | ⚠ 代码已就位，但还没有实际资产，链路未实跑 |
-| UI / 表现层 | ⬜ 未开始 |
+| 正式 UI / 表现层 | ⬜ 未开始 |
 | 联网 | ⬜ 未开始 |
+
+沙盒里傻瓜 AI 自动打完的结果（种子 20251117），可以看出难度曲线是成立的：
+
+| 敌人 | 1 人 | 2 人 | 3 人 | 4 人 |
+| ----- | ----- | ----- | ----- | ----- |
+| 哥布林 | 胜 4 轮 | 胜 4 轮 | 胜 4 轮 | 胜 1 轮 |
+| 石像鬼（精英） | 胜 12 轮 | 胜 7 轮 | 胜 5 轮 | 胜 4 轮 |
+| 深渊领主（首领） | **负** 3 轮 | **负** 6 轮 | 胜 10 轮 | 胜 8 轮 |
 
 一局真实战斗的战报长这样（`BattleLog.Format(engine)`）：
 
@@ -59,10 +92,12 @@
 
 ```
 Assets/Scripts/
-  Core/        TCGinFU.Core      规则引擎（零 Unity 依赖）
-  Content/     TCGinFU.Content   样例卡组、敌人、行为钩子（零 Unity 依赖）
-  Data/        TCGinFU.Data      ScriptableObject 资产 → 烘焙成 Core 的 POCO
-  Tests/       TCGinFU.Core.Tests  EditMode 测试
+  Core/        TCGinFU.Core           规则引擎（零 Unity 依赖）
+  Content/     TCGinFU.Content        样例卡组、敌人、行为钩子（零 Unity 依赖）
+  Data/        TCGinFU.Data           ScriptableObject 资产 → 烘焙成 Core 的 POCO
+  Sandbox/     TCGinFU.Sandbox        调试沙盒（IMGUI）
+    Editor/    TCGinFU.Sandbox.Editor 编辑器窗口 + 场景生成
+  Tests/       TCGinFU.Core.Tests     EditMode 测试
 ```
 
 `Core` 与 `Content` 都设了 `noEngineReferences: true`，不引用 `UnityEngine`。

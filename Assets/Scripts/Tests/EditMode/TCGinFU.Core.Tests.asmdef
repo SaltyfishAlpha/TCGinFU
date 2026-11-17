@@ -4,6 +4,7 @@
     "references": [
         "TCGinFU.Core",
         "TCGinFU.Content",
+        "TCGinFU.Sandbox",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

@@ -1,0 +1,20 @@
+{
+    "name": "TCGinFU.Sandbox.Editor",
+    "rootNamespace": "TCGinFU.Sandbox.Editor",
+    "references": [
+        "TCGinFU.Core",
+        "TCGinFU.Content",
+        "TCGinFU.Sandbox"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
