@@ -1,0 +1,37 @@
+# 统一行尾：仓库内一律存 LF，检出时由各人的 core.autocrlf 决定
+# 没有这一行时，Windows 上 autocrlf=true 会让同一份文件在不同机器上产生整文件 diff
+* text=auto
+
+# ─── Unity YAML 资产 ───
+# 强制 LF，并走 Unity 自带的 YAML 合并工具（未配置 unityyamlmerge 时 git 会回退到默认合并）
+*.unity        text eol=lf merge=unityyamlmerge
+*.prefab       text eol=lf merge=unityyamlmerge
+*.asset        text eol=lf merge=unityyamlmerge
+*.meta         text eol=lf merge=unityyamlmerge
+*.mat          text eol=lf merge=unityyamlmerge
+*.anim         text eol=lf merge=unityyamlmerge
+*.controller   text eol=lf merge=unityyamlmerge
+*.physicMaterial text eol=lf merge=unityyamlmerge
+
+*.asmdef       text eol=lf
+*.cs           text eol=lf diff=csharp
+*.shader       text eol=lf
+*.md           text eol=lf
+*.json         text eol=lf
+
+# ─── 二进制 ───
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.psd  binary
+*.tga  binary
+*.fbx  binary
+*.obj  binary
+*.wav  binary
+*.mp3  binary
+*.ogg  binary
+*.ttf  binary
+*.otf  binary
+*.dll  binary
+*.unitypackage binary

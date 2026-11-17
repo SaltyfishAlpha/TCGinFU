@@ -1,0 +1,136 @@
+using System.Collections.Generic;
+using System.Linq;
+using TCGinFU.Core;
+
+namespace TCGinFU.Core.Tests
+{
+    /// <summary>测试用的建卡与建局快捷方法。</summary>
+    internal static class TestFactory
+    {
+        public static CharacterSheet Sheet(
+            string name = "测试角色",
+            int level = 5,
+            DieRank might = DieRank.D8,
+            DieRank insight = DieRank.D6,
+            DieRank dexterity = DieRank.D8,
+            DieRank willpower = DieRank.D6)
+        {
+            // 多职业共享等级：每个职业最多 10 级，按需要开新职业凑够总等级
+            var classes = new List<ClassLevel>();
+            int remaining = level;
+            int index = 0;
+            while (remaining > 0)
+            {
+                int take = System.Math.Min(remaining, ClassLevel.MaxPerClass);
+                classes.Add(new ClassLevel($"职业{index++}", take));
+                remaining -= take;
+            }
+
+            return new CharacterSheet(name, classes, new AttributeDice(might, insight, dexterity, willpower));
+        }
+
+        public static PlayerCharacter Player(
+            string id = "p1",
+            CharacterSheet sheet = null,
+            int chargeCapacity = 2,
+            WeaponProfile weapon = null,
+            ArmorProfile armor = null,
+            int? hp = null,
+            int? mp = null)
+            => new(id, sheet ?? Sheet(), chargeCapacity, hp, mp, weapon, armor);
+
+        public static Enemy Enemy(
+            string id = "e1",
+            int hp = 100,
+            EnemyRank rank = EnemyRank.Normal,
+            IEnumerable<EnemyIntent> intents = null)
+        {
+            var enemy = new Enemy(id, id, hp, rank);
+            List<EnemyIntent> list = intents?.ToList() ?? new List<EnemyIntent>();
+            enemy.IntentPlanner = (_, _) => list;
+            return enemy;
+        }
+
+        public static EnemyIntent Attack(int damage, DamageElement element = DamageElement.Physical)
+            => new("攻击", IntentTargeting.DefaultSingle) { Damage = damage, Element = element };
+
+        public static CardDefinition StrikeCard(
+            string id = "strike",
+            int apCost = 1,
+            int mpCost = 0,
+            int damage = 5,
+            bool hasCrit = false,
+            params AttributeColor[] colors)
+            => new(id, id, CardCategory.Weapon, CardKind.Skill)
+            {
+                ApCost = apCost,
+                MpCost = mpCost,
+                HasCrit = hasCrit,
+                Colors = colors.Length > 0 ? colors : new[] { AttributeColor.Might },
+                Effects = new[] { EffectData.Damage(ValueExpr.Flat(damage)) },
+            };
+
+        public static CardDefinition FormStrike(string id = "form_strike", int bonus = 4)
+            => new(id, id, CardCategory.Class, CardKind.Form)
+            {
+                ApCost = 1,
+                Colors = new[] { AttributeColor.Might },
+                Effects = new[] { EffectData.Damage(ValueExpr.FormAttack(bonus)) },
+            };
+
+        public static CardDefinition TransformCard(
+            string id = "transform",
+            string classId = "浪客",
+            TransformTrigger trigger = TransformTrigger.Immediate)
+            => new(id, id, CardCategory.Class, CardKind.Transform)
+            {
+                ClassId = classId,
+                TransformTrigger = trigger,
+                Colors = new[] { AttributeColor.Dexterity },
+            };
+
+        public static CardDefinition FillerCard(string id)
+            => new(id, id, CardCategory.Class, CardKind.Skill) { ApCost = 1 };
+
+        /// <summary>给角色的主卡组塞 n 张占位牌，让抽牌不会抽空。</summary>
+        public static void FillDeck(PlayerCharacter player, int count, CardDefinition def = null)
+        {
+            def ??= FillerCard("filler");
+            for (int i = 0; i < count; i++)
+            {
+                player.Zones.Deck.AddBottom(new CardInstance(def, player.Id));
+            }
+        }
+
+        public static CardInstance AddToHand(PlayerCharacter player, CardDefinition def)
+        {
+            var card = new CardInstance(def, player.Id);
+            player.Zones.Hand.AddBottom(card);
+            return card;
+        }
+
+        public static BattleState State(
+            IRng rng,
+            IEnumerable<(PlayerCharacter, Row)> players,
+            IEnumerable<(Enemy, Row)> enemies)
+            => BattleSetup.Create(rng, players, enemies);
+
+        /// <summary>一名前排玩家 + 一只前排小怪的最小局面。</summary>
+        public static (BattleEngine engine, PlayerCharacter player, Enemy enemy) Duel(
+            IRng rng = null,
+            PlayerCharacter player = null,
+            Enemy enemy = null)
+        {
+            rng ??= new XorShift32Rng(1);
+            player ??= Player();
+            enemy ??= Enemy();
+
+            BattleState state = BattleSetup.Create(
+                rng,
+                new[] { (player, Row.Front) },
+                new[] { (enemy, Row.Front) });
+
+            return (new BattleEngine(state), player, enemy);
+        }
+    }
+}
