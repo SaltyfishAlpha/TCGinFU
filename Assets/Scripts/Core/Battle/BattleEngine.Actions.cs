@@ -118,6 +118,7 @@ namespace TCGinFU.Core
                 ctx.Crit = CritResolver.Roll(State.Rng, actor.Sheet.Dice, def.Colors, CritResistFor(chosenTarget));
             }
 
+            State.Stats.Add(BattleStatKeys.CardsPlayed, actor.Id);
             Emit(new BattleEvent(BattleEventType.CardPlayed, actor.Id, chosenTarget?.Id)
             {
                 CardId = def.Id,

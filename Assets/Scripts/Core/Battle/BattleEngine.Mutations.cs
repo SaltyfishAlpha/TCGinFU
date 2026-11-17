@@ -20,6 +20,10 @@ namespace TCGinFU.Core
 
             DamageResult result = DamageResolver.Resolve(source, target, amount, element, crit);
 
+            State.Stats.Add(BattleStatKeys.DamageDealt, source?.Id, result.HpLost);
+            if (result.IsCrit) State.Stats.Add(BattleStatKeys.CritsDealt, source?.Id);
+            if (result.IsSuperCrit) State.Stats.Add(BattleStatKeys.SuperCritsDealt, source?.Id);
+
             Emit(new BattleEvent(BattleEventType.DamageDealt, source?.Id, target.Id)
             {
                 Amount = result.HpLost,
@@ -36,7 +40,11 @@ namespace TCGinFU.Core
             if (result.TargetWentDown)
             {
                 Emit(new BattleEvent(BattleEventType.CombatantDown, target.Id, target.Id) { Round = State.Round });
-                if (target is Enemy enemy) enemy.ClearIntents();
+                if (target is Enemy enemy)
+                {
+                    State.Stats.Add(BattleStatKeys.EnemiesDowned, source?.Id);
+                    enemy.ClearIntents();
+                }
                 State.CheckOutcome();
             }
 
@@ -175,6 +183,7 @@ namespace TCGinFU.Core
             if (token == null) return false;
 
             ReturnToOwnerDiscard(token.Card);
+            State.Stats.Add(BattleStatKeys.ChargesSpent, player.Id);
             Emit(new BattleEvent(BattleEventType.ChargeSpent, player.Id, token.OwnerId)
             {
                 CardId = token.Card.Definition.Id,

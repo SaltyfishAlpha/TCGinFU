@@ -104,7 +104,9 @@ namespace TCGinFU.Core
         {
             if (string.IsNullOrEmpty(data.StatusId)) return;
             int stacks = ctx.Resolve(data.Amount);
-            ctx.Engine.ApplyStatus(target, new StatusEffect(data.StatusId, data.Duration, stacks < 1 ? 1 : stacks));
+            ctx.Engine.ApplyStatus(
+                target,
+                ctx.Engine.Statuses.Create(data.StatusId, data.Duration, stacks < 1 ? 1 : stacks));
         }
     }
 

@@ -3,6 +3,7 @@
     "rootNamespace": "TCGinFU.Core.Tests",
     "references": [
         "TCGinFU.Core",
+        "TCGinFU.Content",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

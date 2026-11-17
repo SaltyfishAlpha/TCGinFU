@@ -29,6 +29,9 @@ namespace TCGinFU.Core
         public Battlefield PlayerField { get; } = new();
         public Battlefield EnemyField { get; } = new();
 
+        /// <summary>本局累计统计，供条件型升变牌与卡面词条判定前置条件。</summary>
+        public BattleStats Stats { get; } = new();
+
         /// <summary>当前轮次，战斗开始后从 1 计。</summary>
         public int Round { get; internal set; }
 

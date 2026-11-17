@@ -20,16 +20,22 @@ namespace TCGinFU.Core
         private (Enemy Enemy, EnemyIntent Intent)? _currentIntent;
         private List<Combatant> _currentIntentTargets = new();
 
-        public BattleEngine(BattleState state, EffectRegistry effects = null, BehaviourRegistry behaviours = null)
+        public BattleEngine(
+            BattleState state,
+            EffectRegistry effects = null,
+            BehaviourRegistry behaviours = null,
+            StatusRegistry statuses = null)
         {
             State = state ?? throw new ArgumentNullException(nameof(state));
             Effects = effects ?? EffectRegistry.CreateDefault();
             Behaviours = behaviours ?? new BehaviourRegistry();
+            Statuses = statuses ?? new StatusRegistry();
         }
 
         public BattleState State { get; }
         public EffectRegistry Effects { get; }
         public BehaviourRegistry Behaviours { get; }
+        public StatusRegistry Statuses { get; }
 
         public IReadOnlyList<BattleEvent> Events => _events;
         public PendingDecision Pending { get; private set; } = PendingDecision.None;
