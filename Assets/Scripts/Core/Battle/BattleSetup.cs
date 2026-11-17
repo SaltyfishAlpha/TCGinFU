@@ -21,6 +21,8 @@ namespace TCGinFU.Core
 
             foreach ((PlayerCharacter player, Row row) in playerList)
             {
+                // 充能区容量取决于全队人数（§4.1），只有到这里才知道，统一重设一遍
+                player.Zones.Charges.SetCapacity(state.ChargeCapacity);
                 state.PlayerField.Place(player, row);
             }
 

@@ -10,10 +10,13 @@ namespace TCGinFU.Core
     {
         public const int ApPerRound = 3;
 
+        /// <param name="chargeCapacity">
+        /// 临时值即可：<see cref="BattleSetup.Create"/> 会按全队实际人数重设成 max(人数-1, 2)。
+        /// </param>
         public PlayerCharacter(
             string id,
             CharacterSheet sheet,
-            int chargeCapacity,
+            int chargeCapacity = 2,
             int? currentHp = null,
             int? currentMp = null,
             WeaponProfile weapon = null,

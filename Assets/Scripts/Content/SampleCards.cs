@@ -157,26 +157,35 @@ namespace TCGinFU.Content
 
         // ───────────────────────── 武器牌 ─────────────────────────
 
-        /// <summary>短弓速射：单手武器，低费高频（§7.1）。</summary>
+        /// <summary>
+        /// 短弓速射：低费高频。这张牌同时是**装备槽里那把弓的定义**——
+        /// <c>WeaponProfile.FromCard</c> 从它派生装备档案，所以武器数值只有这一处（§3.2）。
+        /// 一阶基础伤害 7 = ⌊FU 原固定伤害 8 ÷ 2⌋ + 3。
+        /// </summary>
         public static readonly CardDefinition ShortbowShot =
             new("wpn_shortbow_shot", "短弓速射", CardCategory.Weapon, CardKind.Skill)
             {
                 Colors = new[] { AttributeColor.Dexterity },
                 ApCost = 1,
                 WeaponBaseDamage = 7,
+                TwoHanded = true,
                 Effects = new[]
                 {
                     EffectData.Damage(new ValueExpr(ValueSource.WeaponDamage)),
                 },
             };
 
-        /// <summary>重劈：双手武器，高费高单发（§7.1）。</summary>
-        public static readonly CardDefinition HeavySwing =
-            new("wpn_heavy_swing", "重劈", CardCategory.Weapon, CardKind.Skill)
+        /// <summary>
+        /// 贯穿狙击：同一把弓的高费高单发用法（§7.1）。
+        /// 伤害取装备槽里武器的数值，所以换上高阶弓后这张牌自动变强。
+        /// </summary>
+        public static readonly CardDefinition AimedShot =
+            new("wpn_aimed_shot", "贯穿狙击", CardCategory.Weapon, CardKind.Skill)
             {
-                Colors = new[] { AttributeColor.Might },
+                Colors = new[] { AttributeColor.Dexterity },
                 ApCost = 2,
                 WeaponBaseDamage = 7,
+                TwoHanded = true,
                 HasCrit = true,
                 Effects = new[]
                 {

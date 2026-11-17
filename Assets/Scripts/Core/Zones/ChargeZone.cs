@@ -30,7 +30,20 @@ namespace TCGinFU.Core
 
         public ChargeZone(int capacity) => Capacity = capacity;
 
-        public int Capacity { get; }
+        /// <summary>
+        /// 容量 = max(玩家人数 - 1, 2)，所以要等全队到齐才能确定。
+        /// <see cref="BattleSetup"/> 在建局时按实际人数统一重设，避免调用方手填错。
+        /// </summary>
+        public int Capacity { get; private set; }
+
+        internal void SetCapacity(int capacity)
+        {
+            Capacity = capacity;
+
+            // 缩容时把超出的最早几个退还给原持有者，由调用方处理
+            while (_tokens.Count > Capacity) _tokens.RemoveAt(0);
+        }
+
         public int Count => _tokens.Count;
         public IReadOnlyList<ChargeToken> Tokens => _tokens;
 

@@ -24,7 +24,7 @@ namespace TCGinFU.Content
 
             // ── 武器牌 6 张 ──
             Add(deck, SampleCards.ShortbowShot, 3);
-            Add(deck, SampleCards.HeavySwing, 3);
+            Add(deck, SampleCards.AimedShot, 3);
 
             // ── 防具牌 6 张 ──
             Add(deck, SampleCards.Block, 3);
@@ -72,7 +72,7 @@ namespace TCGinFU.Content
             return registry;
         }
 
-        /// <summary>样例角色：5 级浪客 3 + 神射手 2，持短弓与皮甲。</summary>
+        /// <summary>样例角色：初始 5 级，浪客 3 + 神射手 2（§2.1 的建卡起点）。</summary>
         public static CharacterSheet CreateSheet(string name = "影刃")
             => new(
                 name,
@@ -83,17 +83,36 @@ namespace TCGinFU.Content
                 },
                 new AttributeDice(DieRank.D6, DieRank.D8, DieRank.D10, DieRank.D6));
 
-        public static WeaponProfile Shortbow => new("短弓", 7);
-        public static ArmorProfile LeatherArmor => new("皮甲", 8);
+        /// <summary>
+        /// 精通版样例角色：浪客满 10 级，因此有资格带英雄技能牌「千刃乱舞」（§3.3）。
+        /// 20/40 级各升过 1 次属性骰，所以敏捷到了 d12。
+        /// </summary>
+        public static CharacterSheet CreateMasteredSheet(string name = "影刃·极")
+            => new(
+                name,
+                new[]
+                {
+                    new ClassLevel(SampleCards.RogueClass, 10),
+                    new ClassLevel("神射手", 10),
+                    new ClassLevel("武器大师", 10),
+                    new ClassLevel("游侠", 10),
+                    new ClassLevel("刺客", 10),
+                },
+                new AttributeDice(DieRank.D6, DieRank.D10, DieRank.D12, DieRank.D6));
+
+        /// <summary>装备槽里的武器与防具直接由对应的卡牌定义派生，数值不另记一份（§3.2）。</summary>
+        public static WeaponProfile Shortbow => WeaponProfile.FromCard(SampleCards.ShortbowShot);
+
+        public static ArmorProfile LeatherArmor => ArmorProfile.FromCard(SampleCards.Block);
 
         /// <summary>按样例卡组装好一名可直接入场的角色。</summary>
         public static PlayerCharacter CreatePlayer(
             string id,
-            int chargeCapacity,
             IRng rng,
             string name = "影刃",
             int? hp = null,
-            int? mp = null)
+            int? mp = null,
+            int chargeCapacity = 2)
         {
             var player = new PlayerCharacter(
                 id, CreateSheet(name), chargeCapacity, hp, mp, Shortbow, LeatherArmor);

@@ -43,11 +43,20 @@ namespace TCGinFU.Core
         /// <summary>所属职业（职业牌、升变牌、形态牌、英雄牌用，决定形态卡组的配对）。</summary>
         public string ClassId { get; init; }
 
-        /// <summary>武器牌的一阶基础伤害。</summary>
+        /// <summary>武器牌的一阶基础伤害（3–10 点）。装备这张牌时由它派生 <see cref="WeaponProfile"/>。</summary>
         public int WeaponBaseDamage { get; init; }
 
-        /// <summary>防具牌的一阶基础护盾。</summary>
+        /// <summary>武器牌造成的伤害属性。</summary>
+        public DamageElement Element { get; init; } = DamageElement.Physical;
+
+        /// <summary>双手武器偏向高费高单发，单手偏向低费高频率（§7.1）。</summary>
+        public bool TwoHanded { get; init; }
+
+        /// <summary>防具牌的一阶基础护盾（6–10 点）。装备这张牌时由它派生 <see cref="ArmorProfile"/>。</summary>
         public int ArmorBaseShield { get; init; }
+
+        /// <summary>防具牌提供的护盾种类。</summary>
+        public ShieldKind ShieldKind { get; init; } = ShieldKind.Physical;
 
         /// <summary>升变牌的触发方式（§6.1）。</summary>
         public TransformTrigger TransformTrigger { get; init; } = TransformTrigger.Conditional;

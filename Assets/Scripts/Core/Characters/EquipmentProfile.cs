@@ -33,6 +33,21 @@ namespace TCGinFU.Core
 
         public int DamageAt(EquipTier tier) => Tier1BaseDamage + EquipMath.TierBonus(tier);
 
+        /// <summary>
+        /// 从一张武器牌定义建装备档案（§3.2：武器牌的卡池来源就是装备槽里的武器）。
+        /// 这样「装备什么武器」和「卡面印多少伤害」只有一处定义，不会各记一份然后对不上。
+        /// </summary>
+        public static WeaponProfile FromCard(CardDefinition card)
+        {
+            if (card == null) throw new System.ArgumentNullException(nameof(card));
+            if (card.Category != CardCategory.Weapon)
+            {
+                throw new System.ArgumentException($"「{card.Name}」不是武器牌", nameof(card));
+            }
+
+            return new WeaponProfile(card.Name, card.WeaponBaseDamage, card.Element, card.TwoHanded);
+        }
+
         public static readonly WeaponProfile Unarmed = new("徒手", 3);
     }
 
@@ -54,6 +69,18 @@ namespace TCGinFU.Core
         public ShieldKind Kind { get; }
 
         public int ShieldAt(EquipTier tier) => Tier1BaseShield + EquipMath.TierBonus(tier);
+
+        /// <summary>从一张防具牌定义建装备档案（§3.2）。</summary>
+        public static ArmorProfile FromCard(CardDefinition card)
+        {
+            if (card == null) throw new System.ArgumentNullException(nameof(card));
+            if (card.Category != CardCategory.Armor)
+            {
+                throw new System.ArgumentException($"「{card.Name}」不是防具牌", nameof(card));
+            }
+
+            return new ArmorProfile(card.Name, card.ArmorBaseShield, card.ShieldKind);
+        }
 
         public static readonly ArmorProfile Unarmored = new("无防具", 6);
     }

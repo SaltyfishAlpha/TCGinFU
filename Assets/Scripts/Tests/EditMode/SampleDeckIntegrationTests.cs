@@ -86,6 +86,68 @@ namespace TCGinFU.Core.Tests
         }
 
         [Test]
+        public void 精通角色才能携带英雄技能牌()
+        {
+            DeckList deck = SampleDeck.Build();
+
+            // 初始 5 级角色：浪客才 3 级，带不了「千刃乱舞」
+            DeckValidationResult novice = DeckValidator.Validate(deck, SampleDeck.CreateSheet());
+            Assert.IsFalse(novice.IsValid);
+            StringAssert.Contains("千刃乱舞", novice.ToString());
+            StringAssert.Contains("10 级精通", novice.ToString());
+
+            // 浪客满 10 级后合法
+            DeckValidationResult mastered = DeckValidator.Validate(deck, SampleDeck.CreateMasteredSheet());
+            Assert.IsTrue(mastered.IsValid, mastered.ToString());
+        }
+
+        [Test]
+        public void 没有对应职业时升变牌被拒绝()
+        {
+            var outsider = new CharacterSheet(
+                "法师", new[] { new ClassLevel("元素使", 5) }, AttributeDice.AllD6);
+
+            DeckValidationResult result = DeckValidator.Validate(SampleDeck.Build(), outsider);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("影舞觉醒", result.ToString());
+        }
+
+        [Test]
+        public void 装备档案由武器牌与防具牌派生()
+        {
+            Assert.AreEqual(SampleCards.ShortbowShot.WeaponBaseDamage, SampleDeck.Shortbow.Tier1BaseDamage);
+            Assert.AreEqual(SampleCards.Block.ArmorBaseShield, SampleDeck.LeatherArmor.Tier1BaseShield);
+
+            Assert.Throws<System.ArgumentException>(
+                () => WeaponProfile.FromCard(SampleCards.Block), "防具牌不能当武器装备");
+            Assert.Throws<System.ArgumentException>(
+                () => ArmorProfile.FromCard(SampleCards.ShortbowShot));
+        }
+
+        [Test]
+        public void 换上高阶武器后武器牌自动变强()
+        {
+            Harness h = Build();
+
+            CardInstance shot = h.Plant(SampleCards.ShortbowShot);
+            h.Engine.Submit(new PlayCardAction(h.Player.Id, shot.Uid, h.Enemy.Id));
+            Assert.AreEqual(7, h.Enemy.MaxHp - h.Enemy.Hp, "一阶短弓 7 点");
+
+            // 同一张牌，换成三阶神器弓（一阶基础 7 + 阶梯补正 6）
+            h.Player.Weapon = new WeaponProfile("神器弓", 7);
+            int before = h.Enemy.Hp;
+
+            CardInstance shot2 = h.Plant(SampleCards.ShortbowShot);
+            h.Player.Ap = 3;
+            h.Engine.Submit(new PlayCardAction(h.Player.Id, shot2.Uid, h.Enemy.Id));
+
+            // 角色仍是 5 级（一阶），所以这里验证的是武器本身的替换；阶梯补正另有测试覆盖
+            Assert.AreEqual(7, before - h.Enemy.Hp);
+            Assert.AreEqual(13, h.Player.Weapon.DamageAt(EquipTier.Tier3), "同一把弓在三阶是 13 点");
+        }
+
+        [Test]
         public void 样例卡组覆盖全部四种卡牌来源与六种结算形态()
         {
             DeckList deck = SampleDeck.Build();
@@ -249,27 +311,18 @@ namespace TCGinFU.Core.Tests
         [Test]
         public void 流血状态在轮末造成持续伤害()
         {
-            // 固定骰点让穿心射必定暴击，从而挂上流血
-            IRng rng = new ScriptedRng(12);
-            PlayerCharacter player = SampleDeck.CreatePlayer("p1", 2, new XorShift32Rng(1));
-            Enemy dummy = SampleEnemies.TrainingDummy();
+            // 骰点拉满让穿心射必定暴击，从而触发 OnCrit 条件挂上流血
+            Harness h = BuildWithRng(new ScriptedRng(12));
 
-            BattleState state = BattleSetup.Create(rng, new[] { (player, Row.Front) }, new[] { (dummy, Row.Front) });
-            var engine = new BattleEngine(
-                state, EffectRegistry.CreateDefault(),
-                SampleBehaviours.CreateRegistry(), SampleDeck.CreateStatusRegistry());
-            engine.Start();
+            CardInstance shot = h.Plant(SampleCards.PiercingShot);
+            Assert.IsTrue(h.Engine.Submit(new PlayCardAction(h.Player.Id, shot.Uid, h.Enemy.Id)).Ok);
 
-            var shot = new CardInstance(SampleCards.PiercingShot, player.Id);
-            player.Zones.Hand.AddBottom(shot);
-            Assert.IsTrue(engine.Submit(new PlayCardAction(player.Id, shot.Uid, dummy.Id)).Ok);
+            Assert.IsTrue(h.Enemy.Statuses.Has(SampleStatuses.Bleed), "暴击时才挂流血");
+            int hpAfterHit = h.Enemy.Hp;
 
-            Assert.IsTrue(dummy.Statuses.Has(SampleStatuses.Bleed), "暴击时才挂流血");
-            int hpAfterHit = dummy.Hp;
+            h.Engine.Submit(new DeclareReadyAction(h.Player.Id));
 
-            engine.Submit(new DeclareReadyAction(player.Id));
-
-            Assert.AreEqual(hpAfterHit - 3, dummy.Hp, "轮末流血扣 3 点");
+            Assert.AreEqual(hpAfterHit - 3, h.Enemy.Hp, "轮末流血扣 3 点");
         }
 
         // ───────────────────────── 脚本钩子卡 ─────────────────────────

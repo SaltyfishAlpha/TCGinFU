@@ -26,7 +26,11 @@ namespace TCGinFU.Core
             (CardCategory.Treasure, "秘宝牌", 0, 6),
         };
 
-        public static DeckValidationResult Validate(DeckList deck)
+        /// <param name="sheet">
+        /// 可选。传入时额外校验与角色相关的规则（英雄技能牌的 10 级精通要求）；
+        /// 不传则只做纯卡表层面的校验，方便在没有具体角色的编辑器里用。
+        /// </param>
+        public static DeckValidationResult Validate(DeckList deck, CharacterSheet sheet = null)
         {
             var result = new DeckValidationResult();
             if (deck == null)
@@ -62,7 +66,42 @@ namespace TCGinFU.Core
             }
 
             ValidateFormDecks(deck, result);
+            if (sheet != null) ValidateAgainstCharacter(deck, sheet, result);
             return result;
+        }
+
+        /// <summary>§3.3：英雄技能牌只有在该职业达到 10 级精通时才能获得。</summary>
+        private static void ValidateAgainstCharacter(DeckList deck, CharacterSheet sheet, DeckValidationResult result)
+        {
+            IEnumerable<CardDefinition> allCards = deck.MainDeck.Concat(deck.FormDecks.Values.SelectMany(f => f));
+
+            foreach (CardDefinition hero in allCards.Where(c => c.Kind == CardKind.Hero).Distinct())
+            {
+                if (hero.ClassId == null)
+                {
+                    result.Errors.Add($"英雄技能牌「{hero.Name}」没有标注所属职业");
+                    continue;
+                }
+
+                if (!sheet.HasClass(hero.ClassId))
+                {
+                    result.Errors.Add($"英雄技能牌「{hero.Name}」要求职业 {hero.ClassId}，但角色没有该职业");
+                }
+                else if (sheet.LevelOf(hero.ClassId) < ClassLevel.MaxPerClass)
+                {
+                    result.Errors.Add(
+                        $"英雄技能牌「{hero.Name}」要求 {hero.ClassId} 达到 {ClassLevel.MaxPerClass} 级精通，"
+                        + $"当前 {sheet.LevelOf(hero.ClassId)} 级");
+                }
+            }
+
+            foreach (CardDefinition transform in deck.TransformCards.Distinct())
+            {
+                if (transform.ClassId != null && !sheet.HasClass(transform.ClassId))
+                {
+                    result.Errors.Add($"升变牌「{transform.Name}」要求职业 {transform.ClassId}，但角色没有该职业");
+                }
+            }
         }
 
         private static void ValidateFormDecks(DeckList deck, DeckValidationResult result)

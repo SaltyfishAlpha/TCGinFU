@@ -8,6 +8,21 @@ namespace TCGinFU.Core
         /// </summary>
         public static ShieldKind ToShieldKind(this DamageElement element)
             => element == DamageElement.Physical ? ShieldKind.Physical : ShieldKind.Magical;
+
+        /// <summary>九大伤害属性的中文名（§7.4）。战报与 UI 都用它，不要直接打印枚举名。</summary>
+        public static string DisplayName(this DamageElement element) => element switch
+        {
+            DamageElement.Physical => "物理",
+            DamageElement.Wind => "风",
+            DamageElement.Lightning => "雷",
+            DamageElement.Dark => "暗",
+            DamageElement.Earth => "地",
+            DamageElement.Fire => "火",
+            DamageElement.Ice => "冰",
+            DamageElement.Light => "光",
+            DamageElement.Poison => "毒",
+            _ => element.ToString(),
+        };
     }
 
     public static class EnemyRankExtensions
