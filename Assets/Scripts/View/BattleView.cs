@@ -295,7 +295,11 @@ namespace TCGinFU.View
             IReadOnlyList<CardInstance> cards = ResolveCards(zone.Layout);
             zone.SetLabel($"{zone.Layout.displayName} ({cards.Count})");
 
-            bool draggable = zone.Layout.draggable && Session.State.Outcome == BattleOutcome.Ongoing;
+            // 选充能目标期间整张手牌都不可拖：这一步是模态的，
+            // 中途还能把别的牌打出去只会让人以为充能没生效
+            bool draggable = zone.Layout.draggable
+                             && Session.State.Outcome == BattleOutcome.Ongoing
+                             && _pendingChargeCard == null;
 
             foreach (CardInstance card in cards)
             {
@@ -561,12 +565,28 @@ namespace TCGinFU.View
 
         public void OnCardClick(CardView card)
         {
+            if (IsBlockedByTargeting("出牌")) return;
             if (!card.Draggable || card.Zone == null) return;
 
             PlayerCharacter owner = ResolvePlayer(card.Zone.Layout.playerIndex);
             if (owner == null) return;
 
             PlayCard(owner, card.Card);
+        }
+
+        /// <summary>
+        /// 选目标是模态的：期间别的操作一律挡掉并说明原因，
+        /// 否则「还能照常打牌」会让人以为前一步没生效。
+        /// </summary>
+        private bool IsBlockedByTargeting(string what)
+        {
+            if (_pendingChargeCard == null) return false;
+
+            Session.SetMessage(
+                $"正在选充能目标（「{_pendingChargeCard.Name}」），不能{what}。"
+                + "请点一名<b>队友的角色卡</b>，或用顶栏的「取消充能」。", isWarning: true);
+            Refresh();
+            return true;
         }
 
         private bool ZoneAcceptsCard(ZoneView zone, CardView card)
@@ -670,6 +690,7 @@ namespace TCGinFU.View
 
         public void OnCardContextMenu(CardView card, Vector2 screenPosition)
         {
+            if (IsBlockedByTargeting("再开菜单")) return;
             if (card.Zone == null || !card.Zone.Layout.draggable || card.Card == null) return;
 
             PlayerCharacter owner = ResolvePlayer(card.Zone.Layout.playerIndex);

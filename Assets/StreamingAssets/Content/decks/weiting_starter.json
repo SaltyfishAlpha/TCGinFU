@@ -1,0 +1,119 @@
+{
+  "id": "weiting_starter",
+  "name": "维汀 · 起始构筑",
+  "characterId": "weiting",
+  "main": [
+    {
+      "card": "cosmic_collapse",
+      "count": 1
+    },
+    {
+      "card": "truth_alchemy_matrix",
+      "count": 1
+    },
+    {
+      "card": "intellect_reflux_persistent",
+      "count": 2
+    },
+    {
+      "card": "pain_transduction",
+      "count": 2
+    },
+    {
+      "card": "fate_anchor_seven",
+      "count": 1
+    },
+    {
+      "card": "lucky_reversal",
+      "count": 2
+    },
+    {
+      "card": "entropy_roulette",
+      "count": 2
+    },
+    {
+      "card": "dark_word_vitality_drain",
+      "count": 1
+    },
+    {
+      "card": "abyssal_siphon",
+      "count": 2
+    },
+    {
+      "card": "universal_elixir",
+      "count": 1
+    },
+    {
+      "card": "emergency_catalyst",
+      "count": 1
+    },
+    {
+      "card": "weakness_analysis",
+      "count": 3
+    },
+    {
+      "card": "arcane_bolt",
+      "count": 2
+    },
+    {
+      "card": "arcane_barrier",
+      "count": 3
+    },
+    {
+      "card": "sages_robe",
+      "count": 2
+    },
+    {
+      "card": "pain_inscription",
+      "count": 2
+    },
+    {
+      "card": "mana_overload_ritual",
+      "count": 2
+    }
+  ],
+  "formDecks": [
+    {
+      "transformCard": "cosmic_collapse",
+      "cards": [
+        {
+          "card": "event_horizon_singularity",
+          "count": 3
+        },
+        {
+          "card": "grand_chaos_roulette",
+          "count": 3
+        },
+        {
+          "card": "soul_devouring_feast",
+          "count": 2
+        },
+        {
+          "card": "time_paradox",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "transformCard": "truth_alchemy_matrix",
+      "cards": [
+        {
+          "card": "elemental_proliferation_bomb",
+          "count": 3
+        },
+        {
+          "card": "philosophers_stone_release",
+          "count": 3
+        },
+        {
+          "card": "aether_reassembly_crucible",
+          "count": 2
+        },
+        {
+          "card": "alchemical_protection_field",
+          "count": 2
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using TCGinFU.Content;
+using TCGinFU.Content.Loading;
 using TCGinFU.Core;
 
 namespace TCGinFU.Presentation
@@ -12,6 +13,8 @@ namespace TCGinFU.Presentation
         石像鬼,
         深渊领主,
         哥布林小队,
+        /// <summary>内容包里的真实数据：米阔阔 + 维汀 对 克洛诺斯-IV型</summary>
+        命刻之战,
     }
 
     /// <summary>
@@ -47,6 +50,8 @@ namespace TCGinFU.Presentation
 
         public void Restart()
         {
+            if (EnemyPreset == BattleScenario.命刻之战 && RestartFromContent()) return;
+
             IRng rng = new XorShift32Rng(Seed);
 
             var party = new List<(PlayerCharacter, Row)>();
@@ -75,6 +80,31 @@ namespace TCGinFU.Presentation
             _discardSelection.Clear();
             Message = $"第 {state.Round} 轮开始。";
             LastActionFailed = false;
+        }
+
+        /// <summary>
+        /// 用内容包里的真实数据开局（见 data_architecture.md）。
+        /// 内容包缺失或有错时返回 false，调用方退回样例内容——
+        /// 玩家把 JSON 改坏时应当还能进游戏并看到报错，而不是卡在黑屏。
+        /// </summary>
+        private bool RestartFromContent()
+        {
+            BattleEngine engine = ContentScenario.CreateClockworkCollapse(Seed, out LoadReport report);
+            if (engine == null)
+            {
+                SetMessage("内容包加载失败，已退回样例卡组：\n" + report, isWarning: true);
+                EnemyPreset = BattleScenario.哥布林;
+                return false;
+            }
+
+            Engine = engine;
+            SelectedPlayerId = State.Players[0].Id;
+            ChargeTargetId = SelectedPlayerId;
+            SelectedEnemyId = State.Enemies[0].Id;
+            _discardSelection.Clear();
+            Message = $"命刻之战 · 第 {State.Round} 轮开始。";
+            LastActionFailed = false;
+            return true;
         }
 
         private IEnumerable<Enemy> BuildEnemies() => EnemyPreset switch

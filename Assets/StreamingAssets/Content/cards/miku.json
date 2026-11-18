@@ -1,0 +1,437 @@
+{
+  "cards": [
+    {
+      "id": "phantom_nightwalk",
+      "name": "幻影夜行",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Transform",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity",
+        "Insight"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "前置条件：本局累计触发2次暴击，或全队累计消耗2个充能指示物。第3轮前抽到时，可0 AP展示此牌并洗回主卡组，抽1张牌且视为达成1次前置条件。第3轮开始时若条件满足，可从主卡组直接跳出发动升变，持续2轮。升变期间你的暴击伤害倍率提升至×1.75；每当你的攻击触发暴击时，回复5 MP。",
+      "behaviourId": "phantom_nightwalk",
+      "effects": [],
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "hawkeye_overdrive",
+      "name": "鹰眼绝境",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Transform",
+      "classId": "神射手",
+      "colors": [
+        "Dexterity",
+        "Insight"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "轮始阶段若自身处于后排且此牌在手牌中，可在第1或第2轮直接发动升变；若前3轮未摸到，第3轮起可从主卡组自动跳出发动，持续2轮。升变期间只要你处于后排，所有【暴击】掷骰结果+2，且双色牌触发【超暴击】的伤害倍率从×2提升至×2.5。",
+      "behaviourId": "hawkeye_overdrive",
+      "effects": [],
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "ambush_opening",
+      "name": "暗算起手",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Skill",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity",
+        "Insight"
+      ],
+      "ap": 1,
+      "mp": 5,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "对单个目标造成5点物理伤害【暴击】。命中后令目标获得【破绽】标记：本轮内下一次受到的任意伤害+3。",
+      "behaviourId": "ambush_opening",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 5
+          },
+          "element": "Physical",
+          "target": "SingleEnemy"
+        }
+      ],
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "cheap_shot_first_form",
+      "name": "卑劣打击·壹式",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Skill",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity",
+        "Insight"
+      ],
+      "ap": 1,
+      "mp": 5,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "对单个目标造成6点物理伤害【暴击】；若目标处于负面状态、带有【破绽】标记或本轮已受到过伤害，基础伤害提升至9点。",
+      "behaviourId": "cheap_shot_first_form",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 6
+          },
+          "element": "Physical",
+          "target": "SingleEnemy"
+        }
+      ],
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "read_dodge",
+      "name": "看破闪避",
+      "owner": "miku",
+      "category": "Armor",
+      "kind": "Timing",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity"
+      ],
+      "ap": 0,
+      "mp": 5,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "在敌人阶段自身或相邻队友被宣告为单体攻击目标时打出。投掷1颗敏捷骰，若点数≥敌方暴击抵抗，完全闪避本次攻击并抽1张牌；若未达标，仍为目标抵消6点伤害。",
+      "behaviourId": "read_dodge",
+      "effects": [],
+      "armorBaseShield": 7,
+      "shieldKind": "Physical",
+      "unmapped": {
+        "ranged": false,
+        "can_target_self": true
+      }
+    },
+    {
+      "id": "seize_initiative",
+      "name": "先声夺人",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Skill",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity"
+      ],
+      "ap": 0,
+      "mp": 5,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "在前后排之间移动1次并抽1张牌。若在战斗的第1轮打出此牌，免除5 MP消耗，且本轮额外获得+1 AP。",
+      "behaviourId": "seize_initiative",
+      "effects": [],
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "suppressing_volley",
+      "name": "压制连射",
+      "owner": "miku",
+      "category": "Weapon",
+      "kind": "Skill",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity"
+      ],
+      "ap": 1,
+      "mp": 10,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "对单个敌人连续射击2次，每次造成5点物理伤害【暴击】；两次射击分别独立投掷敏捷骰判定暴击。",
+      "behaviourId": "suppressing_volley",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 5
+          },
+          "element": "Physical",
+          "target": "SingleEnemy"
+        },
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 5
+          },
+          "element": "Physical",
+          "target": "SingleEnemy"
+        }
+      ],
+      "weaponBaseDamage": 7,
+      "twoHanded": true,
+      "unmapped": {
+        "ranged": true,
+        "hits": 2
+      }
+    },
+    {
+      "id": "crossfire_network",
+      "name": "交叉火力网",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Skill",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity",
+        "Insight"
+      ],
+      "ap": 1,
+      "mp": 10,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "对单个目标造成8点物理伤害【暴击】；若本轮已有其他队友对该目标造成过伤害，此牌消耗减少1 AP（变为0 AP）且伤害提升至12点。",
+      "behaviourId": "crossfire_network",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 8
+          },
+          "element": "Physical",
+          "target": "SingleEnemy"
+        }
+      ],
+      "unmapped": {
+        "ranged": true
+      }
+    },
+    {
+      "id": "hawkeye_lock",
+      "name": "鹰眼锁定",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Continuous",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity",
+        "Insight"
+      ],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "置入持续区。只要你处于后排，你的远程攻击无视目标2点物理护盾，且所有【暴击】掷骰结果+1。",
+      "behaviourId": "hawkeye_lock",
+      "effects": [],
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "cloud_piercing_snipe",
+      "name": "穿云狙击",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Skill",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity",
+        "Insight"
+      ],
+      "ap": 2,
+      "mp": 10,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "仅限在后排打出。对单个目标造成12点物理伤害【双色暴击】，本次攻击无视敌方自动物理护盾；双骰同时达标时触发×2超暴击，造成24点穿透伤害。",
+      "behaviourId": "cloud_piercing_snipe",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 12
+          },
+          "element": "Physical",
+          "target": "SingleEnemy"
+        }
+      ],
+      "unmapped": {
+        "ranged": true,
+        "requires_back_row": true
+      }
+    },
+    {
+      "id": "skirmish_shot",
+      "name": "游击速射",
+      "owner": "miku",
+      "category": "Weapon",
+      "kind": "Skill",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity"
+      ],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "造成7点物理伤害【暴击】（纯绿，投敏捷骰）；打出前或结算后可免费在前后排之间移动1次。",
+      "behaviourId": "skirmish_shot",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 7
+          },
+          "element": "Physical",
+          "target": "SingleEnemy"
+        }
+      ],
+      "weaponBaseDamage": 7,
+      "twoHanded": true,
+      "unmapped": {
+        "ranged": true
+      }
+    },
+    {
+      "id": "rapid_arrow_rain",
+      "name": "连珠箭雨",
+      "owner": "miku",
+      "category": "Weapon",
+      "kind": "Skill",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity"
+      ],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "对单个目标造成7点物理伤害【暴击】；若触发【暴击】，对敌方另一排的1名随机目标追加4点物理伤害。若全场仅1名敌人，则主目标额外受到+2点伤害。",
+      "behaviourId": "rapid_arrow_rain",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 7
+          },
+          "element": "Physical",
+          "target": "SingleEnemy"
+        }
+      ],
+      "weaponBaseDamage": 7,
+      "twoHanded": true,
+      "unmapped": {
+        "ranged": true
+      }
+    },
+    {
+      "id": "rolling_cloak",
+      "name": "翻滚披风",
+      "owner": "miku",
+      "category": "Armor",
+      "kind": "Timing",
+      "classId": "浪客",
+      "colors": [],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "自身或相邻队友受击时打出，使目标获得4点物理护盾与4点魔法护盾，并可免费在前后排之间移动1次。",
+      "behaviourId": "rolling_cloak",
+      "effects": [],
+      "armorBaseShield": 7,
+      "shieldKind": "Physical",
+      "unmapped": {
+        "ranged": false,
+        "can_target_self": true
+      }
+    },
+    {
+      "id": "tactical_concealment",
+      "name": "战术隐蔽",
+      "owner": "miku",
+      "category": "Armor",
+      "kind": "Skill",
+      "classId": "浪客",
+      "colors": [],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "获得7点物理护盾；若打出时自身处于后排，本轮敌方的常规单体攻击意图无法将你选为目标。",
+      "behaviourId": "tactical_concealment",
+      "effects": [],
+      "armorBaseShield": 7,
+      "shieldKind": "Physical",
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "tailwind_charge",
+      "name": "顺风充能",
+      "owner": "miku",
+      "category": "Treasure",
+      "kind": "Skill",
+      "classId": "浪客",
+      "colors": [],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "抽1张牌，并将此牌直接置入自己或任意队友的充能区，不占用每轮1次的贴充能动作限额。",
+      "behaviourId": "tailwind_charge",
+      "effects": [],
+      "unmapped": {
+        "ranged": false,
+        "can_target_self": true
+      }
+    },
+    {
+      "id": "verdant_wind_arrow",
+      "name": "翠风箭附",
+      "owner": "miku",
+      "category": "Treasure",
+      "kind": "Skill",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity"
+      ],
+      "ap": 0,
+      "mp": 5,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "本轮你造成的所有物理伤害转化为风属性伤害（可触发敌方风属性弱点×2增伤），且你本轮下一次攻击造成的伤害+3。",
+      "behaviourId": "verdant_wind_arrow",
+      "effects": [],
+      "unmapped": {
+        "ranged": false
+      }
+    }
+  ]
+}

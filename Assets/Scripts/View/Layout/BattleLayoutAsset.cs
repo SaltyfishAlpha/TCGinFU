@@ -133,11 +133,15 @@ namespace TCGinFU.View
                     arrange = ZoneArrange.堆叠, cardScale = 0.95f, reservedSlots = 1, peekable = true,
                     background = new Color(0.5f, 0.3f, 0.8f, 0.09f),
                 },
+                // 已完成升变区：规则书 §4.1 / §6.2 ⑤ 仍然需要这个区域（用完的升变牌与
+                // 形态牌移出本局都堆在这儿），但升变期间升变牌已经盖在角色卡上了，
+                // 这块地平时一直是空的，白占一个卡位。默认隐藏，需要查看时把 visible 打开。
                 new()
                 {
                     key = "completed", displayName = "已完成升变", source = ZoneSource.已完成升变区,
+                    visible = false,
                     anchorMin = new Vector2(0.01f, 0.214f), anchorMax = new Vector2(0.125f, 0.394f),
-                    arrange = ZoneArrange.堆叠, cardScale = 0.95f, reservedSlots = 1, peekable = true,
+                    arrange = ZoneArrange.堆叠, cardScale = 0.95f, reservedSlots = 1,
                     background = new Color(0.8f, 0.6f, 0.2f, 0.07f),
                 },
             };

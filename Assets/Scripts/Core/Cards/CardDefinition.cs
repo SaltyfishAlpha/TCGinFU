@@ -43,6 +43,9 @@ namespace TCGinFU.Core
         /// <summary>所属职业（职业牌、升变牌、形态牌、英雄牌用，决定形态卡组的配对）。</summary>
         public string ClassId { get; init; }
 
+        /// <summary>卡面规则文字，供界面展示。不参与任何结算——结算只看 <see cref="Effects"/> 与 Behaviour。</summary>
+        public string RulesText { get; init; }
+
         /// <summary>武器牌的一阶基础伤害（3–10 点）。装备这张牌时由它派生 <see cref="WeaponProfile"/>。</summary>
         public int WeaponBaseDamage { get; init; }
 

@@ -1,0 +1,437 @@
+{
+  "cards": [
+    {
+      "id": "cosmic_collapse",
+      "name": "星穹坍缩",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Transform",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight",
+        "Willpower"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "前置条件：本局累计触发2次「灵智回流」效果，或累计回复过15 MP。第3轮前抽到时，可0 AP展示此牌并洗回主卡组，抽1张牌并对自己造成1点刺痛伤害（可直接触发在场的「灵智回流」）。第3轮开始时若条件满足，可从主卡组直接跳出发动升变，持续2轮。升变期间你的所有骰子投掷结果+2；每当你回复HP或MP时，对生命值最低的敌人自动造成3点暗属性穿透伤害。",
+      "behaviourId": "cosmic_collapse",
+      "effects": [],
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "truth_alchemy_matrix",
+      "name": "真理炼金矩阵",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Transform",
+      "classId": "造物使",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "轮始阶段若全队充能区合计有至少3个充能指示物且此牌在手牌中，可在第1或第2轮提前发动；否则在第3轮起可从主卡组自动跳出发动，持续2轮。升变期间你每轮可执行2次免费的「贴充能」动作；且全队角色每当消耗充能指示物时，投掷1颗任意骰子，若点数为偶数，则该充能指示物不进入弃牌堆，继续留在充能区中。",
+      "behaviourId": "truth_alchemy_matrix",
+      "effects": [],
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "intellect_reflux_persistent",
+      "name": "灵智回流·常驻",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Continuous",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight",
+        "Willpower"
+      ],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "置入持续区。每当你受到伤害时（包括自身秘宝或卡牌造成的刺痛伤害），立即回复5 MP（每轮最多触发2次）；若单次受到敌方实际生命值伤害≥5点，额外从弃牌堆将1张牌贴入你的充能区。",
+      "behaviourId": "intellect_reflux_persistent",
+      "effects": [],
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "pain_transduction",
+      "name": "苦痛转导",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Skill",
+      "classId": "混沌法师",
+      "colors": [
+        "Willpower"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "仅限本轮你已受到过伤害（含卷轴刺痛）时打出。立即回复10 MP，并使你本轮打出的下一张魔法攻击牌伤害+3。",
+      "behaviourId": "pain_transduction",
+      "effects": [],
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "fate_anchor_seven",
+      "name": "命运锚点·七",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Skill",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 0,
+      "mp": 5,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "使你本轮下一次投掷任何骰子（暴击骰或【无常命运】判定骰）时，可将其中1颗骰子的结果直接视为7。",
+      "behaviourId": "fate_anchor_seven",
+      "effects": [],
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "lucky_reversal",
+      "name": "幸运改命",
+      "owner": "weiting",
+      "category": "Armor",
+      "kind": "Timing",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 0,
+      "mp": 5,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "在你或任意队友投掷骰子后立即打出。将其中1颗骰子的结果直接改为7；若另一颗双色骰原本就是7，则直接达成双骰同面，触发×2【超暴击】。",
+      "behaviourId": "lucky_reversal",
+      "effects": [],
+      "armorBaseShield": 7,
+      "shieldKind": "Physical",
+      "unmapped": {
+        "ranged": false,
+        "can_target_self": true
+      }
+    },
+    {
+      "id": "entropy_roulette",
+      "name": "熵之轮盘·无常命运",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Skill",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight",
+        "Willpower"
+      ],
+      "ap": 1,
+      "mp": 10,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "投掷1颗洞察骰与1颗意志骰并取较高值（可受【幸运七】修改）。点数1—3：混沌失控，对敌方前排全体造成6点暗属性伤害，并对自身造成2点刺痛伤害。点数4—6：对单个目标造成9点火或冰属性伤害【双色暴击】，并使其下回合暴击抵抗-1。点数7+：天命大吉！对敌方全体造成10点雷或风属性伤害【双色暴击】，并为全队每名角色各贴1个充能指示物（从各自牌库顶盲贴）。",
+      "behaviourId": "entropy_roulette",
+      "effects": [],
+      "unmapped": {
+        "ranged": true,
+        "damage_options": [
+          6,
+          9,
+          10
+        ],
+        "target_group": "variable_by_roll"
+      }
+    },
+    {
+      "id": "dark_word_vitality_drain",
+      "name": "暗言术·活力汲取",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Skill",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight",
+        "Willpower"
+      ],
+      "ap": 1,
+      "mp": 5,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "对单个目标造成6点暗属性魔法伤害【双色暴击】，你自己或1名队友回复等同于本次实际伤害一半（向上取整）的HP。",
+      "behaviourId": "dark_word_vitality_drain",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 6
+          },
+          "element": "Dark",
+          "target": "SingleEnemy"
+        }
+      ],
+      "unmapped": {
+        "ranged": true
+      }
+    },
+    {
+      "id": "abyssal_siphon",
+      "name": "深渊虹吸·活力汲取贰式",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Skill",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight",
+        "Willpower"
+      ],
+      "ap": 1,
+      "mp": 10,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "对单个目标造成9点暗属性魔法伤害【双色暴击】。你立即回复6 HP；若你生命值已满，溢出的治疗量自动转化为你或相邻队友的魔法护盾。若触发【暴击】，额外回复5 MP。",
+      "behaviourId": "abyssal_siphon",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 9
+          },
+          "element": "Dark",
+          "target": "SingleEnemy"
+        }
+      ],
+      "unmapped": {
+        "ranged": true
+      }
+    },
+    {
+      "id": "universal_elixir",
+      "name": "调合·万能灵药",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Skill",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "打出时需消耗1个充能指示物，从以下两项炼金效果中二选一；若消耗2个充能指示物则两项同时生效。①生命灵药：令1名我方角色回复10 HP与10 MP。②元素涂油：令1名我方角色本轮所有攻击附加指定元素属性（火／冰／雷／风／毒任选），且本轮造成的伤害+3。",
+      "behaviourId": "universal_elixir",
+      "effects": [],
+      "unmapped": {
+        "ranged": false,
+        "can_target_self": true
+      }
+    },
+    {
+      "id": "emergency_catalyst",
+      "name": "应急催化剂",
+      "owner": "weiting",
+      "category": "Armor",
+      "kind": "Timing",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "在任意队友行动时或敌人阶段打出。将你手牌中的1张牌直接贴入该队友的充能区（不占用每轮1次的贴充能限额），并令该队友获得4点全能护盾，或使其本轮下一次暴击掷骰结果+1。",
+      "behaviourId": "emergency_catalyst",
+      "effects": [],
+      "armorBaseShield": 7,
+      "shieldKind": "Physical",
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "weakness_analysis",
+      "name": "弱点解析",
+      "owner": "weiting",
+      "category": "Weapon",
+      "kind": "Skill",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "造成4点魔法伤害【暴击】（纯蓝，投洞察骰），揭示目标1项属性弱点并抽1张牌。",
+      "behaviourId": "weakness_analysis",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 4
+          },
+          "element": "Light",
+          "target": "SingleEnemy"
+        }
+      ],
+      "weaponBaseDamage": 6,
+      "twoHanded": true,
+      "unmapped": {
+        "ranged": true,
+        "damageType": "arcane"
+      }
+    },
+    {
+      "id": "arcane_bolt",
+      "name": "秘法冲击",
+      "owner": "weiting",
+      "category": "Weapon",
+      "kind": "Skill",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "造成6点魔法伤害【暴击】；若目标已被揭示属性弱点或处于负面状态，额外造成+3点魔法伤害。",
+      "behaviourId": "arcane_bolt",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 6
+          },
+          "element": "Light",
+          "target": "SingleEnemy"
+        }
+      ],
+      "weaponBaseDamage": 6,
+      "twoHanded": true,
+      "unmapped": {
+        "ranged": true,
+        "damageType": "arcane"
+      }
+    },
+    {
+      "id": "arcane_barrier",
+      "name": "奥术结界",
+      "owner": "weiting",
+      "category": "Armor",
+      "kind": "Skill",
+      "classId": "混沌法师",
+      "colors": [],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "获得7点魔法护盾，并使自身充能区上限在本轮及下一轮临时+1。",
+      "behaviourId": "arcane_barrier",
+      "effects": [],
+      "armorBaseShield": 7,
+      "shieldKind": "Physical",
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "sages_robe",
+      "name": "睿智法袍",
+      "owner": "weiting",
+      "category": "Armor",
+      "kind": "Timing",
+      "classId": "混沌法师",
+      "colors": [],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "自身或相邻队友受击时打出，获得4点物理护盾与4点魔法护盾；若你的持续区有卡牌在场，额外回复5 MP。",
+      "behaviourId": "sages_robe",
+      "effects": [],
+      "armorBaseShield": 7,
+      "shieldKind": "Physical",
+      "unmapped": {
+        "ranged": false,
+        "can_target_self": true
+      }
+    },
+    {
+      "id": "pain_inscription",
+      "name": "痛觉铭刻",
+      "owner": "weiting",
+      "category": "Treasure",
+      "kind": "Skill",
+      "classId": "混沌法师",
+      "colors": [
+        "Willpower"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "立即对自身造成2点无视护盾的刺痛伤害；若【魔力激发卷轴】处于关闭状态，则同时将其免费切换为【激活】状态。回复10 MP并抽1张牌。",
+      "behaviourId": "pain_inscription",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "Flat",
+            "add": 2
+          },
+          "element": "Dark",
+          "target": "Self"
+        }
+      ],
+      "unmapped": {
+        "ranged": false,
+        "self_damage": 2
+      }
+    },
+    {
+      "id": "mana_overload_ritual",
+      "name": "魔力过载仪式",
+      "owner": "weiting",
+      "category": "Treasure",
+      "kind": "Skill",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight",
+        "Willpower"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "仅限【魔力激发卷轴】处于激活状态时打出。本轮你的「灵智回流」触发次数上限+1，且你本轮打出的下一张【熵系魔法】牌消耗减少5 MP、暴击掷骰结果+1。",
+      "behaviourId": "mana_overload_ritual",
+      "effects": [],
+      "unmapped": {
+        "ranged": false
+      }
+    }
+  ]
+}

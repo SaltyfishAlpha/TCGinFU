@@ -1,0 +1,69 @@
+{
+  "characters": [
+    {
+      "id": "miku",
+      "name": "米阔阔",
+      "subtitle": "浪客 · 神射手",
+      "classes": [
+        {
+          "classId": "浪客",
+          "level": 3
+        },
+        {
+          "classId": "神射手",
+          "level": 2
+        }
+      ],
+      "dice": {
+        "Might": "D6",
+        "Insight": "D10",
+        "Dexterity": "D10",
+        "Willpower": "D8"
+      },
+      "hpBonus": 5,
+      "mpBonus": -10,
+      "startingRow": "Back",
+      "chargeCapacity": 2,
+      "weaponCardId": "skirmish_shot",
+      "armorCardId": "rolling_cloak",
+      "deckId": "miku_starter",
+      "legacy": {
+        "hp": 40,
+        "mp": 35
+      }
+    },
+    {
+      "id": "weiting",
+      "name": "维汀",
+      "subtitle": "混沌法师 · 造物使",
+      "classes": [
+        {
+          "classId": "混沌法师",
+          "level": 4
+        },
+        {
+          "classId": "造物使",
+          "level": 1
+        }
+      ],
+      "dice": {
+        "Might": "D8",
+        "Insight": "D10",
+        "Dexterity": "D8",
+        "Willpower": "D8"
+      },
+      "hpBonus": -10,
+      "mpBonus": 5,
+      "startingRow": "Front",
+      "chargeCapacity": 2,
+      "weaponCardId": "weakness_analysis",
+      "armorCardId": "arcane_barrier",
+      "deckId": "weiting_starter",
+      "legacy": {
+        "hp": 35,
+        "mp": 50,
+        "autoMagicShieldBonus": 1
+      }
+    }
+  ]
+}

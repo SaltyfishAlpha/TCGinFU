@@ -1,0 +1,115 @@
+{
+  "id": "miku_starter",
+  "name": "米阔阔 · 起始构筑",
+  "characterId": "miku",
+  "main": [
+    {
+      "card": "phantom_nightwalk",
+      "count": 1
+    },
+    {
+      "card": "hawkeye_overdrive",
+      "count": 1
+    },
+    {
+      "card": "ambush_opening",
+      "count": 2
+    },
+    {
+      "card": "cheap_shot_first_form",
+      "count": 2
+    },
+    {
+      "card": "read_dodge",
+      "count": 2
+    },
+    {
+      "card": "seize_initiative",
+      "count": 2
+    },
+    {
+      "card": "suppressing_volley",
+      "count": 2
+    },
+    {
+      "card": "crossfire_network",
+      "count": 1
+    },
+    {
+      "card": "hawkeye_lock",
+      "count": 1
+    },
+    {
+      "card": "cloud_piercing_snipe",
+      "count": 2
+    },
+    {
+      "card": "skirmish_shot",
+      "count": 3
+    },
+    {
+      "card": "rapid_arrow_rain",
+      "count": 3
+    },
+    {
+      "card": "rolling_cloak",
+      "count": 3
+    },
+    {
+      "card": "tactical_concealment",
+      "count": 2
+    },
+    {
+      "card": "tailwind_charge",
+      "count": 2
+    },
+    {
+      "card": "verdant_wind_arrow",
+      "count": 1
+    }
+  ],
+  "formDecks": [
+    {
+      "transformCard": "phantom_nightwalk",
+      "cards": [
+        {
+          "card": "shadow_dash_assault",
+          "count": 3
+        },
+        {
+          "card": "night_eviscerate",
+          "count": 3
+        },
+        {
+          "card": "thieves_trick",
+          "count": 2
+        },
+        {
+          "card": "smoke_decoy",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "transformCard": "hawkeye_overdrive",
+      "cards": [
+        {
+          "card": "wind_chasing_arrows",
+          "count": 3
+        },
+        {
+          "card": "death_sentence",
+          "count": 3
+        },
+        {
+          "card": "arrow_storm_coverage",
+          "count": 2
+        },
+        {
+          "card": "wind_wall_counter",
+          "count": 2
+        }
+      ]
+    }
+  ]
+}

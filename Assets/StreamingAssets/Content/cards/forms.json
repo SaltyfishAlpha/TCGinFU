@@ -1,0 +1,550 @@
+{
+  "cards": [
+    {
+      "id": "shadow_dash_assault",
+      "name": "瞬影突袭",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity"
+      ],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "造成B_atk点物理伤害【暴击】（本5级短弓构筑B_atk=8，即8点）；若本轮已打出过其他牌，返还1 AP（每轮限返还1次）。",
+      "behaviourId": "shadow_dash_assault",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "FormAttack",
+            "add": 0
+          },
+          "element": "Physical",
+          "target": "SingleEnemy"
+        }
+      ],
+      "formId": "phantom",
+      "unmapped": {
+        "ranged": false,
+        "damage_formula": "B_atk",
+        "legacyDamageAtLevel5": 8
+      }
+    },
+    {
+      "id": "night_eviscerate",
+      "name": "暗夜剔骨",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity",
+        "Insight"
+      ],
+      "ap": 1,
+      "mp": 5,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "造成B_atk+4点物理伤害【暴击】（本5级构筑为12点）；若消耗1个充能指示物，本次攻击必定暴击且抽1张牌。",
+      "behaviourId": "night_eviscerate",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "FormAttack",
+            "add": 4
+          },
+          "element": "Physical",
+          "target": "SingleEnemy"
+        }
+      ],
+      "formId": "phantom",
+      "unmapped": {
+        "ranged": false,
+        "damage_formula": "B_atk + 4",
+        "legacyDamageAtLevel5": 12
+      }
+    },
+    {
+      "id": "thieves_trick",
+      "name": "盗贼戏法",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "浪客",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "从弃牌堆选择1张牌直接置入自己或队友的充能区，并使该角色本轮下一次攻击伤害+3。",
+      "behaviourId": "thieves_trick",
+      "effects": [],
+      "formId": "phantom",
+      "unmapped": {
+        "ranged": false,
+        "can_target_self": true
+      }
+    },
+    {
+      "id": "smoke_decoy",
+      "name": "烟幕替身",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "浪客",
+      "colors": [
+        "Dexterity"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "自身或相邻队友受击时打出，获得B_def+2点物理护盾（本5级构筑为10点），并使攻击者本轮后续造成的伤害降低3点。",
+      "behaviourId": "smoke_decoy",
+      "effects": [
+        {
+          "kind": "GainShield",
+          "amount": {
+            "source": "FormDefense",
+            "add": 2
+          },
+          "shieldKind": "Physical",
+          "target": "SingleAlly"
+        }
+      ],
+      "formId": "phantom",
+      "unmapped": {
+        "ranged": false,
+        "can_target_self": true,
+        "shield_formula": "B_def + 2"
+      }
+    },
+    {
+      "id": "wind_chasing_arrows",
+      "name": "追风连矢",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "神射手",
+      "colors": [
+        "Dexterity"
+      ],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "造成B_atk+2点物理伤害【暴击】（本5级构筑为10点）；命中后若目标未死亡，可免费将1张手牌贴入充能区，不占每轮充能限额。",
+      "behaviourId": "wind_chasing_arrows",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "FormAttack",
+            "add": 2
+          },
+          "element": "Physical",
+          "target": "SingleEnemy"
+        }
+      ],
+      "formId": "hawkeye",
+      "unmapped": {
+        "ranged": true,
+        "damage_formula": "B_atk + 2",
+        "legacyDamageAtLevel5": 10
+      }
+    },
+    {
+      "id": "death_sentence",
+      "name": "死神裁决",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "神射手",
+      "colors": [
+        "Dexterity",
+        "Insight"
+      ],
+      "ap": 2,
+      "mp": 10,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "造成B_atk×2点物理伤害【双色暴击】（本5级构筑为16点）；后排触发×2.5超暴击时造成B_atk×5点毁灭性伤害（本5级构筑为40点）。",
+      "behaviourId": "death_sentence",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "FormAttack",
+            "add": 0,
+            "times": 2
+          },
+          "element": "Physical",
+          "target": "SingleEnemy"
+        }
+      ],
+      "formId": "hawkeye",
+      "unmapped": {
+        "ranged": true,
+        "damage_formula": "B_atk * 2",
+        "legacyDamageAtLevel5": 16
+      }
+    },
+    {
+      "id": "arrow_storm_coverage",
+      "name": "箭雨覆盖",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "神射手",
+      "colors": [
+        "Dexterity",
+        "Insight"
+      ],
+      "ap": 1,
+      "mp": 5,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "对敌方全体造成B_atk点物理伤害【双色暴击】（本5级构筑为8点），并削减所有敌人3点物理护盾。",
+      "behaviourId": "arrow_storm_coverage",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "FormAttack",
+            "add": 0
+          },
+          "element": "Physical",
+          "target": "AllEnemies"
+        }
+      ],
+      "formId": "hawkeye",
+      "unmapped": {
+        "ranged": true,
+        "damage_formula": "B_atk",
+        "legacyDamageAtLevel5": 8
+      }
+    },
+    {
+      "id": "wind_wall_counter",
+      "name": "风墙反制",
+      "owner": "miku",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "神射手",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "敌人阶段自身或相邻队友受击时打出，获得B_def点物理护盾与B_def点魔法护盾（本5级构筑各8点）；若完全抵消本次攻击伤害，立即对攻击者反击造成B_atk点物理伤害（本5级构筑为8点）。",
+      "behaviourId": "wind_wall_counter",
+      "effects": [
+        {
+          "kind": "GainShield",
+          "amount": {
+            "source": "FormDefense",
+            "add": 0
+          },
+          "shieldKind": "Physical",
+          "target": "SingleAlly"
+        },
+        {
+          "kind": "GainShield",
+          "amount": {
+            "source": "FormDefense",
+            "add": 0
+          },
+          "shieldKind": "Magical",
+          "target": "SingleAlly"
+        }
+      ],
+      "formId": "hawkeye",
+      "unmapped": {
+        "ranged": false,
+        "can_target_self": true,
+        "damage_formula": "B_atk（仅完全抵消时反击）",
+        "shield_formula": "B_def physical + B_def magic",
+        "conditionalDamageAtLevel5": 8
+      }
+    },
+    {
+      "id": "event_horizon_singularity",
+      "name": "视界奇点",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight",
+        "Willpower"
+      ],
+      "ap": 1,
+      "mp": 5,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "造成B_atk+4点暗属性魔法伤害【双色暴击】（本5级构筑为11点），无视目标魔法护盾。",
+      "behaviourId": "event_horizon_singularity",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "FormAttack",
+            "add": 4
+          },
+          "element": "Dark",
+          "target": "SingleEnemy"
+        }
+      ],
+      "formId": "cosmic",
+      "unmapped": {
+        "ranged": true,
+        "damage_formula": "B_atk + 4",
+        "legacyDamageAtLevel5": 11
+      }
+    },
+    {
+      "id": "grand_chaos_roulette",
+      "name": "无常大轮盘",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight",
+        "Willpower"
+      ],
+      "ap": 1,
+      "mp": 5,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "对敌方全体造成B_atk+2点魔法伤害【双色暴击】（本5级构筑为9点），该伤害自动适应并触发每名敌人的易损弱点属性。",
+      "behaviourId": "grand_chaos_roulette",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "FormAttack",
+            "add": 2
+          },
+          "element": "Dark",
+          "target": "AllEnemies"
+        }
+      ],
+      "formId": "cosmic",
+      "unmapped": {
+        "ranged": true,
+        "damage_formula": "B_atk + 2",
+        "legacyDamageAtLevel5": 9
+      }
+    },
+    {
+      "id": "soul_devouring_feast",
+      "name": "噬魂狂宴",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "混沌法师",
+      "colors": [
+        "Willpower"
+      ],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "对单个目标造成B_atk点暗属性伤害（本5级构筑为7点），全队所有角色回复6 HP与10 MP。",
+      "behaviourId": "soul_devouring_feast",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "FormAttack",
+            "add": 0
+          },
+          "element": "Dark",
+          "target": "SingleEnemy"
+        }
+      ],
+      "formId": "cosmic",
+      "unmapped": {
+        "ranged": true,
+        "damage_formula": "B_atk",
+        "legacyDamageAtLevel5": 7
+      }
+    },
+    {
+      "id": "time_paradox",
+      "name": "时间悖论",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "混沌法师",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "自身或相邻队友受击时打出，获得B_def+2点物理护盾与B_def+2点魔法护盾（本5级构筑各10点），并令敌方本次攻击的暴击判定强制改为失败。",
+      "behaviourId": "time_paradox",
+      "effects": [
+        {
+          "kind": "GainShield",
+          "amount": {
+            "source": "FormDefense",
+            "add": 2
+          },
+          "shieldKind": "Physical",
+          "target": "SingleAlly"
+        },
+        {
+          "kind": "GainShield",
+          "amount": {
+            "source": "FormDefense",
+            "add": 2
+          },
+          "shieldKind": "Magical",
+          "target": "SingleAlly"
+        }
+      ],
+      "formId": "cosmic",
+      "unmapped": {
+        "ranged": false,
+        "can_target_self": true,
+        "shield_formula": "(B_def + 2) physical + (B_def + 2) magic"
+      }
+    },
+    {
+      "id": "elemental_proliferation_bomb",
+      "name": "元素增殖炸弹",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "造物使",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": true,
+      "rulesText": "造成B_atk+3点指定元素伤害【暴击】（本5级构筑为10点），并令目标在本轮内获得该元素的【易损】状态：受到该属性伤害×2。",
+      "behaviourId": "elemental_proliferation_bomb",
+      "effects": [
+        {
+          "kind": "Damage",
+          "amount": {
+            "source": "FormAttack",
+            "add": 3
+          },
+          "element": "Dark",
+          "target": "SingleEnemy"
+        }
+      ],
+      "formId": "alchemy",
+      "unmapped": {
+        "ranged": true,
+        "damage_formula": "B_atk + 3",
+        "legacyDamageAtLevel5": 10
+      }
+    },
+    {
+      "id": "philosophers_stone_release",
+      "name": "贤者之石解放",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "造物使",
+      "colors": [
+        "Insight",
+        "Willpower"
+      ],
+      "ap": 1,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "令1名我方角色立即获得+2 AP、回复10 MP并抽1张牌（每轮对同一角色限用1次）。",
+      "behaviourId": "philosophers_stone_release",
+      "effects": [],
+      "formId": "alchemy",
+      "unmapped": {
+        "ranged": false,
+        "can_target_self": true
+      }
+    },
+    {
+      "id": "aether_reassembly_crucible",
+      "name": "以太重组坩埚",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "造物使",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "从你的弃牌堆将最多2张牌直接贴入全队任意角色的充能区，随后抽1张牌。",
+      "behaviourId": "aether_reassembly_crucible",
+      "effects": [],
+      "formId": "alchemy",
+      "unmapped": {
+        "ranged": false
+      }
+    },
+    {
+      "id": "alchemical_protection_field",
+      "name": "炼金防护力场",
+      "owner": "weiting",
+      "category": "Class",
+      "kind": "Form",
+      "classId": "造物使",
+      "colors": [
+        "Insight"
+      ],
+      "ap": 0,
+      "mp": 0,
+      "charge": 0,
+      "hasCrit": false,
+      "rulesText": "敌人阶段打出，为前排全体或后排全体提供B_def点全能护盾（本5级构筑为8点），并移除每名受保护角色身上的1个负面状态。",
+      "behaviourId": "alchemical_protection_field",
+      "effects": [
+        {
+          "kind": "GainShield",
+          "amount": {
+            "source": "FormDefense",
+            "add": 0
+          },
+          "shieldKind": "Physical",
+          "target": "SingleAlly"
+        },
+        {
+          "kind": "GainShield",
+          "amount": {
+            "source": "FormDefense",
+            "add": 0
+          },
+          "shieldKind": "Magical",
+          "target": "SingleAlly"
+        }
+      ],
+      "formId": "alchemy",
+      "unmapped": {
+        "ranged": false,
+        "target_group": "front_row_or_back_row",
+        "shield_formula": "B_def"
+      }
+    }
+  ]
+}

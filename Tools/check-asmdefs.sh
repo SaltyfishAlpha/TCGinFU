@@ -56,6 +56,13 @@ package_dll() {
     esac
 }
 
+# Unity 自带的 NUnit。**必须用它而不是 NuGet 上的 NUnit**：
+# Unity 附带的是 3.5.0，没有 Assert.Multiple、Assert.Warn 这些后来才加的 API。
+# 用 NuGet 的新版会编译通过而 Unity 里报错——假阳性，等于白测。
+nunit_dll() {
+    find "$REPO/Library/PackageCache" -iname "nunit.framework.dll" 2>/dev/null | head -1
+}
+
 json_string() { sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$1" | head -1; }
 json_bool()   { sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\(true\|false\).*/\1/p" "$1" | head -1; }
 json_refs() {
@@ -156,8 +163,15 @@ generate_csproj() {
         done
         echo '  </ItemGroup>'
 
-        [[ "$name" == *Tests* ]] && \
-            echo '  <ItemGroup><PackageReference Include="NUnit" Version="3.14.0" /></ItemGroup>'
+        if [[ "$name" == *Tests* ]]; then
+            local nunit; nunit="$(nunit_dll)"
+            if [[ -n "$nunit" ]]; then
+                echo "  <ItemGroup><Reference Include=\"nunit.framework\"><HintPath>$(win_path "$nunit")</HintPath></Reference></ItemGroup>"
+            else
+                echo "⚠ 找不到 Unity 自带的 nunit.framework.dll，改用 NuGet 版——API 可能与 Unity 不一致" >&2
+                echo '  <ItemGroup><PackageReference Include="NUnit" Version="3.5.0" /></ItemGroup>'
+            fi
+        fi
 
         echo '</Project>'
     } > "$csproj"

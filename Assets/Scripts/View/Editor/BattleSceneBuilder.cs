@@ -1,4 +1,5 @@
 using System.IO;
+using TCGinFU.Presentation;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -14,10 +15,20 @@ namespace TCGinFU.View.Editor
     public static class BattleSceneBuilder
     {
         public const string ScenePath = "Assets/Scenes/Battle.unity";
+        public const string ClockworkScenePath = "Assets/Scenes/ClockworkCollapse.unity";
         public const string LayoutPath = "Assets/Settings/BattleLayout.asset";
 
         [MenuItem("TCGinFU/生成战斗场景", priority = 0)]
-        public static void GenerateAndOpen()
+        public static void GenerateAndOpen() => Generate(ScenePath, BattleScenario.哥布林);
+
+        /// <summary>
+        /// 用迁移过来的真实卡池生成测试场景（米阔阔 + 维汀 对 克洛诺斯-IV型）。
+        /// 数据读 <c>Assets/StreamingAssets/Content</c>，见 Assets/docs/data_architecture.md。
+        /// </summary>
+        [MenuItem("TCGinFU/生成命刻之战场景", priority = 1)]
+        public static void GenerateClockworkAndOpen() => Generate(ClockworkScenePath, BattleScenario.命刻之战);
+
+        private static void Generate(string scenePath, BattleScenario scenario)
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
@@ -33,32 +44,33 @@ namespace TCGinFU.View.Editor
             // 调试浮层：正式发版时把这个组件（和它那个文件）删掉即可，BattleView 不依赖它
             go.AddComponent<Debugging.BattleDebugOverlay>();
 
-            // layout 是私有 [SerializeField]，用 SerializedObject 赋值，避免为了建场景把字段开成 public
+            // layout / scenario 都是私有 [SerializeField]，用 SerializedObject 赋值，
+            // 避免为了建场景把字段开成 public
             var serialized = new SerializedObject(view);
             SerializedProperty property = serialized.FindProperty("layout");
-            if (property != null)
-            {
-                property.objectReferenceValue = layout;
-                serialized.ApplyModifiedPropertiesWithoutUndo();
-            }
-            else
-            {
-                Debug.LogWarning("BattleView 上找不到 layout 字段，场景里需要手动拖一下布局资产。");
-            }
+            if (property != null) property.objectReferenceValue = layout;
+            else Debug.LogWarning("BattleView 上找不到 layout 字段，场景里需要手动拖一下布局资产。");
 
-            EnsureDirectory(ScenePath);
-            if (!EditorSceneManager.SaveScene(scene, ScenePath))
+            SerializedProperty scenarioProperty = serialized.FindProperty("scenario");
+            if (scenarioProperty != null) scenarioProperty.enumValueIndex = (int)scenario;
+            else Debug.LogWarning("BattleView 上找不到 scenario 字段，场景里需要手动选一下对局预设。");
+
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            EnsureDirectory(scenePath);
+            if (!EditorSceneManager.SaveScene(scene, scenePath))
             {
-                Debug.LogError($"场景保存失败：{ScenePath}");
+                Debug.LogError($"场景保存失败：{scenePath}");
                 return;
             }
 
             AssetDatabase.Refresh();
-            EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath));
-            Debug.Log($"已生成战斗场景 {ScenePath}，布局资产 {LayoutPath}。按 Play 开打；改布局直接改那个资产。");
+            EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePath));
+            Debug.Log($"已生成战斗场景 {scenePath}（预设 {scenario}），布局资产 {LayoutPath}。"
+                      + "按 Play 开打；改布局直接改那个资产。");
         }
 
-        [MenuItem("TCGinFU/重建默认布局资产", priority = 1)]
+        [MenuItem("TCGinFU/重建默认布局资产", priority = 2)]
         public static void RegenerateLayout()
         {
             BattleLayoutAsset existing = AssetDatabase.LoadAssetAtPath<BattleLayoutAsset>(LayoutPath);

@@ -1,0 +1,380 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using TCGinFU.Content.Json;
+using TCGinFU.Core;
+
+namespace TCGinFU.Content.Loading
+{
+    /// <summary>
+    /// 把内容包 JSON 解析成 Core 的 POCO。
+    ///
+    /// **本类不碰文件系统**：只接受已经读好的字符串，由调用方决定内容是
+    /// <c>File.ReadAllText</c> 来的还是 <c>TextAsset.text</c> 来的。
+    /// 这样 <c>TCGinFU.Content</c> 的 <c>noEngineReferences</c> 保得住，
+    /// 测试也不需要 mock 文件系统（见 data_architecture.md §3）。
+    /// </summary>
+    public static class ContentLoader
+    {
+        /// <summary>按 <c>pack.json</c> 的清单顺序加载一个内容包。</summary>
+        /// <param name="readFile">相对内容包根目录的路径 → 文件文本。读不到应返回 null。</param>
+        public static void LoadPack(ContentDatabase db, Func<string, string> readFile, LoadReport report)
+        {
+            if (db == null) throw new ArgumentNullException(nameof(db));
+            if (readFile == null) throw new ArgumentNullException(nameof(readFile));
+            report ??= new LoadReport();
+
+            JsonValue manifest = ReadJson(readFile, "pack.json", report);
+            if (!manifest.Exists) return;
+
+            int schema = manifest["schemaVersion"].AsInt(1);
+            if (schema != SupportedSchemaVersion)
+            {
+                report.Errors.Add(
+                    $"pack.json：schemaVersion {schema} 与当前支持的 {SupportedSchemaVersion} 不符");
+                return;
+            }
+
+            // 顺序有意义：卡牌必须先于卡组加载，卡组展开时要按 Id 找卡
+            LoadList(db, readFile, report, manifest["cards"], "cards", LoadCards);
+            LoadList(db, readFile, report, manifest["characters"], "characters", LoadCharacters);
+            LoadList(db, readFile, report, manifest["enemies"], "enemies", LoadEnemies);
+            LoadList(db, readFile, report, manifest["decks"], "decks", LoadDecks);
+        }
+
+        public const int SupportedSchemaVersion = 1;
+
+        private static void LoadList(
+            ContentDatabase db, Func<string, string> readFile, LoadReport report,
+            JsonValue paths, string label,
+            Action<ContentDatabase, JsonValue, string, LoadReport> load)
+        {
+            foreach (JsonValue entry in paths.Items)
+            {
+                string rel = entry.AsString();
+                if (rel == null) { report.Errors.Add($"pack.json 的 {label} 里有非字符串项"); continue; }
+
+                JsonValue root = ReadJson(readFile, rel, report);
+                if (root.Exists) load(db, root, rel, report);
+            }
+        }
+
+        private static JsonValue ReadJson(Func<string, string> readFile, string rel, LoadReport report)
+        {
+            string text;
+            try
+            {
+                text = readFile(rel);
+            }
+            catch (Exception e)
+            {
+                report.Errors.Add($"{rel}：读取失败 — {e.Message}");
+                return JsonValue.Missing;
+            }
+
+            if (text == null) { report.Errors.Add($"{rel}：文件不存在"); return JsonValue.Missing; }
+
+            try
+            {
+                return Json.Json.Parse(text);
+            }
+            catch (JsonException e)
+            {
+                report.Errors.Add($"{rel}：{e.Message}");
+                return JsonValue.Missing;
+            }
+        }
+
+        // ───────────────────────────── 卡牌 ─────────────────────────────
+
+        private static void LoadCards(ContentDatabase db, JsonValue root, string file, LoadReport report)
+        {
+            foreach (JsonValue node in root["cards"].Items)
+            {
+                CardDefinition card = ReadCard(node, file, report);
+                if (card != null) db.Put(card);
+            }
+        }
+
+        private static CardDefinition ReadCard(JsonValue node, string file, LoadReport report)
+        {
+            string id = node["id"].AsString();
+            if (string.IsNullOrWhiteSpace(id)) { report.Errors.Add($"{file}：有卡牌缺少 id"); return null; }
+
+            string where = $"{file} / {id}";
+            var errors = report.Errors;
+
+            var colors = new List<AttributeColor>();
+            foreach (JsonValue c in node["colors"].Items)
+            {
+                colors.Add(c.AsEnum(AttributeColor.Might, $"{where} 的 colors", errors));
+            }
+
+            if (colors.Count > 2) errors.Add($"{where}：颜色最多 2 项，当前 {colors.Count} 项");
+
+            return new CardDefinition(
+                id,
+                node["name"].AsString(id),
+                node["category"].AsEnum(CardCategory.Class, $"{where} 的 category", errors),
+                node["kind"].AsEnum(CardKind.Skill, $"{where} 的 kind", errors))
+            {
+                Colors = colors,
+                ApCost = node["ap"].AsInt(),
+                MpCost = node["mp"].AsInt(),
+                ChargeCost = node["charge"].AsInt(),
+                HasCrit = node["hasCrit"].AsBool(),
+                ClassId = Blank(node["classId"].AsString()),
+                RulesText = node["rulesText"].AsString(),
+                BehaviourId = Blank(node["behaviourId"].AsString()),
+                WeaponBaseDamage = node["weaponBaseDamage"].AsInt(),
+                ArmorBaseShield = node["armorBaseShield"].AsInt(),
+                TwoHanded = node["twoHanded"].AsBool(),
+                Element = node["element"].AsEnum(DamageElement.Physical, $"{where} 的 element", errors),
+                ShieldKind = node["shieldKind"].AsEnum(ShieldKind.Physical, $"{where} 的 shieldKind", errors),
+                TransformTrigger = node["transformTrigger"]
+                    .AsEnum(TransformTrigger.Conditional, $"{where} 的 transformTrigger", errors),
+                TransformConditionText = node["transformConditionText"].AsString(),
+                Effects = node["effects"].Items
+                    .Select((e, i) => ReadEffect(e, $"{where} 的 effects[{i}]", errors))
+                    .ToArray(),
+            };
+        }
+
+        private static EffectData ReadEffect(JsonValue node, string where, List<string> errors)
+        {
+            JsonValue amount = node["amount"];
+            int times = amount["times"].AsInt(1);
+            int dividedBy = amount["dividedBy"].AsInt(1);
+            if (times == 0) { errors.Add($"{where}：amount.times 不能为 0"); times = 1; }
+            if (dividedBy <= 0) { errors.Add($"{where}：amount.dividedBy 必须为正"); dividedBy = 1; }
+
+            EffectKind kind = node["kind"].AsEnum(EffectKind.Damage, $"{where} 的 kind", errors);
+            TargetScope scope = node["target"].AsEnum(TargetScope.SingleEnemy, $"{where} 的 target", errors);
+
+            return new EffectData
+            {
+                Kind = kind,
+                Amount = new ValueExpr(
+                    amount["source"].AsEnum(ValueSource.Flat, $"{where} 的 amount.source", errors),
+                    amount["add"].AsInt(), times, dividedBy),
+                // 援护改写的是「本次结算的既定目标」，作用域强制成 CurrentTarget，与 SerializedEffect 保持一致
+                Target = new TargetSelector(kind == EffectKind.Cover ? TargetScope.CurrentTarget : scope),
+                Element = node["element"].AsEnum(DamageElement.Physical, $"{where} 的 element", errors),
+                ShieldKind = node["shieldKind"].AsEnum(ShieldKind.Physical, $"{where} 的 shieldKind", errors),
+                StatusId = Blank(node["statusId"].AsString()),
+                Duration = node["duration"].AsInt(1),
+                Condition = node["condition"].AsEnum(EffectCondition.Always, $"{where} 的 condition", errors),
+            };
+        }
+
+        // ───────────────────────────── 角色 ─────────────────────────────
+
+        private static void LoadCharacters(ContentDatabase db, JsonValue root, string file, LoadReport report)
+        {
+            foreach (JsonValue node in root["characters"].Items)
+            {
+                CharacterContent c = ReadCharacter(db, node, file, report);
+                if (c != null) db.Put(c);
+            }
+        }
+
+        private static CharacterContent ReadCharacter(
+            ContentDatabase db, JsonValue node, string file, LoadReport report)
+        {
+            string id = node["id"].AsString();
+            if (string.IsNullOrWhiteSpace(id)) { report.Errors.Add($"{file}：有角色缺少 id"); return null; }
+
+            string where = $"{file} / {id}";
+            var errors = report.Errors;
+
+            var classes = new List<ClassLevel>();
+            foreach (JsonValue c in node["classes"].Items)
+            {
+                string classId = c["classId"].AsString();
+                if (string.IsNullOrWhiteSpace(classId)) { errors.Add($"{where}：职业项缺少 classId"); continue; }
+                classes.Add(new ClassLevel(classId, c["level"].AsInt(1)));
+            }
+
+            if (classes.Count == 0) { errors.Add($"{where}：角色至少要有 1 个职业"); return null; }
+
+            JsonValue dice = node["dice"];
+            var attributeDice = new AttributeDice(
+                dice["Might"].AsEnum(DieRank.D6, $"{where} 的 dice.Might", errors),
+                dice["Insight"].AsEnum(DieRank.D6, $"{where} 的 dice.Insight", errors),
+                dice["Dexterity"].AsEnum(DieRank.D6, $"{where} 的 dice.Dexterity", errors),
+                dice["Willpower"].AsEnum(DieRank.D6, $"{where} 的 dice.Willpower", errors));
+
+            CharacterSheet sheet;
+            try
+            {
+                sheet = new CharacterSheet(
+                    node["name"].AsString(id), classes, attributeDice,
+                    node["hpBonus"].AsInt(), node["mpBonus"].AsInt());
+            }
+            catch (ArgumentException e)
+            {
+                errors.Add($"{where}：{e.Message}");
+                return null;
+            }
+
+            return new CharacterContent
+            {
+                Id = id,
+                DisplayName = node["name"].AsString(id),
+                Subtitle = node["subtitle"].AsString(""),
+                Sheet = sheet,
+                // R-19：装备档案直接从卡牌定义派生，数值不另记一份
+                Weapon = EquipFrom(db, node["weaponCardId"].AsString(), where, errors),
+                Armor = ArmorFrom(db, node["armorCardId"].AsString(), where, errors),
+                StartingRow = node["startingRow"].AsEnum(Row.Front, $"{where} 的 startingRow", errors),
+                ChargeCapacity = node["chargeCapacity"].AsInt(2),
+                DeckId = node["deckId"].AsString(),
+                LegacyHp = node["legacy"]["hp"].AsInt(),
+                LegacyMp = node["legacy"]["mp"].AsInt(),
+            };
+        }
+
+        private static WeaponProfile EquipFrom(
+            ContentDatabase db, string cardId, string where, List<string> errors)
+        {
+            if (string.IsNullOrEmpty(cardId)) return WeaponProfile.Unarmed;
+
+            CardDefinition card = db.Card(cardId);
+            if (card == null) { errors.Add($"{where}：找不到武器牌 {cardId}"); return WeaponProfile.Unarmed; }
+            if (card.Category != CardCategory.Weapon)
+            {
+                errors.Add($"{where}：{cardId} 不是武器牌（category = {card.Category}）");
+                return WeaponProfile.Unarmed;
+            }
+
+            return WeaponProfile.FromCard(card);
+        }
+
+        private static ArmorProfile ArmorFrom(
+            ContentDatabase db, string cardId, string where, List<string> errors)
+        {
+            if (string.IsNullOrEmpty(cardId)) return ArmorProfile.Unarmored;
+
+            CardDefinition card = db.Card(cardId);
+            if (card == null) { errors.Add($"{where}：找不到防具牌 {cardId}"); return ArmorProfile.Unarmored; }
+            if (card.Category != CardCategory.Armor)
+            {
+                errors.Add($"{where}：{cardId} 不是防具牌（category = {card.Category}）");
+                return ArmorProfile.Unarmored;
+            }
+
+            return ArmorProfile.FromCard(card);
+        }
+
+        // ───────────────────────────── 敌人 ─────────────────────────────
+
+        private static void LoadEnemies(ContentDatabase db, JsonValue root, string file, LoadReport report)
+        {
+            foreach (JsonValue node in root["enemies"].Items)
+            {
+                EnemyContent e = ReadEnemy(node, file, report);
+                if (e != null) db.Put(e);
+            }
+        }
+
+        private static EnemyContent ReadEnemy(JsonValue node, string file, LoadReport report)
+        {
+            string id = node["id"].AsString();
+            if (string.IsNullOrWhiteSpace(id)) { report.Errors.Add($"{file}：有敌人缺少 id"); return null; }
+
+            string where = $"{file} / {id}";
+            var errors = report.Errors;
+
+            var affinities = new AffinityTable();
+            foreach (KeyValuePair<string, JsonValue> pair in node["affinities"].Fields)
+            {
+                if (!Enum.TryParse(pair.Key, ignoreCase: true, out DamageElement element))
+                {
+                    errors.Add($"{where}：affinities 里「{pair.Key}」不是合法的伤害属性");
+                    continue;
+                }
+
+                affinities.Set(element, pair.Value.AsEnum(
+                    Affinity.Normal, $"{where} 的 affinities.{pair.Key}", errors));
+            }
+
+            var intents = new Dictionary<string, EnemyIntent>(StringComparer.Ordinal);
+            foreach (JsonValue node2 in node["intents"].Items)
+            {
+                string intentId = node2["id"].AsString();
+                if (string.IsNullOrWhiteSpace(intentId)) { errors.Add($"{where}：有意图缺少 id"); continue; }
+
+                intents[intentId] = new EnemyIntent(
+                    node2["name"].AsString(intentId),
+                    node2["targeting"].AsEnum(
+                        IntentTargeting.DefaultSingle, $"{where} 的意图 {intentId} 的 targeting", errors))
+                {
+                    Damage = node2["damage"].AsInt(),
+                    Element = node2["element"].AsEnum(
+                        DamageElement.Physical, $"{where} 的意图 {intentId} 的 element", errors),
+                    DesignatedRow = node2["designatedRow"].AsEnum(
+                        Row.Front, $"{where} 的意图 {intentId} 的 designatedRow", errors),
+                };
+            }
+
+            JsonValue pools = node["intentPools"];
+            List<string> Pool(string key) => pools[key].Items
+                .Select(v => v.AsString())
+                .Where(s => s != null)
+                .Where(s =>
+                {
+                    if (intents.ContainsKey(s)) return true;
+                    errors.Add($"{where}：意图池 {key} 引用了不存在的意图 {s}");
+                    return false;
+                })
+                .ToList();
+
+            int critResist = node["critResist"].AsInt(-1);
+
+            return new EnemyContent
+            {
+                Id = id,
+                DisplayName = node["name"].AsString(id),
+                Hp = node["hp"].AsInt(1),
+                Rank = node["rank"].AsEnum(EnemyRank.Normal, $"{where} 的 rank", errors),
+                CritResist = critResist < 0 ? null : critResist,
+                Row = node["row"].AsEnum(Row.Front, $"{where} 的 row", errors),
+                Affinities = affinities,
+                Intents = intents,
+                PhaseOne = Pool("phaseOne"),
+                PhaseTwo = Pool("phaseTwo"),
+                PhaseTwoHpThreshold = node["phaseTwoHpThreshold"].AsInt(node["hp"].AsInt(1) / 2),
+                IntentsPerRound = node["intentsPerRound"].AsInt(3),
+            };
+        }
+
+        // ───────────────────────────── 卡组 ─────────────────────────────
+
+        private static void LoadDecks(ContentDatabase db, JsonValue root, string file, LoadReport report)
+        {
+            string id = root["id"].AsString();
+            if (string.IsNullOrWhiteSpace(id)) { report.Errors.Add($"{file}：卡组缺少 id"); return; }
+
+            db.Put(new DeckContent
+            {
+                Id = id,
+                DisplayName = root["name"].AsString(id),
+                CharacterId = root["characterId"].AsString(),
+                Main = ReadEntries(root["main"]),
+                FormDecks = root["formDecks"].Items.Select(f => new FormDeckContent
+                {
+                    TransformCardId = f["transformCard"].AsString(),
+                    Cards = ReadEntries(f["cards"]),
+                }).ToArray(),
+            });
+        }
+
+        private static (string, int)[] ReadEntries(JsonValue list)
+            => list.Items
+                .Select(e => (e["card"].AsString(), Math.Max(1, e["count"].AsInt(1))))
+                .Where(e => e.Item1 != null)
+                .ToArray();
+
+        private static string Blank(string s) => string.IsNullOrWhiteSpace(s) ? null : s;
+    }
+}
