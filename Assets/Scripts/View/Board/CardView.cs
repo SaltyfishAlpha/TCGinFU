@@ -231,9 +231,14 @@ namespace TCGinFU.View
             Transform board = _context.BoardRoot;
             if (camera == null || board == null) return false;
 
-            // 桌面法线就是根节点的 forward；lift 在根节点局部空间里是像素，要乘上根节点缩放
+            // 桌面的 forward 是**背离**镜头的（见 CardMeshFactory.TowardCamera），
+            // 所以「抬起来」要往它的反方向走。写成 +forward 的话卡会被抬到桌面背后、
+            // 被不透明的桌布整个挡住——表现就是「拖动时卡片消失」。
             Vector3 normal = board.forward;
-            Vector3 origin = board.position + normal * (liftPx * board.lossyScale.z);
+            Vector3 toCamera = normal * CardMeshFactory.TowardCamera;
+
+            // lift 是设计像素，乘根节点缩放换算到世界单位
+            Vector3 origin = board.position + toCamera * (liftPx * board.lossyScale.z);
 
             var plane = new Plane(normal, origin);
             Ray ray = camera.ScreenPointToRay(eventData.position);
