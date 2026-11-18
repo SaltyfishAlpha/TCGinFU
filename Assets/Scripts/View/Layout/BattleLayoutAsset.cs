@@ -44,22 +44,25 @@ namespace TCGinFU.View
         public static BattleLayoutAsset CreateDefault()
         {
             var asset = CreateInstance<BattleLayoutAsset>();
+
+            // 五条横带（敌后 / 敌前 / 我前 / 我后 / 手牌）平分可用高度。
+            // 角色也是卡，所以每条带的高度按标准卡高留，再加一点余量给横置的充能牌。
             asset.zones = new List<ZoneLayout>
             {
                 // 敌方按**敌人自己的视角**排：它们的后排在更远处，也就是屏幕更上方
                 new()
                 {
                     key = "enemy_back", displayName = "敌方后排", source = ZoneSource.敌方后排,
-                    anchorMin = new Vector2(0.12f, 0.80f), anchorMax = new Vector2(0.88f, 0.955f),
-                    arrange = ZoneArrange.横排, combatantSize = new Vector2(200f, 118f), spacing = 18f,
+                    anchorMin = new Vector2(0.14f, 0.805f), anchorMax = new Vector2(0.86f, 0.985f),
+                    arrange = ZoneArrange.横排, cardScale = 0.92f, spacing = 22f,
                     reservedSlots = 2, acceptsDrop = true,
                     background = new Color(0.6f, 0.2f, 0.2f, 0.05f),
                 },
                 new()
                 {
                     key = "enemy_front", displayName = "敌方前排", source = ZoneSource.敌方前排,
-                    anchorMin = new Vector2(0.12f, 0.615f), anchorMax = new Vector2(0.88f, 0.79f),
-                    arrange = ZoneArrange.横排, combatantSize = new Vector2(200f, 140f), spacing = 18f,
+                    anchorMin = new Vector2(0.14f, 0.608f), anchorMax = new Vector2(0.86f, 0.788f),
+                    arrange = ZoneArrange.横排, cardScale = 0.92f, spacing = 22f,
                     reservedSlots = 2, acceptsDrop = true,
                     background = new Color(0.6f, 0.2f, 0.2f, 0.08f),
                 },
@@ -68,46 +71,54 @@ namespace TCGinFU.View
                 new()
                 {
                     key = "party_front", displayName = "我方前排", source = ZoneSource.我方前排,
-                    anchorMin = new Vector2(0.12f, 0.425f), anchorMax = new Vector2(0.88f, 0.60f),
-                    arrange = ZoneArrange.横排, combatantSize = new Vector2(220f, 150f), spacing = 18f,
+                    anchorMin = new Vector2(0.14f, 0.411f), anchorMax = new Vector2(0.86f, 0.591f),
+                    arrange = ZoneArrange.横排, cardScale = 0.92f, spacing = 22f,
                     reservedSlots = 2, acceptsDrop = true,
                     background = new Color(0.2f, 0.45f, 0.7f, 0.08f),
                 },
                 new()
                 {
                     key = "party_back", displayName = "我方后排", source = ZoneSource.我方后排,
-                    anchorMin = new Vector2(0.12f, 0.24f), anchorMax = new Vector2(0.88f, 0.415f),
-                    arrange = ZoneArrange.横排, combatantSize = new Vector2(220f, 150f), spacing = 18f,
+                    anchorMin = new Vector2(0.14f, 0.214f), anchorMax = new Vector2(0.86f, 0.394f),
+                    arrange = ZoneArrange.横排, cardScale = 0.92f, spacing = 22f,
                     reservedSlots = 2, acceptsDrop = true,
                     background = new Color(0.2f, 0.45f, 0.7f, 0.06f),
                 },
 
                 new()
                 {
+                    key = "hand", displayName = "手牌", source = ZoneSource.手牌,
+                    anchorMin = new Vector2(0.135f, 0.012f), anchorMax = new Vector2(0.865f, 0.197f),
+                    arrange = ZoneArrange.扇形, cardScale = 1.0f, spacing = 14f,
+                    draggable = true, reservedSlots = 5,
+                    background = new Color(1f, 1f, 1f, 0.04f),
+                },
+
+                new()
+                {
                     key = "deck", displayName = "卡组", source = ZoneSource.卡组,
-                    anchorMin = new Vector2(0.008f, 0.03f), anchorMax = new Vector2(0.105f, 0.23f),
+                    anchorMin = new Vector2(0.01f, 0.012f), anchorMax = new Vector2(0.125f, 0.197f),
                     arrange = ZoneArrange.堆叠, cardScale = 0.95f, faceDown = true, reservedSlots = 1,
                 },
                 new()
                 {
-                    key = "hand", displayName = "手牌", source = ZoneSource.手牌,
-                    anchorMin = new Vector2(0.115f, 0.015f), anchorMax = new Vector2(0.885f, 0.235f),
-                    arrange = ZoneArrange.扇形, cardScale = 1.1f, spacing = 14f,
-                    draggable = true, reservedSlots = 5,
-                    background = new Color(1f, 1f, 1f, 0.04f),
+                    key = "discard", displayName = "弃牌堆", source = ZoneSource.弃牌堆,
+                    anchorMin = new Vector2(0.875f, 0.012f), anchorMax = new Vector2(0.99f, 0.197f),
+                    arrange = ZoneArrange.堆叠, cardScale = 0.95f, reservedSlots = 1, peekable = true,
                 },
                 new()
                 {
                     key = "continuous", displayName = "持续区", source = ZoneSource.持续区,
-                    anchorMin = new Vector2(0.895f, 0.245f), anchorMax = new Vector2(0.992f, 0.44f),
-                    arrange = ZoneArrange.堆叠, cardScale = 0.95f, reservedSlots = 1,
+                    anchorMin = new Vector2(0.875f, 0.214f), anchorMax = new Vector2(0.99f, 0.394f),
+                    arrange = ZoneArrange.堆叠, cardScale = 0.95f, reservedSlots = 1, peekable = true,
                     background = new Color(0.5f, 0.3f, 0.8f, 0.09f),
                 },
                 new()
                 {
-                    key = "discard", displayName = "弃牌堆", source = ZoneSource.弃牌堆,
-                    anchorMin = new Vector2(0.895f, 0.03f), anchorMax = new Vector2(0.992f, 0.23f),
-                    arrange = ZoneArrange.堆叠, cardScale = 0.95f, reservedSlots = 1,
+                    key = "completed", displayName = "已完成升变", source = ZoneSource.已完成升变区,
+                    anchorMin = new Vector2(0.01f, 0.214f), anchorMax = new Vector2(0.125f, 0.394f),
+                    arrange = ZoneArrange.堆叠, cardScale = 0.95f, reservedSlots = 1, peekable = true,
+                    background = new Color(0.8f, 0.6f, 0.2f, 0.07f),
                 },
             };
 
@@ -132,10 +143,7 @@ namespace TCGinFU.View
                 if (zone.cardScale <= 0.01f) zone.cardScale = 1f;
                 zone.cardScale = Mathf.Clamp(zone.cardScale, 0.2f, 2f);
 
-                if (zone.IsCombatantZone && (zone.combatantSize.x < 1f || zone.combatantSize.y < 1f))
-                {
-                    zone.combatantSize = new Vector2(210f, 150f);
-                }
+                if (zone.stackStep <= 0.01f) zone.stackStep = 16f;
 
                 zone.reservedSlots = Mathf.Clamp(zone.reservedSlots, 0, 12);
             }

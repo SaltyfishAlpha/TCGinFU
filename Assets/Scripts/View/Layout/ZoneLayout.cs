@@ -36,7 +36,10 @@ namespace TCGinFU.View
         堆叠,
         /// <summary>网格</summary>
         网格,
-        /// <summary>横置叠放：卡牌旋转 90° 依次压住，对应实体打牌里「横置一张牌表示充能」</summary>
+        /// <summary>
+        /// 横置叠放：卡牌旋转 90° 压在角色卡下面，一张比一张低，只露出下缘。
+        /// 对应实体打牌里「把牌横着塞到角色卡下面表示充能」。
+        /// </summary>
         横置,
     }
 
@@ -75,12 +78,13 @@ namespace TCGinFU.View
         [Header("排布")]
         public ZoneArrange arrange = ZoneArrange.横排;
 
-        [Tooltip("卡牌缩放。实际尺寸 = 布局资产里的标准卡牌尺寸 × 这个值，比例恒定不变形")]
+        [Tooltip("卡牌缩放。实际尺寸 = 布局资产里的标准卡牌尺寸 × 这个值，比例恒定不变形。"
+                 + "角色卡同样走这个值——棋盘上的角色本身就是一张卡")]
         [Range(0.2f, 2f)]
         public float cardScale = 1f;
 
-        [Tooltip("角色面板尺寸。只有排位区域（前排/后排）用得到")]
-        public Vector2 combatantSize = new(210f, 150f);
+        [Tooltip("横置叠放时每张往下错开的像素")]
+        public float stackStep = 16f;
 
         public float spacing = 12f;
 
@@ -106,6 +110,9 @@ namespace TCGinFU.View
 
         [Tooltip("背面朝上。卡组、充能指示物用")]
         public bool faceDown;
+
+        [Tooltip("能不能点开查看里面所有的牌。弃牌堆、已完成升变区这类公开信息应当打开")]
+        public bool peekable;
 
         public bool showLabel = true;
 

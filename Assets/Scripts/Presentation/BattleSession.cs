@@ -91,9 +91,16 @@ namespace TCGinFU.Presentation
 
         public bool IsWaitingOn(string playerId) => Engine.Pending.WaitingOn.Contains(playerId);
 
+        /// <summary>给状态栏写一条提示。表现层做了点什么、但并没有提交动作时用。</summary>
+        public void SetMessage(string text, bool isWarning = false)
+        {
+            Message = text;
+            LastActionFailed = isWarning;
+        }
+
         /// <summary>
         /// 提交动作并记录结果。被拒绝的动作不会改动任何状态——
-        /// 所以沙盒可以直接乐观提交，失败了把原因显示出来就行。
+        /// 所以界面可以直接乐观提交，失败了把原因显示出来就行。
         /// </summary>
         public void Submit(IBattleAction action, string successText = null)
         {

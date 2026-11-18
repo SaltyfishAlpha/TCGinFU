@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace TCGinFU.View
@@ -31,7 +32,7 @@ namespace TCGinFU.View
     /// 具体放什么由 <see cref="BattleView"/> 决定——所以新增一种区域
     /// 不用改这个文件。
     /// </summary>
-    public sealed class ZoneView : MonoBehaviour, IDropTarget
+    public sealed class ZoneView : MonoBehaviour, IDropTarget, IPointerClickHandler
     {
         private readonly List<RectTransform> _items = new();
         private readonly List<RectTransform> _ghosts = new();
@@ -51,6 +52,11 @@ namespace TCGinFU.View
 
         public System.Action<ZoneView, CardView> DropHandler { get; set; }
 
+        /// <summary>点击区域（用于展开查看牌堆内容）。</summary>
+        public System.Action<ZoneView> ClickHandler { get; set; }
+
+        public void OnPointerClick(PointerEventData eventData) => ClickHandler?.Invoke(this);
+
         public static ZoneView Create(Transform parent, ZoneLayout layout, Vector2 slotSize)
         {
             RectTransform rect = UiBuilder.CreateRect($"Zone_{layout.key}", parent);
@@ -66,7 +72,9 @@ namespace TCGinFU.View
 
             view._background = UiBuilder.CreateImage("Bg", rect, layout.background);
             view._background.rectTransform.Stretch();
-            view._background.raycastTarget = true;
+            // 完全透明的底板不该吃掉点击——充能堆就是透明的，它压在角色卡下半部分上，
+            // 要是挡住射线，点角色卡的下半边就选不中人了
+            view._background.raycastTarget = layout.background.a > 0.001f;
 
             UiBuilder.CreateBorder(rect, layout.border);
 
@@ -143,6 +151,9 @@ namespace TCGinFU.View
         private void WarnIfTooSmall()
         {
             if (_warnedTooSmall) return;
+
+            // 横置堆是**故意**画到自己矩形外面的（牌要露在角色卡外），不适用这条检查
+            if (Layout.arrange == ZoneArrange.横置) return;
 
             Vector2 size = Rect.rect.size;
             if (size.x <= 0f || size.y <= 0f) return; // 布局还没算完，下一帧再说
@@ -267,19 +278,16 @@ namespace TCGinFU.View
         }
 
         /// <summary>
-        /// 横置叠放：对应实体打牌里「在角色卡上横放一张牌表示充能」。
-        /// 卡旋转 90°，依次往右压住一部分，只露出边缘。
+        /// 横置叠放：对应实体打牌里「把牌横着塞到角色卡下面表示充能」。
+        /// 卡旋转 90° 压在角色卡背后，一张比一张低，只露出下缘那一条。
         /// </summary>
         private List<SlotPose> SidewaysPoses(int count)
         {
-            // 旋转后卡牌在水平方向的占位是它的高度
-            float rotatedWidth = SlotSize.y;
-            float step = Mathf.Max(12f, rotatedWidth * 0.3f + Layout.spacing);
-            float total = rotatedWidth + (count - 1) * step;
-            float startX = -total / 2f + rotatedWidth / 2f;
+            float step = Mathf.Max(6f, Layout.stackStep);
 
+            // 第一张几乎完全藏在角色卡后面，后面的依次往下露
             var poses = new List<SlotPose>(count);
-            for (int i = 0; i < count; i++) poses.Add(new SlotPose(new Vector2(startX + i * step, 0f), 90f));
+            for (int i = 0; i < count; i++) poses.Add(new SlotPose(new Vector2(0f, -i * step), 90f));
             return poses;
         }
 

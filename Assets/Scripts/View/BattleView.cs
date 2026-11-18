@@ -37,6 +37,7 @@ namespace TCGinFU.View
         private readonly List<CardView> _cardPool = new();
 
         private RectTransform _board;
+        private ZonePeekPanel _peekPanel;
         private Text _statusText;
         private Text _messageText;
         private Button _contextButton;
@@ -89,13 +90,11 @@ namespace TCGinFU.View
 
             foreach (ZoneLayout zoneLayout in layout.zones)
             {
-                Vector2 slotSize = zoneLayout.IsCombatantZone
-                    ? zoneLayout.combatantSize
-                    : layout.CardSizeFor(zoneLayout);
-
-                ZoneView zone = ZoneView.Create(_board, zoneLayout, slotSize);
+                // 角色也是卡，所以全部区域都用同一套标准卡牌尺寸
+                ZoneView zone = ZoneView.Create(_board, zoneLayout, layout.CardSizeFor(zoneLayout));
                 zone.DropFilter = ZoneAcceptsCard;
                 zone.DropHandler = HandleZoneDrop;
+                zone.ClickHandler = HandleZoneClick;
                 _zones.Add(zone);
                 if (zoneLayout.acceptsDrop && !zoneLayout.IsCombatantZone) _dropTargets.Add(zone);
             }
@@ -106,6 +105,9 @@ namespace TCGinFU.View
             DragLayer = UiBuilder.CreateRect("DragLayer", canvasGo.transform);
             DragLayer.Stretch();
             DragLayer.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0.5f);
+
+            // 查看牌堆的面板盖在最上面
+            _peekPanel = ZonePeekPanel.Create(canvasGo.transform, layout.CardSize);
         }
 
         private static void EnsureEventSystem()
@@ -225,21 +227,20 @@ namespace TCGinFU.View
 
                 if (!_combatantViews.TryGetValue(combatant.Id, out CombatantView view))
                 {
-                    // 充能牌横置压在角色卡上，用标准卡牌的一个缩小比例
-                    view = CombatantView.Create(
-                        zone.Rect, layout.CardSize * 0.38f, withChargeStrip: !isEnemy);
+                    // 角色本身就是一张卡，尺寸直接用区域的卡位尺寸
+                    view = CombatantView.Create(zone.Rect, zone.SlotSize, withChargeStack: !isEnemy);
                     view.DropFilter = CombatantAcceptsCard;
                     view.DropHandler = HandleCombatantDrop;
                     view.ClickHandler = HandleCombatantClick;
                     _combatantViews[combatant.Id] = view;
                     _dropTargets.Add(view);
 
-                    if (view.ChargeStrip != null)
+                    if (view.ChargeStack != null)
                     {
-                        view.ChargeStrip.DropFilter = (_, card) => card.Zone != null && card.Zone.Layout.draggable;
-                        view.ChargeStrip.DropHandler = HandleChargeDrop;
-                        // 排在角色面板之后：命中判定倒序遍历，充能条才会优先于面板本体
-                        _dropTargets.Add(view.ChargeStrip);
+                        view.ChargeStack.DropFilter = (_, card) => card.Zone != null && card.Zone.Layout.draggable;
+                        view.ChargeStack.DropHandler = HandleChargeDrop;
+                        // 排在角色卡之后：命中判定倒序遍历，露在卡外的那截充能才会优先命中
+                        _dropTargets.Add(view.ChargeStack);
                     }
                 }
 
@@ -262,9 +263,9 @@ namespace TCGinFU.View
         /// </summary>
         private void FillChargeStrip(CombatantView view, Combatant combatant, HashSet<int> liveCards)
         {
-            if (view.ChargeStrip == null || combatant is not PlayerCharacter player) return;
+            if (view.ChargeStack == null || combatant is not PlayerCharacter player) return;
 
-            ZoneView strip = view.ChargeStrip;
+            ZoneView strip = view.ChargeStack;
             strip.BeginRebuild();
 
             foreach (ChargeToken token in player.Zones.Charges.Tokens)
@@ -457,6 +458,27 @@ namespace TCGinFU.View
 
             Session.Submit(new PlayCardAction(player.Id, card.Card.Uid, target), $"打出「{card.Card.Name}」。");
             Refresh();
+        }
+
+        /// <summary>点可查看的叠放区域 → 把里面的牌全部摊开（弃牌堆是公开信息）。</summary>
+        private void HandleZoneClick(ZoneView zone)
+        {
+            if (!zone.Layout.peekable) return;
+
+            IReadOnlyList<CardInstance> cards = ResolveCards(zone.Layout);
+            if (cards.Count == 0)
+            {
+                Session.SetMessage($"{zone.Layout.displayName}是空的。");
+                Refresh();
+                return;
+            }
+
+            PlayerCharacter owner = ResolvePlayer(zone.Layout.playerIndex);
+            string title = owner == null
+                ? zone.Layout.displayName
+                : $"{owner.Name} 的{zone.Layout.displayName}";
+
+            _peekPanel.Open(title, cards, this);
         }
 
         private bool ZoneAcceptsCard(ZoneView zone, CardView card)
