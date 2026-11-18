@@ -4,6 +4,7 @@
     "references": [
         "TCGinFU.Core",
         "TCGinFU.Content",
+        "TCGinFU.Presentation",
         "TCGinFU.Sandbox"
     ],
     "includePlatforms": [

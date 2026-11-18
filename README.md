@@ -189,6 +189,23 @@ new CardDefinition("wpn_shortbow_shot", "短弓速射", CardCategory.Weapon, Car
 
 ---
 
+## 不启动 Unity 做验证
+
+```bash
+bash Tools/check-asmdefs.sh      # 按 asmdef 的真实程序集边界编译整个工程
+```
+
+**必须用这个，不能把所有 .cs 塞进一个 csproj 编译。** 后者会把程序集边界整个抹掉，
+asmdef 少写一条 `references` 这种错误一个都抓不到——踩过：单工程编译全绿，
+Unity 里直接 `CS0234: 命名空间 TCGinFU 中不存在 Presentation`。
+
+脚本刻意**不用 ProjectReference**：MSBuild 的 P2P 引用是传递的，A→B→C 时 A 不写 C 也能编过；
+而 Unity 的 asmdef 引用不传递，用到谁就必须写谁。所以它按依赖顺序逐个编译，
+各自只引用显式列出的那几个 dll，与 Unity 行为一致。
+
+> 需要先在 Unity 里打开过一次工程（生成 `.csproj` 与 `Library/ScriptAssemblies`），
+> 脚本靠它们定位 Unity 安装目录和包程序集。
+
 ## 跑测试
 
 **Unity 内**：`Window → General → Test Runner → EditMode → Run All`
