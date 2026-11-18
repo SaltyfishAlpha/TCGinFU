@@ -260,6 +260,34 @@ namespace TCGinFU.View
             }
 
             Prune(liveCards, liveCombatants);
+
+            // 必须放在重建之后：FillCardZone 里的 Bind 会把高亮重置成「正常」，
+            // 之前就是因为这个，选完「贴充能」后那张牌的高亮立刻没了，看着像没生效
+            ApplyChargeTargetingHighlights();
+        }
+
+        /// <summary>
+        /// 选充能目标期间的提示：被选中的那张牌保持高亮，可以贴的队友角色卡亮绿。
+        /// 不在选择状态时负责把这些高亮清掉。
+        /// </summary>
+        private void ApplyChargeTargetingHighlights()
+        {
+            bool targeting = _pendingChargeCard != null;
+
+            foreach (CombatantView view in _combatantViews.Values)
+            {
+                bool valid = targeting
+                             && view.Combatant is PlayerCharacter
+                             && !view.Combatant.IsDown;
+                view.SetDropHighlight(valid ? CardHighlight.合法 : CardHighlight.正常);
+            }
+
+            if (!targeting) return;
+
+            if (_cardViews.TryGetValue(_pendingChargeCard.Uid, out CardView card))
+            {
+                card.SetHighlight(CardHighlight.选中);
+            }
         }
 
         private void FillCardZone(ZoneView zone, HashSet<int> live)
@@ -520,6 +548,14 @@ namespace TCGinFU.View
         public void OnCardHover(CardView card, bool entered)
         {
             if (card.IsDragging) return;
+
+            // 正在等它选目标的那张牌保持选中高亮，别被「鼠标移开」给清掉
+            if (_pendingChargeCard != null && ReferenceEquals(card.Card, _pendingChargeCard))
+            {
+                card.SetHighlight(CardHighlight.选中);
+                return;
+            }
+
             card.SetHighlight(entered ? CardHighlight.悬停 : CardHighlight.正常);
         }
 
@@ -592,7 +628,7 @@ namespace TCGinFU.View
             if (_pendingChargeCard != null)
             {
                 Session.SetMessage(
-                    $"还在选充能目标（「{_pendingChargeCard.Name}」）——请点一名**队友的角色卡**，"
+                    $"还在选充能目标（「{_pendingChargeCard.Name}」）——请点一名<b>队友的角色卡</b>，"
                     + "或用顶栏的「取消充能」。", isWarning: true);
                 Refresh();
                 return;
@@ -680,7 +716,7 @@ namespace TCGinFU.View
 
             _pendingChargeCard = card;
             _pendingChargeOwnerId = owner.Id;
-            Session.SetMessage($"选择要给谁贴充能（「{card.Name}」）——点一名**队友的角色卡**，或用顶栏的「取消充能」。");
+            Session.SetMessage($"选择要给谁贴充能（「{card.Name}」）——点一名<b>队友的角色卡</b>，或用顶栏的「取消充能」。");
             Refresh();
         }
 

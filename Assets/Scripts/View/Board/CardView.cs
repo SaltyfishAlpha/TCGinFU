@@ -11,7 +11,9 @@ namespace TCGinFU.View
         正常,
         悬停,
         拖拽中,
-        /// <summary>可以放在这里</summary>
+        /// <summary>已被选中、正在等后续操作（例如选完「贴充能」等着点目标）</summary>
+        选中,
+        /// <summary>可以放在这里 / 是个合法目标</summary>
         合法,
         /// <summary>放不了</summary>
         非法,
@@ -171,6 +173,7 @@ namespace TCGinFU.View
             {
                 CardHighlight.悬停 => new Color(1f, 1f, 1f, 0.9f),
                 CardHighlight.拖拽中 => new Color(1f, 0.95f, 0.5f, 1f),
+                CardHighlight.选中 => new Color(1f, 0.82f, 0.2f, 1f),
                 CardHighlight.合法 => new Color(0.4f, 1f, 0.5f, 1f),
                 CardHighlight.非法 => new Color(1f, 0.35f, 0.35f, 1f),
                 _ => Color.clear,
