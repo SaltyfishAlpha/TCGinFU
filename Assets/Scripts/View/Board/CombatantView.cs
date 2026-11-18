@@ -52,11 +52,13 @@ namespace TCGinFU.View
             view._collider = go.GetComponent<BoxCollider>();
 
             float t = CardMeshFactory.CardThickness;
+            float front = CardMeshFactory.TowardCamera;
 
+            // 选中环与放置高亮都比卡大一圈、压在卡背后，只露出四周一圈
             view._selectionRing = CardMeshFactory.CreateMeshObject(
                 "Selection", go.transform, CardMeshFactory.Quad, Color.clear);
             view._selectionRing.localScale = new Vector3(sizePx.x * 1.08f, sizePx.y * 1.06f, 1f);
-            view._selectionRing.localPosition = new Vector3(0f, 0f, -t * 0.5f - 0.05f);
+            view._selectionRing.localPosition = new Vector3(0f, 0f, -front * (t * 0.5f + 0.05f));
             view._selectionRing.gameObject.SetActive(false);
 
             view._body = CardMeshFactory.CreateMeshObject(
@@ -66,12 +68,12 @@ namespace TCGinFU.View
             view._faceQuad = CardMeshFactory.CreateMeshObject(
                 "FaceQuad", go.transform, CardMeshFactory.Quad, Color.gray);
             view._faceQuad.localScale = new Vector3(sizePx.x * 0.94f, sizePx.y * 0.95f, 1f);
-            view._faceQuad.localPosition = new Vector3(0f, 0f, t * 0.5f + 0.05f);
+            view._faceQuad.localPosition = new Vector3(0f, 0f, front * (t * 0.5f + 0.05f));
 
             view._highlight = CardMeshFactory.CreateMeshObject(
                 "DropHighlight", go.transform, CardMeshFactory.Quad, Color.clear);
             view._highlight.localScale = new Vector3(sizePx.x * 1.02f, sizePx.y * 1.02f, 1f);
-            view._highlight.localPosition = new Vector3(0f, 0f, -t * 0.5f - 0.1f);
+            view._highlight.localPosition = new Vector3(0f, 0f, -front * (t * 0.5f + 0.1f));
             view._highlight.gameObject.SetActive(false);
 
             view._collider.size = new Vector3(sizePx.x, sizePx.y, t);
@@ -85,7 +87,7 @@ namespace TCGinFU.View
 
         private void BuildFace(Vector2 sizePx, float thickness)
         {
-            _face = CardFace.Create(Root, sizePx, thickness * 0.5f + 0.15f);
+            _face = CardFace.Create(Root, sizePx, CardMeshFactory.TowardCamera * (thickness * 0.5f + 0.15f));
 
             _nameText = _face.AddText(
                 "Name", "", 14, TextAnchor.MiddleCenter, new Vector2(0f, 0.86f), new Vector2(1f, 1f));

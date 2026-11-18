@@ -15,6 +15,20 @@ namespace TCGinFU.View
         /// <summary>卡牌厚度（设计像素）。一张实体卡约 0.3mm，这里夸张一点才看得见。</summary>
         public const float CardThickness = 3.2f;
 
+        /// <summary>
+        /// 桌面局部空间里「朝向镜头」是哪个 Z 方向。
+        /// <para>
+        /// Unity 的约定：相机在 −Z 朝 +Z 看时，identity 旋转的平面/Canvas 内容才是正的
+        /// （默认场景的 Main Camera 就在 (0,1,−10)）。所以桌面根节点的 +Z 是**背离**镜头的，
+        /// 卡面、牌堆的抬升方向一律是局部 −Z。
+        /// </para>
+        /// <para>
+        /// 把这个符号写成常量而不是到处手写负号：之前相机放到了 +Z，结果整个画面左右镜像、
+        /// 所有面片被背面剔除，屏幕一片黑。所有涉及「前后」的偏移都应当乘上它。
+        /// </para>
+        /// </summary>
+        public const float TowardCamera = -1f;
+
         private static Mesh _box;
         private static Mesh _quad;
         private static readonly Dictionary<Color, Material> Materials = new();
@@ -92,8 +106,16 @@ namespace TCGinFU.View
                 new(0.5f, 0.5f, 0f), new(0.5f, -0.5f, 0f),
             });
             mesh.SetUVs(0, new List<Vector2> { new(0f, 0f), new(0f, 1f), new(1f, 1f), new(1f, 0f) });
-            // 法线朝 +Z，也就是朝镜头那一面
-            mesh.SetTriangles(new[] { 0, 1, 2, 0, 2, 3 }, 0);
+
+            // 刻意做成**双面**：两组相反缠绕。
+            // 面片朝向搞反会被背面剔除、整屏漆黑，而这种错误肉眼不可能从代码里看出来，
+            // 多两个三角形换「永远不会因为朝向反了而消失」很划算。
+            mesh.SetTriangles(new[]
+            {
+                0, 1, 2, 0, 2, 3, // 正面
+                0, 2, 1, 0, 3, 2, // 背面
+            }, 0);
+
             mesh.SetNormals(new List<Vector3>
             {
                 Vector3.forward, Vector3.forward, Vector3.forward, Vector3.forward,

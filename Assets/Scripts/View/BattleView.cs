@@ -89,9 +89,9 @@ namespace TCGinFU.View
             var root = new GameObject("Board").transform;
             root.SetParent(transform, false);
             root.localScale = Vector3.one * scale;
-            // 绕 X 轴负向旋转：上边缘（远处的敌人）往镜头反方向倒下去，
-            // 桌面法线仍然朝向镜头那一侧
-            root.localRotation = Quaternion.Euler(-layout.boardTilt, 0f, 0f);
+            // 绕 X 轴正向旋转：上边缘（远处的敌人）往 +Z 倒下去，也就是远离位于 −Z 的镜头。
+            // 注意桌面的 +Z 是**背离**镜头的，朝镜头的一侧是 −Z（见 CardMeshFactory.TowardCamera）
+            root.localRotation = Quaternion.Euler(layout.boardTilt, 0f, 0f);
             root.localPosition = Vector3.zero;
             BoardRoot = root;
 
@@ -101,7 +101,8 @@ namespace TCGinFU.View
             Transform table = CardMeshFactory.CreateMeshObject(
                 "Table", root, CardMeshFactory.Quad, layout.tableColor);
             table.localScale = new Vector3(boardPx.x * 1.35f, boardPx.y * 1.3f, 1f);
-            table.localPosition = new Vector3(0f, 0f, -2f);
+            // 桌布压在所有东西背后（远离镜头的一侧）
+            table.localPosition = new Vector3(0f, 0f, -CardMeshFactory.TowardCamera * 2f);
 
             foreach (ZoneLayout zoneLayout in layout.zones)
             {
@@ -144,7 +145,10 @@ namespace TCGinFU.View
             float distance = needed * 0.5f / Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
             distance *= layout.cameraMargin;
 
-            cameraGo.transform.position = new Vector3(0f, boardWorldSize.y * layout.cameraHeight, distance);
+            // 相机必须在 −Z 侧朝 +Z 看。放到 +Z 侧会让整个画面左右镜像，
+            // 而且所有面片都变成背面——屏幕会一片漆黑。
+            cameraGo.transform.position = new Vector3(
+                0f, boardWorldSize.y * layout.cameraHeight, -distance);
             cameraGo.transform.LookAt(Vector3.zero, Vector3.up);
 
             BoardCamera = camera;

@@ -222,6 +222,19 @@ new CardDefinition("wpn_shortbow_shot", "短弓速射", CardCategory.Weapon, Car
 
 ---
 
+## Unity MCP（让 AI 能自己看 Unity）
+
+工程里已经配好，但**需要重启 Claude Code 才会生效**（MCP 只在启动时连接）：
+
+- Unity 侧：`Packages/manifest.json` 里已加 `com.coplaydev.unity-mcp`，打开 Unity 会自动拉取
+- 服务端：稀疏检出在 `~/.mcp-servers/unity-mcp/Server`，由 `.mcp.json` 指向
+
+> 为什么不直接 `uvx --from git+https://...`：那样 uvx 会完整克隆仓库，
+> 而仓库里 `TestProjects/` 有超长路径，Windows 下 checkout 直接报
+> `Filename too long`。所以只稀疏检出 `Server/` 到固定位置。
+
+> ⚠ `.mcp.json` 里是**绝对路径**，换机器要改。
+
 ## 不启动 Unity 做验证
 
 ```bash

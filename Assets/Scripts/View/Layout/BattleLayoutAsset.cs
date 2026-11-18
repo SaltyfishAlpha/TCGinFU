@@ -27,7 +27,7 @@ namespace TCGinFU.View
         [Header("3D 视角")]
         [Tooltip("桌面向后倾斜的角度。0 = 正对镜头的平面视角，越大越像趴在桌子上看")]
         [Range(0f, 60f)]
-        public float boardTilt = 32f;
+        public float boardTilt = 20f;
 
         [Tooltip("相机视野角度。越小透视越弱、越接近平面")]
         [Range(20f, 70f)]

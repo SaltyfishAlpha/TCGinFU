@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "unity": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "C:\\Users\\19144\\.mcp-servers\\unity-mcp\\Server",
+        "mcp-for-unity"
+      ]
+    }
+  }
+}

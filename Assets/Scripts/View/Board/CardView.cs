@@ -145,19 +145,21 @@ namespace TCGinFU.View
         private void ApplySize()
         {
             float t = CardMeshFactory.CardThickness;
+            float front = CardMeshFactory.TowardCamera; // 朝镜头的方向
 
             _body.localScale = new Vector3(SizePx.x, SizePx.y, t);
             _body.localPosition = Vector3.zero;
 
-            // 正面朝 +Z（也就是朝镜头），往外挪半个厚度再加一点避免 z-fighting
+            // 卡面贴在朝镜头的那一侧，挪出半个厚度再加一点避免 z-fighting
             _faceQuad.localScale = new Vector3(SizePx.x * 0.94f, SizePx.y * 0.94f, 1f);
-            _faceQuad.localPosition = new Vector3(0f, 0f, t * 0.5f + 0.05f);
+            _faceQuad.localPosition = new Vector3(0f, 0f, front * (t * 0.5f + 0.05f));
 
+            // 高亮比卡大一圈、压在卡的背面，于是只露出四周一圈描边
             _highlight.localScale = new Vector3(SizePx.x * 1.06f, SizePx.y * 1.06f, 1f);
-            _highlight.localPosition = new Vector3(0f, 0f, -t * 0.5f - 0.05f);
+            _highlight.localPosition = new Vector3(0f, 0f, -front * (t * 0.5f + 0.05f));
 
             _face.Root.sizeDelta = SizePx;
-            _face.Root.localPosition = new Vector3(0f, 0f, t * 0.5f + 0.15f);
+            _face.Root.localPosition = new Vector3(0f, 0f, front * (t * 0.5f + 0.15f));
 
             _collider.size = new Vector3(SizePx.x, SizePx.y, t);
             _collider.center = Vector3.zero;

@@ -88,13 +88,14 @@ namespace TCGinFU.View
                 view._plate = CardMeshFactory.CreateMeshObject(
                     "Plate", go.transform, CardMeshFactory.Quad, OpaqueOnTable(layout.background));
                 view._plate.localScale = new Vector3(sizePx.x, sizePx.y, 1f);
-                view._plate.localPosition = new Vector3(0f, 0f, -0.6f);
+                // 底板压在卡的背面一侧
+                view._plate.localPosition = new Vector3(0f, 0f, -CardMeshFactory.TowardCamera * 0.6f);
             }
 
             view._highlight = CardMeshFactory.CreateMeshObject(
                 "Highlight", go.transform, CardMeshFactory.Quad, Color.clear);
             view._highlight.localScale = new Vector3(sizePx.x + 8f, sizePx.y + 8f, 1f);
-            view._highlight.localPosition = new Vector3(0f, 0f, -0.9f);
+            view._highlight.localPosition = new Vector3(0f, 0f, -CardMeshFactory.TowardCamera * 0.9f);
             view._highlight.gameObject.SetActive(false);
 
             view._ghostRoot = new GameObject("Slots").transform;
@@ -118,8 +119,9 @@ namespace TCGinFU.View
 
         private void CreateLabel(Vector2 sizePx)
         {
-            CardFace face = CardFace.Create(Root, new Vector2(sizePx.x, 26f), -0.4f);
-            face.Root.localPosition = new Vector3(0f, sizePx.y * 0.5f + 16f, -0.4f);
+            float front = CardMeshFactory.TowardCamera;
+            CardFace face = CardFace.Create(Root, new Vector2(sizePx.x, 26f), front * 0.4f);
+            face.Root.localPosition = new Vector3(0f, sizePx.y * 0.5f + 16f, front * 0.4f);
             _label = face.AddText(
                 "Label", Layout.displayName, 15, TextAnchor.MiddleLeft,
                 Vector2.zero, Vector2.one, new Color(1f, 1f, 1f, 0.55f));
@@ -190,7 +192,8 @@ namespace TCGinFU.View
 
                 SlotPose pose = poses[i];
                 // 空卡位压在桌面上，别和真卡抢同一个高度
-                _ghosts[i].localPosition = new Vector3(pose.Position.x, pose.Position.y, -0.3f);
+                _ghosts[i].localPosition = new Vector3(
+                    pose.Position.x, pose.Position.y, -CardMeshFactory.TowardCamera * 0.3f);
                 _ghosts[i].localRotation = Quaternion.Euler(0f, 0f, pose.Roll);
                 _ghosts[i].localScale = new Vector3(SlotSize.x, SlotSize.y, 1f);
             }
@@ -208,7 +211,7 @@ namespace TCGinFU.View
         /// <summary>牌堆：逐张沿桌面法线抬高一个卡厚，堆得越高说明牌越多。</summary>
         private List<SlotPose> StackPoses(int count)
         {
-            float t = CardMeshFactory.CardThickness;
+            float t = CardMeshFactory.CardThickness * CardMeshFactory.TowardCamera;
             var poses = new List<SlotPose>(count);
             for (int i = 0; i < count; i++)
             {
@@ -237,7 +240,7 @@ namespace TCGinFU.View
         private List<SlotPose> RowPoses(int count)
         {
             float step = RowStep(count, SlotSize.x, out float startX);
-            float t = CardMeshFactory.CardThickness;
+            float t = CardMeshFactory.CardThickness * CardMeshFactory.TowardCamera;
 
             var poses = new List<SlotPose>(count);
             for (int i = 0; i < count; i++)
@@ -254,7 +257,7 @@ namespace TCGinFU.View
 
             float step = RowStep(count, SlotSize.x, out float startX);
             float half = (count - 1) / 2f;
-            float t = CardMeshFactory.CardThickness;
+            float t = CardMeshFactory.CardThickness * CardMeshFactory.TowardCamera;
 
             var poses = new List<SlotPose>(count);
             for (int i = 0; i < count; i++)
@@ -276,7 +279,7 @@ namespace TCGinFU.View
         {
             int columns = Mathf.Max(1, Layout.gridColumns);
             float spacing = Layout.spacing;
-            float t = CardMeshFactory.CardThickness;
+            float t = CardMeshFactory.CardThickness * CardMeshFactory.TowardCamera;
 
             var poses = new List<SlotPose>(count);
             for (int i = 0; i < count; i++)
@@ -299,12 +302,13 @@ namespace TCGinFU.View
         private List<SlotPose> SidewaysPoses(int count)
         {
             float step = Mathf.Max(6f, Layout.stackStep);
-            float t = CardMeshFactory.CardThickness;
+            // 充能牌塞在角色卡**背后**，所以是远离镜头的方向
+            float t = CardMeshFactory.CardThickness * -CardMeshFactory.TowardCamera;
 
             var poses = new List<SlotPose>(count);
             for (int i = 0; i < count; i++)
             {
-                poses.Add(new SlotPose(new Vector3(0f, -i * step, -t * (i + 1)), 90f));
+                poses.Add(new SlotPose(new Vector3(0f, -i * step, t * (i + 1)), 90f));
             }
 
             return poses;
