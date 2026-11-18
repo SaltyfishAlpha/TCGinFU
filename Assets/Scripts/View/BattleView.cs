@@ -37,7 +37,15 @@ namespace TCGinFU.View
         private readonly List<CardView> _cardPool = new();
 
         private RectTransform _board;
+        private Camera _boardCamera;
         private ZonePeekPanel _peekPanel;
+        private CardContextMenu _contextMenu;
+        private ConfirmDialog _confirmDialog;
+
+        /// <summary>右键选了「贴充能」之后，等待点选目标的那张牌。</summary>
+        private CardInstance _pendingChargeCard;
+        private string _pendingChargeOwnerId;
+
         private Text _statusText;
         private Text _messageText;
         private Button _contextButton;
@@ -68,25 +76,41 @@ namespace TCGinFU.View
         private void BuildUi()
         {
             EnsureEventSystem();
+            BuildBoardCanvas();
+            BuildHudCanvas();
+        }
 
-            var canvasGo = new GameObject("BattleCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+        /// <summary>
+        /// 桌面本身是一块**世界空间**的 Canvas，被一台透视相机斜着看——
+        /// 这样就有了真实的 3D 透视（靠近手牌的一侧更大、远处的敌人更小），
+        /// 同时 CardView / ZoneView 这些 uGUI 组件原样复用，不必重写成 3D 物体。
+        /// </summary>
+        private void BuildBoardCanvas()
+        {
+            Vector2 size = layout.referenceResolution;
+            float scale = 1f / BattleLayoutAsset.PixelsPerUnit;
+
+            var canvasGo = new GameObject("BoardCanvas", typeof(Canvas), typeof(GraphicRaycaster));
             canvasGo.transform.SetParent(transform, false);
 
             Canvas = canvasGo.GetComponent<Canvas>();
-            Canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            Canvas.renderMode = RenderMode.WorldSpace;
 
-            var scaler = canvasGo.GetComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = layout.referenceResolution;
-            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 0.5f;
+            var canvasRect = (RectTransform)canvasGo.transform;
+            canvasRect.sizeDelta = size;
+            canvasRect.localScale = Vector3.one * scale;
+            // 桌面向后躺倒；绕 X 轴转正角度 = 上边缘远离镜头
+            canvasRect.localRotation = Quaternion.Euler(layout.boardTilt, 0f, 0f);
+            canvasRect.position = Vector3.zero;
+
+            _boardCamera = BuildCamera(size * scale);
+            Canvas.worldCamera = _boardCamera;
 
             Image table = UiBuilder.CreateImage("Table", canvasGo.transform, layout.tableColor);
-            table.rectTransform.Stretch();
+            table.rectTransform.Stretch(-240f); // 桌布往外铺一圈，避免边缘露出背景
 
             _board = UiBuilder.CreateRect("Board", canvasGo.transform);
             _board.Stretch();
-            _board.offsetMax = new Vector2(0f, -44f); // 给顶栏让出位置
 
             foreach (ZoneLayout zoneLayout in layout.zones)
             {
@@ -99,15 +123,61 @@ namespace TCGinFU.View
                 if (zoneLayout.acceptsDrop && !zoneLayout.IsCombatantZone) _dropTargets.Add(zone);
             }
 
-            BuildTopBar(canvasGo.transform);
-
             // 拖拽层放最后，保证拖起来的牌画在所有区域之上
             DragLayer = UiBuilder.CreateRect("DragLayer", canvasGo.transform);
             DragLayer.Stretch();
-            DragLayer.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0.5f);
+            DragLayer.pivot = new Vector2(0.5f, 0.5f);
+        }
 
-            // 查看牌堆的面板盖在最上面
-            _peekPanel = ZonePeekPanel.Create(canvasGo.transform, layout.CardSize);
+        private Camera BuildCamera(Vector2 boardWorldSize)
+        {
+            // 场景里没有别的相机，顺带把 AudioListener 挂这儿，免得 Unity 报缺失
+            var cameraGo = new GameObject("BoardCamera", typeof(Camera), typeof(AudioListener));
+            cameraGo.transform.SetParent(transform, false);
+
+            var camera = cameraGo.GetComponent<Camera>();
+            camera.orthographic = false;
+            camera.fieldOfView = layout.cameraFov;
+            camera.nearClipPlane = 0.1f;
+            camera.farClipPlane = 200f;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = layout.tableColor * 0.45f;
+
+            // 桌面倾斜后在竖直方向上的投影会变短，所以按 cos 折算需要的取景高度
+            float tilt = layout.boardTilt * Mathf.Deg2Rad;
+            float visibleHeight = boardWorldSize.y * Mathf.Cos(tilt);
+            float neededHeight = Mathf.Max(visibleHeight, boardWorldSize.x / camera.aspect);
+            float distance = neededHeight * 0.5f / Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            distance *= layout.cameraMargin;
+
+            float height = boardWorldSize.y * layout.cameraHeight;
+            cameraGo.transform.position = new Vector3(0f, height, -distance);
+            cameraGo.transform.LookAt(Vector3.zero, Vector3.up);
+
+            return camera;
+        }
+
+        /// <summary>顶栏、弹窗这些**不**跟着桌面倾斜，单独走屏幕空间 Canvas。</summary>
+        private void BuildHudCanvas()
+        {
+            var hudGo = new GameObject("HudCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            hudGo.transform.SetParent(transform, false);
+
+            var hud = hudGo.GetComponent<Canvas>();
+            hud.renderMode = RenderMode.ScreenSpaceOverlay;
+            hud.sortingOrder = 100;
+
+            var scaler = hudGo.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = layout.referenceResolution;
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
+
+            BuildTopBar(hudGo.transform);
+
+            _peekPanel = ZonePeekPanel.Create(hudGo.transform, layout.CardSize);
+            _contextMenu = CardContextMenu.Create(hudGo.transform);
+            _confirmDialog = ConfirmDialog.Create(hudGo.transform);
         }
 
         private static void EnsureEventSystem()
@@ -234,14 +304,8 @@ namespace TCGinFU.View
                     view.ClickHandler = HandleCombatantClick;
                     _combatantViews[combatant.Id] = view;
                     _dropTargets.Add(view);
-
-                    if (view.ChargeStack != null)
-                    {
-                        view.ChargeStack.DropFilter = (_, card) => card.Zone != null && card.Zone.Layout.draggable;
-                        view.ChargeStack.DropHandler = HandleChargeDrop;
-                        // 排在角色卡之后：命中判定倒序遍历，露在卡外的那截充能才会优先命中
-                        _dropTargets.Add(view.ChargeStack);
-                    }
+                    // 充能堆只负责显示，不作为放置目标——充能走右键菜单，
+                    // 不必靠「拖到卡的哪一块」来区分打出和充能
                 }
 
                 bool selected = isEnemy
@@ -283,23 +347,6 @@ namespace TCGinFU.View
             }
 
             strip.Arrange();
-        }
-
-        /// <summary>拖到角色卡的充能条上 = 给这名角色贴充能。</summary>
-        private void HandleChargeDrop(ZoneView strip, CardView card)
-        {
-            PlayerCharacter owner = ResolvePlayer(card.Zone.Layout.playerIndex);
-            CombatantView host = strip.GetComponentInParent<CombatantView>();
-
-            if (owner == null || host?.Combatant is not PlayerCharacter target)
-            {
-                card.ReturnHome();
-                return;
-            }
-
-            Session.Submit(
-                new PlaceChargeAction(owner.Id, card.Card.Uid, target.Id),
-                $"「{card.Card.Name}」横置到 {target.Name} 身上，作为充能。");
         }
 
         private void Prune(HashSet<int> liveCards, HashSet<string> liveCombatants)
@@ -533,8 +580,92 @@ namespace TCGinFU.View
 
         private void HandleCombatantClick(CombatantView view)
         {
+            // 正在选充能目标时，点角色 = 选中它并二次确认
+            if (_pendingChargeCard != null)
+            {
+                PickChargeTarget(view);
+                return;
+            }
+
             if (view.Combatant is Enemy) Session.SelectedEnemyId = view.Combatant.Id;
             else Session.SelectedPlayerId = view.Combatant.Id;
+
+            Refresh();
+        }
+
+        // ──────────────────────────── 右键菜单与充能 ────────────────────────────
+
+        public void OnCardContextMenu(CardView card, Vector2 screenPosition)
+        {
+            if (card.Zone == null || !card.Zone.Layout.draggable || card.Card == null) return;
+
+            PlayerCharacter owner = ResolvePlayer(card.Zone.Layout.playerIndex);
+            if (owner == null) return;
+
+            CardInstance instance = card.Card;
+            var options = new List<(string, System.Action)>
+            {
+                ($"打出（→ {Session.State.Find(Session.SelectedEnemyId)?.Name ?? "当前目标"}）",
+                    () => PlayCard(owner, instance)),
+                ("贴充能…", () => BeginChargeTargeting(owner, instance)),
+            };
+
+            _contextMenu.Open(instance.Name, screenPosition, options);
+        }
+
+        private void PlayCard(PlayerCharacter owner, CardInstance card)
+        {
+            string target = BattleSession.NeedsAllyTarget(card.Definition)
+                ? owner.Id
+                : Session.SelectedEnemyId;
+
+            Session.Submit(new PlayCardAction(owner.Id, card.Uid, target), $"打出「{card.Name}」。");
+            Refresh();
+        }
+
+        /// <summary>进入「选充能目标」状态，下一次点角色卡就是选目标。</summary>
+        private void BeginChargeTargeting(PlayerCharacter owner, CardInstance card)
+        {
+            _pendingChargeCard = card;
+            _pendingChargeOwnerId = owner.Id;
+            Session.SetMessage($"选择要给谁贴充能（「{card.Name}」）——点一名队友的角色卡，或按右键取消。");
+            Refresh();
+        }
+
+        private void CancelChargeTargeting()
+        {
+            if (_pendingChargeCard == null) return;
+
+            _pendingChargeCard = null;
+            _pendingChargeOwnerId = null;
+            Session.SetMessage("已取消贴充能。");
+            Refresh();
+        }
+
+        private void PickChargeTarget(CombatantView view)
+        {
+            if (view.Combatant is not PlayerCharacter target)
+            {
+                Session.SetMessage("充能只能贴给队友的角色卡。", isWarning: true);
+                Refresh();
+                return;
+            }
+
+            CardInstance card = _pendingChargeCard;
+            string ownerId = _pendingChargeOwnerId;
+            _pendingChargeCard = null;
+            _pendingChargeOwnerId = null;
+
+            _confirmDialog.Open(
+                $"把「{card.Name}」横置到 {target.Name} 的角色卡上作为充能？\n"
+                + $"（{target.Name} 当前充能 {target.Zones.Charges.Count}/{target.Zones.Charges.Capacity}）",
+                () =>
+                {
+                    Session.Submit(
+                        new PlaceChargeAction(ownerId, card.Uid, target.Id),
+                        $"「{card.Name}」横置到 {target.Name} 身上，作为充能。");
+                    Refresh();
+                });
 
             Refresh();
         }

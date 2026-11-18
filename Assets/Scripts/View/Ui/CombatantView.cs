@@ -28,9 +28,9 @@ namespace TCGinFU.View
         public Combatant Combatant { get; private set; }
 
         /// <summary>
-        /// 塞在角色卡**背后**的充能牌堆。实体打牌里给队友充能就是把一张牌横着
-        /// 塞到他的角色卡下面，只露出下缘一条（§5.2），所以充能不单独占场地。
-        /// 玩家角色才有。
+        /// 塞在角色卡**背后**的充能牌堆：与角色卡等大的牌横置（旋转 90°）压在
+        /// 卡中心偏下的位置，一张比一张低（§5.2）。玩家角色才有。
+        /// <para>它只负责显示，不是放置目标——充能走右键菜单。</para>
         /// </summary>
         public ZoneView ChargeStack { get; private set; }
 
@@ -48,26 +48,28 @@ namespace TCGinFU.View
             // 被不透明的卡面挡住大半，只露出往下错开的那几条边
             if (withChargeStack)
             {
+                // 充能牌与角色卡**等大**，横置在卡中心的下方
+                const float centerOffset = 0.3f;
+
                 view.ChargeStack = ZoneView.Create(rect, new ZoneLayout
                 {
                     key = "charge_stack",
                     displayName = "充能",
                     source = ZoneSource.充能区,
                     arrange = ZoneArrange.横置,
-                    acceptsDrop = true,
+                    acceptsDrop = false, // 充能走右键菜单，不靠拖拽命中
                     faceDown = true,
                     showLabel = false,
-                    reservedSlots = 1,
-                    stackStep = Mathf.Max(10f, cardSize.y * 0.085f),
+                    reservedSlots = 0,
+                    stackStep = Mathf.Max(10f, cardSize.y * 0.09f),
                     cardScale = 1f,
-                    // 贴着卡的下半部分，往下延伸出卡外一截
-                    anchorMin = new Vector2(0.5f, 0f),
-                    anchorMax = new Vector2(0.5f, 0f),
-                    offsetMin = new Vector2(-cardSize.x * 0.5f, -cardSize.y * 0.42f),
-                    offsetMax = new Vector2(cardSize.x * 0.5f, cardSize.y * 0.12f),
+                    anchorMin = new Vector2(0.5f, 0.5f),
+                    anchorMax = new Vector2(0.5f, 0.5f),
+                    offsetMin = new Vector2(-cardSize.x * 0.5f, -cardSize.y * (0.5f + centerOffset)),
+                    offsetMax = new Vector2(cardSize.x * 0.5f, cardSize.y * (0.5f - centerOffset)),
                     background = Color.clear,
                     border = Color.clear,
-                }, cardSize * 0.78f);
+                }, cardSize);
             }
 
             view._background = UiBuilder.CreateImage("CardFace", rect, Color.gray);

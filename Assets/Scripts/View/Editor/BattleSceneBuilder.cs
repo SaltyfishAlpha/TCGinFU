@@ -23,7 +23,9 @@ namespace TCGinFU.View.Editor
 
             BattleLayoutAsset layout = LoadOrCreateLayout();
 
-            Scene scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+            // 用空场景：BattleView 会自己建透视相机，留着默认的 Main Camera
+            // 会出现两台相机同时渲染、天空盒盖在桌面上的问题
+            Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             var go = new GameObject("BattleView");
             var view = go.AddComponent<BattleView>();

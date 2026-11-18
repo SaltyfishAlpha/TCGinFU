@@ -24,6 +24,26 @@ namespace TCGinFU.View
         [Tooltip("桌面底色")]
         public Color tableColor = new(0.11f, 0.12f, 0.15f, 1f);
 
+        [Header("3D 视角")]
+        [Tooltip("桌面向后倾斜的角度。0 = 正对镜头的平面视角，越大越像趴在桌子上看")]
+        [Range(0f, 60f)]
+        public float boardTilt = 32f;
+
+        [Tooltip("相机视野角度。越小透视越弱、越接近平面")]
+        [Range(20f, 70f)]
+        public float cameraFov = 38f;
+
+        [Tooltip("取景余量。1 = 刚好装下桌面，调大则留白更多")]
+        [Range(1f, 2f)]
+        public float cameraMargin = 1.28f;
+
+        [Tooltip("相机在桌面上方的抬高量，按桌面高度的比例。抬高后更俯视")]
+        [Range(-0.5f, 0.8f)]
+        public float cameraHeight = 0.18f;
+
+        /// <summary>设计像素 → 世界单位的换算。桌面宽 1920 像素即 19.2 个单位。</summary>
+        public const float PixelsPerUnit = 100f;
+
         [Tooltip("全部区域。顺序即渲染层级，靠后的盖在上面")]
         public List<ZoneLayout> zones = new();
 
@@ -137,6 +157,12 @@ namespace TCGinFU.View
         {
             if (cardWidth < 40f) cardWidth = 120f;
             cardWidth = Mathf.Clamp(cardWidth, 40f, 400f);
+
+            // 旧资产升级时这些新字段会是 0，给回可用的默认值
+            if (cameraFov < 20f) cameraFov = 38f;
+            if (cameraMargin < 1f) cameraMargin = 1.28f;
+            boardTilt = Mathf.Clamp(boardTilt, 0f, 60f);
+            cameraHeight = Mathf.Clamp(cameraHeight, -0.5f, 0.8f);
 
             foreach (ZoneLayout zone in zones.Where(z => z != null))
             {

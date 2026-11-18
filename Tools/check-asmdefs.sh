@@ -125,9 +125,14 @@ generate_csproj() {
         echo '  <ItemGroup>'
         if [[ "$no_engine" != "true" ]]; then
             local m
+            # Unity 会给每个 asmdef 自动引用全部引擎模块，这里尽量跟上。
+            # 缺哪个会报 CS1069「类型已转发到程序集 X」——那是本脚本的清单漏了，不是代码问题。
             for m in UnityEngine.CoreModule UnityEngine.IMGUIModule UnityEngine.TextRenderingModule \
                      UnityEngine.UIModule UnityEngine.InputLegacyModule UnityEngine.PhysicsModule \
-                     UnityEngine.AnimationModule UnityEngine.JSONSerializeModule; do
+                     UnityEngine.AnimationModule UnityEngine.JSONSerializeModule \
+                     UnityEngine.AudioModule UnityEngine.ParticleSystemModule \
+                     UnityEngine.UnityWebRequestModule UnityEngine.VideoModule \
+                     UnityEngine.SpriteShapeModule UnityEngine.TilemapModule; do
                 [[ -f "$UNITY_MANAGED/UnityEngine/$m.dll" ]] && \
                     echo "    <Reference Include=\"$m\"><HintPath>$(win_path "$UNITY_MANAGED/UnityEngine/$m.dll")</HintPath></Reference>"
             done

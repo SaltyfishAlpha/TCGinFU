@@ -28,6 +28,9 @@ namespace TCGinFU.View
         void OnCardEndDrag(CardView card, PointerEventData eventData);
         void OnCardHover(CardView card, bool entered);
         void OnCardClick(CardView card);
+
+        /// <summary>右键卡牌：弹出「打出 / 贴充能」之类的操作菜单。</summary>
+        void OnCardContextMenu(CardView card, Vector2 screenPosition);
     }
 
     /// <summary>
@@ -185,6 +188,13 @@ namespace TCGinFU.View
         public void OnPointerClick(PointerEventData eventData)
         {
             if (IsDragging) return;
+
+            if (eventData.button == PointerEventData.InputButton.Right)
+            {
+                _context?.OnCardContextMenu(this, eventData.position);
+                return;
+            }
+
             _context?.OnCardClick(this);
         }
 
