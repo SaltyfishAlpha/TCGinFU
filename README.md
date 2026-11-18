@@ -11,17 +11,32 @@
 
 ## 怎么跑起来
 
-两种方式，都不需要手动拼任何界面：
+### 正式界面（uGUI）
 
-**① 编辑器窗口（最快，不用进 Play 模式）**
+> 菜单 `TCGinFU → 生成战斗场景` → 生成并打开 `Assets/Scenes/Battle.unity` → 按 Play
 
-> 菜单 `TCGinFU → 战斗沙盒`
+拖手牌到敌人身上出牌，拖到左侧充能区贴充能，点角色面板切换目标与操作角色。
+拖拽时合法目标会亮绿、非法亮红。顶栏有 `自动出牌 / 跳过本步 / 自动打完 / 战报 / 重开`。
 
-**② 可运行场景**
+**场地区域全部是数据**，配置在 `Assets/Settings/BattleLayout.asset`：
 
-> 菜单 `TCGinFU → 生成战斗沙盒场景` → 自动生成并打开 `Assets/Scenes/BattleSandbox.unity` → 按 Play
+- 挪位置、改大小 → 改该区域的 `anchorMin/Max`（0–1 相对坐标，分辨率自适应）
+- 加一个区域 → 列表里加一条，选 `source` 和锚点，**不用改代码**
+- 删 / 临时隐藏 → 删一条或关 `visible`
+- 想同屏显示四个人的手牌 → 复制四份手牌区，`playerIndex` 分别填 0/1/2/3
 
-两边是同一套界面。可以调种子、队伍人数（1–4）、敌人预设（木桩 / 哥布林 / 石像鬼 / 深渊领主 / 哥布林小队），
+改完直接 Play 就生效，界面每次都按这个资产重建。误改了用菜单
+`TCGinFU → 重建默认布局资产` 恢复。
+
+详见 [表现层架构](Assets/docs/view_architecture.md)。
+
+### 调试沙盒（IMGUI，保留）
+
+> 菜单 `TCGinFU → 战斗沙盒`（编辑器窗口，不用进 Play 模式）
+> 或 `TCGinFU → 生成战斗沙盒场景` → `Assets/Scenes/BattleSandbox.unity` → Play
+
+正式界面做好之前的临时工具，现在仍然留着：它把全部状态和完整战报平铺出来，
+查规则问题比正式 UI 方便。可以调种子、队伍人数（1–4）、敌人预设（木桩 / 哥布林 / 石像鬼 / 深渊领主 / 哥布林小队），
 点手牌出牌或贴充能，宣告升变，敌人阶段打时机牌响应，右侧实时看战报。
 `自动出牌` 让傻瓜 AI 替当前待行动的角色打完手牌，`自动打完` 直接演完整局。
 
@@ -43,8 +58,9 @@
 | 样例内容（30 张卡组 + 形态组 + 三档敌人） | ✅ 已完成 |
 | 战报渲染 `BattleLog` | ✅ 已完成 |
 | 调试沙盒（编辑器窗口 + 可运行场景） | ✅ 已完成 |
-| ScriptableObject 数据层 | ⚠ 代码已就位，但还没有实际资产，链路未实跑 |
-| 正式 UI / 表现层 | ⬜ 未开始 |
+| 正式 UI：场地区域、抽牌、拖拽、高亮 | ⚠ 代码完成且编译通过，**但未在 Unity 里实跑** |
+| ScriptableObject 卡牌数据层 | ⚠ 代码已就位，但还没有实际资产，链路未实跑 |
+| UI 动效 / 美术 | ⬜ 未开始 |
 | 联网 | ⬜ 未开始 |
 
 沙盒里傻瓜 AI 自动打完的结果（种子 20251117），可以看出难度曲线是成立的：
@@ -92,13 +108,19 @@
 
 ```
 Assets/Scripts/
-  Core/        TCGinFU.Core           规则引擎（零 Unity 依赖）
-  Content/     TCGinFU.Content        样例卡组、敌人、行为钩子（零 Unity 依赖）
-  Data/        TCGinFU.Data           ScriptableObject 资产 → 烘焙成 Core 的 POCO
-  Sandbox/     TCGinFU.Sandbox        调试沙盒（IMGUI）
-    Editor/    TCGinFU.Sandbox.Editor 编辑器窗口 + 场景生成
-  Tests/       TCGinFU.Core.Tests     EditMode 测试
+  Core/         TCGinFU.Core           规则引擎（零 Unity 依赖）
+  Content/      TCGinFU.Content        样例卡组、敌人、行为钩子（零 Unity 依赖）
+  Presentation/ TCGinFU.Presentation   BattleSession：引擎 + 选中状态 + 提交入口（零 Unity 依赖）
+  Data/         TCGinFU.Data           ScriptableObject 卡牌资产 → 烘焙成 Core 的 POCO
+  View/         TCGinFU.View           正式 uGUI 界面
+    Editor/     TCGinFU.View.Editor    战斗场景与布局资产生成
+  Sandbox/      TCGinFU.Sandbox        调试沙盒（IMGUI）
+    Editor/     TCGinFU.Sandbox.Editor 编辑器窗口 + 场景生成
+  Tests/        TCGinFU.Core.Tests     EditMode 测试
 ```
+
+`BattleSession` 是唯一的推进逻辑，正式 UI 和沙盒共用，不会出现两套流程对不上。
+它不引用 Unity，所以「自动打完不卡死」「同种子重现同一局」这类行为能在 `dotnet test` 里跑。
 
 `Core` 与 `Content` 都设了 `noEngineReferences: true`，不引用 `UnityEngine`。
 这样规则测试能脱离 Unity 跑（秒级，不必等域重载），将来做联网也能把这两层直接搬到服务端做权威结算。

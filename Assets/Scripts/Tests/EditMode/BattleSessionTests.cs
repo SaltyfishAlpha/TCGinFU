@@ -1,21 +1,21 @@
 using System.Linq;
 using NUnit.Framework;
 using TCGinFU.Core;
-using TCGinFU.Sandbox;
+using TCGinFU.Presentation;
 
 namespace TCGinFU.Core.Tests
 {
     /// <summary>
-    /// 沙盒会话的逻辑部分（<see cref="SandboxSession"/> 不碰任何 Unity 类型，所以能在这里跑）。
+    /// 沙盒会话的逻辑部分（<see cref="BattleSession"/> 不碰任何 Unity 类型，所以能在这里跑）。
     /// 界面本身没法自动测，但「每个预设都能开局」「自动打完不会卡住」这两条能测——
     /// 而它们正是沙盒最容易坏掉的地方。
     /// </summary>
-    public class SandboxSessionTests
+    public class BattleSessionTests
     {
         [Test]
         public void 默认开局停在可操作的状态()
         {
-            var session = new SandboxSession();
+            var session = new BattleSession();
 
             Assert.AreEqual(1, session.State.Round);
             Assert.AreEqual(2, session.State.Players.Count);
@@ -28,7 +28,7 @@ namespace TCGinFU.Core.Tests
         [Test]
         public void 每位角色开局都有五张起手牌()
         {
-            var session = new SandboxSession { PartySize = 4 };
+            var session = new BattleSession { PartySize = 4 };
             session.Restart();
 
             foreach (PlayerCharacter player in session.State.Players)
@@ -37,14 +37,14 @@ namespace TCGinFU.Core.Tests
             }
         }
 
-        [TestCase(SandboxEnemy.训练木桩)]
-        [TestCase(SandboxEnemy.哥布林)]
-        [TestCase(SandboxEnemy.石像鬼)]
-        [TestCase(SandboxEnemy.深渊领主)]
-        [TestCase(SandboxEnemy.哥布林小队)]
-        public void 每个敌人预设都能正常开局(SandboxEnemy preset)
+        [TestCase(BattleScenario.训练木桩)]
+        [TestCase(BattleScenario.哥布林)]
+        [TestCase(BattleScenario.石像鬼)]
+        [TestCase(BattleScenario.深渊领主)]
+        [TestCase(BattleScenario.哥布林小队)]
+        public void 每个敌人预设都能正常开局(BattleScenario preset)
         {
-            var session = new SandboxSession { EnemyPreset = preset };
+            var session = new BattleSession { EnemyPreset = preset };
             session.Restart();
 
             Assert.IsTrue(session.State.Enemies.Count > 0);
@@ -56,14 +56,14 @@ namespace TCGinFU.Core.Tests
         /// 「自动打完」靠反复跳过决策点推进。只要有一个阶段忘了推进，这里就会跳满上限——
         /// 所以这条测试实际上在验证整个轮次状态机不会卡死。
         /// </summary>
-        [TestCase(SandboxEnemy.哥布林, 1)]
-        [TestCase(SandboxEnemy.哥布林, 3)]
-        [TestCase(SandboxEnemy.石像鬼, 2)]
-        [TestCase(SandboxEnemy.深渊领主, 4)]
-        [TestCase(SandboxEnemy.哥布林小队, 2)]
-        public void 自动打完总能分出胜负(SandboxEnemy preset, int partySize)
+        [TestCase(BattleScenario.哥布林, 1)]
+        [TestCase(BattleScenario.哥布林, 3)]
+        [TestCase(BattleScenario.石像鬼, 2)]
+        [TestCase(BattleScenario.深渊领主, 4)]
+        [TestCase(BattleScenario.哥布林小队, 2)]
+        public void 自动打完总能分出胜负(BattleScenario preset, int partySize)
         {
-            var session = new SandboxSession { EnemyPreset = preset, PartySize = partySize };
+            var session = new BattleSession { EnemyPreset = preset, PartySize = partySize };
             session.Restart();
 
             session.SkipToEnd();
@@ -76,11 +76,11 @@ namespace TCGinFU.Core.Tests
         [Test]
         public void 同种子重开产生完全相同的一局()
         {
-            var a = new SandboxSession { Seed = 777, EnemyPreset = SandboxEnemy.石像鬼 };
+            var a = new BattleSession { Seed = 777, EnemyPreset = BattleScenario.石像鬼 };
             a.Restart();
             a.SkipToEnd();
 
-            var b = new SandboxSession { Seed = 777, EnemyPreset = SandboxEnemy.石像鬼 };
+            var b = new BattleSession { Seed = 777, EnemyPreset = BattleScenario.石像鬼 };
             b.Restart();
             b.SkipToEnd();
 
@@ -90,11 +90,11 @@ namespace TCGinFU.Core.Tests
         [Test]
         public void 不同种子产生不同的一局()
         {
-            var a = new SandboxSession { Seed = 1, EnemyPreset = SandboxEnemy.石像鬼 };
+            var a = new BattleSession { Seed = 1, EnemyPreset = BattleScenario.石像鬼 };
             a.Restart();
             a.SkipToEnd();
 
-            var b = new SandboxSession { Seed = 2, EnemyPreset = SandboxEnemy.石像鬼 };
+            var b = new BattleSession { Seed = 2, EnemyPreset = BattleScenario.石像鬼 };
             b.Restart();
             b.SkipToEnd();
 
@@ -104,7 +104,7 @@ namespace TCGinFU.Core.Tests
         [Test]
         public void 非法动作只改提示不改状态()
         {
-            var session = new SandboxSession();
+            var session = new BattleSession();
             PlayerCharacter player = session.SelectedPlayer;
 
             CardInstance card = player.Zones.Hand[0];
@@ -121,7 +121,7 @@ namespace TCGinFU.Core.Tests
         [Test]
         public void 跳过本步会推进到下一个决策点()
         {
-            var session = new SandboxSession { EnemyPreset = SandboxEnemy.哥布林 };
+            var session = new BattleSession { EnemyPreset = BattleScenario.哥布林 };
             session.Restart();
 
             DecisionKind before = session.Engine.Pending.Kind;
@@ -137,7 +137,7 @@ namespace TCGinFU.Core.Tests
         [Test]
         public void 轮末弃牌的多选能正确提交()
         {
-            var session = new SandboxSession { EnemyPreset = SandboxEnemy.训练木桩, PartySize = 1 };
+            var session = new BattleSession { EnemyPreset = BattleScenario.训练木桩, PartySize = 1 };
             session.Restart();
 
             // 推到第 2 轮轮末：起手 5 张 + 补 3 张 = 8 张，需要弃 1 张
@@ -171,10 +171,10 @@ namespace TCGinFU.Core.Tests
         [Test]
         public void 克制摘要能读()
         {
-            var session = new SandboxSession { EnemyPreset = SandboxEnemy.深渊领主 };
+            var session = new BattleSession { EnemyPreset = BattleScenario.深渊领主 };
             session.Restart();
 
-            string summary = SandboxSession.AffinitySummary((Enemy)session.State.Enemies[0]);
+            string summary = BattleSession.AffinitySummary((Enemy)session.State.Enemies[0]);
 
             StringAssert.Contains("免暗", summary);
             StringAssert.Contains("吸毒", summary);
@@ -184,10 +184,10 @@ namespace TCGinFU.Core.Tests
         [Test]
         public void 费用摘要能读()
         {
-            Assert.AreEqual("免费", SandboxSession.CostText(
+            Assert.AreEqual("免费", BattleSession.CostText(
                 new CardDefinition("x", "x", CardCategory.Treasure, CardKind.Skill)));
 
-            string text = SandboxSession.CostText(TCGinFU.Content.SampleCards.PiercingShot);
+            string text = BattleSession.CostText(TCGinFU.Content.SampleCards.PiercingShot);
             StringAssert.Contains("2AP", text);
             StringAssert.Contains("5MP", text);
             StringAssert.Contains("【暴击】", text);

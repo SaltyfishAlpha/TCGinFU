@@ -1,0 +1,20 @@
+{
+    "name": "TCGinFU.View",
+    "rootNamespace": "TCGinFU.View",
+    "references": [
+        "TCGinFU.Core",
+        "TCGinFU.Content",
+        "TCGinFU.Presentation",
+        "UnityEngine.UI",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

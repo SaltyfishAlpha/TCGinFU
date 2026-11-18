@@ -1,3 +1,4 @@
+using TCGinFU.Presentation;
 using UnityEditor;
 using UnityEngine;
 
@@ -9,7 +10,7 @@ namespace TCGinFU.Sandbox.Editor
     /// </summary>
     public sealed class BattleSandboxWindow : EditorWindow
     {
-        private SandboxSession _session;
+        private BattleSession _session;
 
         [MenuItem("TCGinFU/战斗沙盒")]
         public static void Open()
@@ -19,7 +20,7 @@ namespace TCGinFU.Sandbox.Editor
             window.Show();
         }
 
-        private void OnEnable() => _session ??= new SandboxSession();
+        private void OnEnable() => _session ??= new BattleSession();
 
         private void OnGUI()
         {

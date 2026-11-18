@@ -1,5 +1,6 @@
 using System.Linq;
 using TCGinFU.Core;
+using TCGinFU.Presentation;
 using UnityEngine;
 
 namespace TCGinFU.Sandbox
@@ -15,7 +16,7 @@ namespace TCGinFU.Sandbox
         private static Vector2 _handScroll;
         private static bool _logAtBottom = true;
 
-        public static void Draw(SandboxSession session, float width, float height)
+        public static void Draw(BattleSession session, float width, float height)
         {
             if (session?.Engine == null) return;
 
@@ -45,7 +46,7 @@ namespace TCGinFU.Sandbox
 
         // ──────────────────────────── 顶栏 ────────────────────────────
 
-        private static void DrawToolbar(SandboxSession session)
+        private static void DrawToolbar(BattleSession session)
         {
             GUILayout.BeginHorizontal();
             {
@@ -66,7 +67,7 @@ namespace TCGinFU.Sandbox
 
                 GUILayout.Space(8);
                 GUILayout.Label("敌人", GUILayout.Width(30));
-                foreach (SandboxEnemy preset in System.Enum.GetValues(typeof(SandboxEnemy)))
+                foreach (BattleScenario preset in System.Enum.GetValues(typeof(BattleScenario)))
                 {
                     bool on = session.EnemyPreset == preset;
                     if (GUILayout.Toggle(on, preset.ToString(), "Button", GUILayout.Width(74)) && !on)
@@ -85,7 +86,7 @@ namespace TCGinFU.Sandbox
             GUILayout.EndHorizontal();
         }
 
-        private static void DrawStatusBar(SandboxSession session)
+        private static void DrawStatusBar(BattleSession session)
         {
             BattleState state = session.State;
             PendingDecision pending = session.Engine.Pending;
@@ -118,7 +119,7 @@ namespace TCGinFU.Sandbox
 
         // ──────────────────────────── 敌人 ────────────────────────────
 
-        private static void DrawEnemies(SandboxSession session, float height)
+        private static void DrawEnemies(BattleSession session, float height)
         {
             GUILayout.Label("敌人", GUILayout.Height(18));
             GUILayout.BeginVertical("box", GUILayout.Height(height));
@@ -145,7 +146,7 @@ namespace TCGinFU.Sandbox
                     GUILayout.Label(enemy.IsDown
                         ? "已倒下"
                         : $"HP {enemy.Hp}/{enemy.MaxHp}　暴击抵抗 {enemy.CritResist}");
-                    GUILayout.Label(SandboxSession.AffinitySummary(enemy));
+                    GUILayout.Label(BattleSession.AffinitySummary(enemy));
 
                     if (enemy.Shields.Physical > 0 || enemy.Shields.Magical > 0)
                     {
@@ -177,7 +178,7 @@ namespace TCGinFU.Sandbox
 
         // ──────────────────────────── 我方 ────────────────────────────
 
-        private static void DrawParty(SandboxSession session, float height)
+        private static void DrawParty(BattleSession session, float height)
         {
             GUILayout.Label("我方小队", GUILayout.Height(18));
             GUILayout.BeginVertical("box", GUILayout.Height(height));
@@ -231,7 +232,7 @@ namespace TCGinFU.Sandbox
 
         // ──────────────────────────── 战报 ────────────────────────────
 
-        private static void DrawLog(SandboxSession session, float height)
+        private static void DrawLog(BattleSession session, float height)
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label("战报", GUILayout.Height(18));
@@ -248,7 +249,7 @@ namespace TCGinFU.Sandbox
 
         // ──────────────────────────── 决策面板 ────────────────────────────
 
-        private static void DrawPendingPanel(SandboxSession session)
+        private static void DrawPendingPanel(BattleSession session)
         {
             PlayerCharacter player = session.SelectedPlayer;
             if (player == null) return;
@@ -281,7 +282,7 @@ namespace TCGinFU.Sandbox
             GUILayout.EndVertical();
         }
 
-        private static void DrawTransformPanel(SandboxSession session, PlayerCharacter player)
+        private static void DrawTransformPanel(BattleSession session, PlayerCharacter player)
         {
             var candidates = session.Engine.TransformCandidates(player).ToList();
 
@@ -315,7 +316,7 @@ namespace TCGinFU.Sandbox
             DrawHand(session, player, playable: false);
         }
 
-        private static void DrawPlayerActionPanel(SandboxSession session, PlayerCharacter player)
+        private static void DrawPlayerActionPanel(BattleSession session, PlayerCharacter player)
         {
             GUILayout.BeginHorizontal();
             {
@@ -357,7 +358,7 @@ namespace TCGinFU.Sandbox
             DrawHand(session, player, playable: true);
         }
 
-        private static void DrawResponsePanel(SandboxSession session, PlayerCharacter player)
+        private static void DrawResponsePanel(BattleSession session, PlayerCharacter player)
         {
             EnemyIntent intent = session.Engine.Pending.Intent;
             string source = session.State.Find(session.Engine.Pending.IntentSourceId)?.Name ?? "敌人";
@@ -384,7 +385,7 @@ namespace TCGinFU.Sandbox
             DrawHand(session, player, playable: true);
         }
 
-        private static void DrawDiscardPanel(SandboxSession session, PlayerCharacter player)
+        private static void DrawDiscardPanel(BattleSession session, PlayerCharacter player)
         {
             int required = session.Engine.RequiredDiscards(player);
 
@@ -415,7 +416,7 @@ namespace TCGinFU.Sandbox
             GUILayout.EndScrollView();
         }
 
-        private static void DrawHand(SandboxSession session, PlayerCharacter player, bool playable)
+        private static void DrawHand(BattleSession session, PlayerCharacter player, bool playable)
         {
             _handScroll = GUILayout.BeginScrollView(_handScroll, GUILayout.Height(104));
             GUILayout.BeginHorizontal();
@@ -429,7 +430,7 @@ namespace TCGinFU.Sandbox
                 GUILayout.BeginVertical("box", GUILayout.Width(126));
                 {
                     GUILayout.Label(def.Name);
-                    GUILayout.Label(SandboxSession.CostText(def));
+                    GUILayout.Label(BattleSession.CostText(def));
                     GUILayout.Label($"{CategoryName(def.Category)}·{KindName(def.Kind)}");
 
                     GUI.enabled = playable && session.IsWaitingOn(player.Id);
@@ -437,7 +438,7 @@ namespace TCGinFU.Sandbox
                     GUILayout.BeginHorizontal();
                     if (GUILayout.Button("打出"))
                     {
-                        string target = SandboxSession.NeedsAllyTarget(def) ? player.Id : session.SelectedEnemyId;
+                        string target = BattleSession.NeedsAllyTarget(def) ? player.Id : session.SelectedEnemyId;
                         session.Submit(
                             new PlayCardAction(player.Id, card.Uid, target), $"打出「{def.Name}」。");
                     }

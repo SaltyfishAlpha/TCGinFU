@@ -1,3 +1,4 @@
+using TCGinFU.Presentation;
 using UnityEngine;
 
 namespace TCGinFU.Sandbox
@@ -15,17 +16,17 @@ namespace TCGinFU.Sandbox
         [Range(1, 4)]
         [SerializeField] private int partySize = 2;
 
-        [SerializeField] private SandboxEnemy enemy = SandboxEnemy.哥布林;
+        [SerializeField] private BattleScenario enemy = BattleScenario.哥布林;
 
         [Tooltip("界面整体缩放，4K 屏上可以调大")]
         [Range(0.6f, 2.5f)]
         [SerializeField] private float uiScale = 1.2f;
 
-        private SandboxSession _session;
+        private BattleSession _session;
 
         private void Start()
         {
-            _session = new SandboxSession { Seed = seed, PartySize = partySize, EnemyPreset = enemy };
+            _session = new BattleSession { Seed = seed, PartySize = partySize, EnemyPreset = enemy };
             _session.Restart();
         }
 

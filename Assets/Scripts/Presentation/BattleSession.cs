@@ -3,9 +3,9 @@ using System.Linq;
 using TCGinFU.Content;
 using TCGinFU.Core;
 
-namespace TCGinFU.Sandbox
+namespace TCGinFU.Presentation
 {
-    public enum SandboxEnemy
+    public enum BattleScenario
     {
         训练木桩,
         哥布林,
@@ -15,16 +15,16 @@ namespace TCGinFU.Sandbox
     }
 
     /// <summary>
-    /// 沙盒的一局对战：握着引擎，外加一点「当前选中谁、选中什么目标」这类纯 GUI 状态。
+    /// 一局对战的驱动层：握着引擎，外加一点「当前选中谁、选中什么目标」这类纯 GUI 状态。
     /// 规则判断一概不做——能不能打交给引擎回答，所以这里不会和引擎产生第二套规则。
     /// </summary>
-    public sealed class SandboxSession
+    public sealed class BattleSession
     {
         private readonly HashSet<int> _discardSelection = new();
 
         public int Seed = 20251117;
         public int PartySize = 2;
-        public SandboxEnemy EnemyPreset = SandboxEnemy.哥布林;
+        public BattleScenario EnemyPreset = BattleScenario.哥布林;
 
         public BattleEngine Engine { get; private set; }
         public BattleState State => Engine.State;
@@ -43,7 +43,7 @@ namespace TCGinFU.Sandbox
 
         public bool LastActionFailed { get; private set; }
 
-        public SandboxSession() => Restart();
+        public BattleSession() => Restart();
 
         public void Restart()
         {
@@ -79,11 +79,11 @@ namespace TCGinFU.Sandbox
 
         private IEnumerable<Enemy> BuildEnemies() => EnemyPreset switch
         {
-            SandboxEnemy.训练木桩 => new[] { SampleEnemies.TrainingDummy() },
-            SandboxEnemy.哥布林 => new[] { SampleEnemies.Goblin(hp: 80) },
-            SandboxEnemy.石像鬼 => new[] { SampleEnemies.Gargoyle() },
-            SandboxEnemy.深渊领主 => new[] { SampleEnemies.AbyssLord() },
-            SandboxEnemy.哥布林小队 => SampleEnemies.GoblinPack(3),
+            BattleScenario.训练木桩 => new[] { SampleEnemies.TrainingDummy() },
+            BattleScenario.哥布林 => new[] { SampleEnemies.Goblin(hp: 80) },
+            BattleScenario.石像鬼 => new[] { SampleEnemies.Gargoyle() },
+            BattleScenario.深渊领主 => new[] { SampleEnemies.AbyssLord() },
+            BattleScenario.哥布林小队 => SampleEnemies.GoblinPack(3),
             _ => new[] { SampleEnemies.TrainingDummy() },
         };
 
