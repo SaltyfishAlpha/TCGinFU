@@ -15,8 +15,9 @@
 
 > 菜单 `TCGinFU → 生成战斗场景` → 生成并打开 `Assets/Scenes/Battle.unity` → 按 Play
 
-桌面是 **3D 视角**：一块世界空间 Canvas 被透视相机斜着看，近处的手牌大、远处的敌人小。
-倾斜角度、视野、俯视高度都在布局资产里调（`boardTilt` / `cameraFov` / `cameraHeight`）。
+棋盘是**真 3D**：每张卡都是带厚度的网格物体，所以**卡组、弃牌堆、充能堆都能看出有多厚**。
+透视相机斜着看桌面，近处手牌大、远处敌人小。倾斜角度、视野、俯视高度都在布局资产里调
+（`boardTilt` / `cameraFov` / `cameraHeight`），卡厚是 `CardMeshFactory.CardThickness`。
 
 操作：
 

@@ -12,8 +12,9 @@ using UnityEngine.InputSystem.UI;
 namespace TCGinFU.View
 {
     /// <summary>
-    /// 战斗界面总控。整个界面由代码按 <see cref="BattleLayoutAsset"/> 建出来，
-    /// 不依赖预制体——改布局只改资产，不用动场景也不用动代码。
+    /// 战斗界面总控。棋盘是真正的 3D：每张卡都是带厚度的网格物体，
+    /// 所以牌堆叠起来看得出有多少张。整个场面按 <see cref="BattleLayoutAsset"/> 搭出来，
+    /// 不依赖预制体——改布局只改资产。
     /// </summary>
     [AddComponentMenu("TCGinFU/战斗界面")]
     public sealed class BattleView : MonoBehaviour, ICardDragContext
@@ -35,14 +36,14 @@ namespace TCGinFU.View
         private readonly Dictionary<int, CardView> _cardViews = new();
         private readonly Dictionary<string, CombatantView> _combatantViews = new();
         private readonly List<CardView> _cardPool = new();
+        private readonly RaycastHit[] _hits = new RaycastHit[16];
 
-        private RectTransform _board;
-        private Camera _boardCamera;
+        private Transform _cardGraveyard;
         private ZonePeekPanel _peekPanel;
         private CardContextMenu _contextMenu;
         private ConfirmDialog _confirmDialog;
+        private IDropTarget _hoveredTarget;
 
-        /// <summary>右键选了「贴充能」之后，等待点选目标的那张牌。</summary>
         private CardInstance _pendingChargeCard;
         private string _pendingChargeOwnerId;
 
@@ -50,72 +51,61 @@ namespace TCGinFU.View
         private Text _messageText;
         private Button _contextButton;
         private Text _contextButtonLabel;
-        private IDropTarget _hoveredTarget;
 
         public BattleSession Session { get; private set; }
-        public Canvas Canvas { get; private set; }
-        public RectTransform DragLayer { get; private set; }
+        public Camera BoardCamera { get; private set; }
+        public Transform BoardRoot { get; private set; }
 
         private void Start()
         {
             if (layout == null) layout = BattleLayoutAsset.CreateDefault();
-
-            // 旧版布局资产升级后，新加的字段会是零值（Unity 不会套用 C# 字段初始值），
-            // 这里兜一下，免得卡牌被缩成 0 看不见
             layout.Normalize();
 
             Session = new BattleSession { Seed = seed, PartySize = partySize, EnemyPreset = scenario };
             Session.Restart();
 
-            BuildUi();
+            BuildScene();
             Refresh();
         }
 
-        // ──────────────────────────── 搭界面 ────────────────────────────
+        // ──────────────────────────── 搭场面 ────────────────────────────
 
-        private void BuildUi()
+        private void BuildScene()
         {
             EnsureEventSystem();
-            BuildBoardCanvas();
-            BuildHudCanvas();
+            BuildBoard();
+            BuildHud();
         }
 
         /// <summary>
-        /// 桌面本身是一块**世界空间**的 Canvas，被一台透视相机斜着看——
-        /// 这样就有了真实的 3D 透视（靠近手牌的一侧更大、远处的敌人更小），
-        /// 同时 CardView / ZoneView 这些 uGUI 组件原样复用，不必重写成 3D 物体。
+        /// 桌面根节点缩放成 1/PixelsPerUnit，于是它底下所有坐标都可以直接用
+        /// **设计像素**，只在这一处换算到世界单位。
         /// </summary>
-        private void BuildBoardCanvas()
+        private void BuildBoard()
         {
-            Vector2 size = layout.referenceResolution;
+            Vector2 boardPx = layout.referenceResolution;
             float scale = 1f / BattleLayoutAsset.PixelsPerUnit;
 
-            var canvasGo = new GameObject("BoardCanvas", typeof(Canvas), typeof(GraphicRaycaster));
-            canvasGo.transform.SetParent(transform, false);
+            var root = new GameObject("Board").transform;
+            root.SetParent(transform, false);
+            root.localScale = Vector3.one * scale;
+            // 绕 X 轴负向旋转：上边缘（远处的敌人）往镜头反方向倒下去，
+            // 桌面法线仍然朝向镜头那一侧
+            root.localRotation = Quaternion.Euler(-layout.boardTilt, 0f, 0f);
+            root.localPosition = Vector3.zero;
+            BoardRoot = root;
 
-            Canvas = canvasGo.GetComponent<Canvas>();
-            Canvas.renderMode = RenderMode.WorldSpace;
+            BuildCamera(boardPx * scale);
 
-            var canvasRect = (RectTransform)canvasGo.transform;
-            canvasRect.sizeDelta = size;
-            canvasRect.localScale = Vector3.one * scale;
-            // 桌面向后躺倒；绕 X 轴转正角度 = 上边缘远离镜头
-            canvasRect.localRotation = Quaternion.Euler(layout.boardTilt, 0f, 0f);
-            canvasRect.position = Vector3.zero;
-
-            _boardCamera = BuildCamera(size * scale);
-            Canvas.worldCamera = _boardCamera;
-
-            Image table = UiBuilder.CreateImage("Table", canvasGo.transform, layout.tableColor);
-            table.rectTransform.Stretch(-240f); // 桌布往外铺一圈，避免边缘露出背景
-
-            _board = UiBuilder.CreateRect("Board", canvasGo.transform);
-            _board.Stretch();
+            // 桌布：比桌面大一圈的面片，压在所有东西下面
+            Transform table = CardMeshFactory.CreateMeshObject(
+                "Table", root, CardMeshFactory.Quad, layout.tableColor);
+            table.localScale = new Vector3(boardPx.x * 1.35f, boardPx.y * 1.3f, 1f);
+            table.localPosition = new Vector3(0f, 0f, -2f);
 
             foreach (ZoneLayout zoneLayout in layout.zones)
             {
-                // 角色也是卡，所以全部区域都用同一套标准卡牌尺寸
-                ZoneView zone = ZoneView.Create(_board, zoneLayout, layout.CardSizeFor(zoneLayout));
+                ZoneView zone = ZoneView.Create(root, zoneLayout, layout.CardSizeFor(zoneLayout), boardPx);
                 zone.DropFilter = ZoneAcceptsCard;
                 zone.DropHandler = HandleZoneDrop;
                 zone.ClickHandler = HandleZoneClick;
@@ -123,42 +113,59 @@ namespace TCGinFU.View
                 if (zoneLayout.acceptsDrop && !zoneLayout.IsCombatantZone) _dropTargets.Add(zone);
             }
 
-            // 拖拽层放最后，保证拖起来的牌画在所有区域之上
-            DragLayer = UiBuilder.CreateRect("DragLayer", canvasGo.transform);
-            DragLayer.Stretch();
-            DragLayer.pivot = new Vector2(0.5f, 0.5f);
+            // 回收池里的卡挂这儿，别留在区域里影响排布
+            _cardGraveyard = new GameObject("CardPool").transform;
+            _cardGraveyard.SetParent(root, false);
+            _cardGraveyard.gameObject.SetActive(false);
         }
 
-        private Camera BuildCamera(Vector2 boardWorldSize)
+        private void BuildCamera(Vector2 boardWorldSize)
         {
-            // 场景里没有别的相机，顺带把 AudioListener 挂这儿，免得 Unity 报缺失
+            // 场景里没有别的相机，顺带把 AudioListener 挂这儿
             var cameraGo = new GameObject("BoardCamera", typeof(Camera), typeof(AudioListener));
             cameraGo.transform.SetParent(transform, false);
 
             var camera = cameraGo.GetComponent<Camera>();
             camera.orthographic = false;
             camera.fieldOfView = layout.cameraFov;
-            camera.nearClipPlane = 0.1f;
-            camera.farClipPlane = 200f;
+            camera.nearClipPlane = 0.05f;
+            camera.farClipPlane = 500f;
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = layout.tableColor * 0.45f;
+            camera.backgroundColor = layout.tableColor * 0.4f;
 
-            // 桌面倾斜后在竖直方向上的投影会变短，所以按 cos 折算需要的取景高度
+            // 3D 卡牌靠碰撞体拾取，所以必须挂 PhysicsRaycaster，
+            // 否则 IPointerClickHandler / IBeginDragHandler 一个都不会触发
+            var raycaster = cameraGo.AddComponent<PhysicsRaycaster>();
+            raycaster.eventMask = ~0;
+
             float tilt = layout.boardTilt * Mathf.Deg2Rad;
             float visibleHeight = boardWorldSize.y * Mathf.Cos(tilt);
-            float neededHeight = Mathf.Max(visibleHeight, boardWorldSize.x / camera.aspect);
-            float distance = neededHeight * 0.5f / Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            float needed = Mathf.Max(visibleHeight, boardWorldSize.x / Mathf.Max(0.1f, camera.aspect));
+            float distance = needed * 0.5f / Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
             distance *= layout.cameraMargin;
 
-            float height = boardWorldSize.y * layout.cameraHeight;
-            cameraGo.transform.position = new Vector3(0f, height, -distance);
+            cameraGo.transform.position = new Vector3(0f, boardWorldSize.y * layout.cameraHeight, distance);
             cameraGo.transform.LookAt(Vector3.zero, Vector3.up);
 
-            return camera;
+            BoardCamera = camera;
         }
 
-        /// <summary>顶栏、弹窗这些**不**跟着桌面倾斜，单独走屏幕空间 Canvas。</summary>
-        private void BuildHudCanvas()
+        private static void EnsureEventSystem()
+        {
+            if (FindFirstObjectByType<EventSystem>() != null) return;
+
+            var go = new GameObject("EventSystem", typeof(EventSystem));
+#if ENABLE_INPUT_SYSTEM
+            // 本工程 Active Input Handling 设的是 Input System Package，
+            // 老的 StandaloneInputModule 会在运行时抛异常，必须用这个
+            go.AddComponent<InputSystemUIInputModule>();
+#else
+            go.AddComponent<StandaloneInputModule>();
+#endif
+        }
+
+        /// <summary>顶栏与弹窗走屏幕空间，不跟着桌面倾斜——倾斜的文字没法读。</summary>
+        private void BuildHud()
         {
             var hudGo = new GameObject("HudCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             hudGo.transform.SetParent(transform, false);
@@ -178,20 +185,6 @@ namespace TCGinFU.View
             _peekPanel = ZonePeekPanel.Create(hudGo.transform, layout.CardSize);
             _contextMenu = CardContextMenu.Create(hudGo.transform);
             _confirmDialog = ConfirmDialog.Create(hudGo.transform);
-        }
-
-        private static void EnsureEventSystem()
-        {
-            if (FindFirstObjectByType<EventSystem>() != null) return;
-
-            var go = new GameObject("EventSystem", typeof(EventSystem));
-#if ENABLE_INPUT_SYSTEM
-            // 本工程 Active Input Handling 设的是 Input System Package，
-            // 老的 StandaloneInputModule 会在运行时抛异常，必须用这个。
-            go.AddComponent<InputSystemUIInputModule>();
-#else
-            go.AddComponent<StandaloneInputModule>();
-#endif
         }
 
         private void BuildTopBar(Transform parent)
@@ -227,7 +220,6 @@ namespace TCGinFU.View
 
         // ──────────────────────────── 刷新 ────────────────────────────
 
-        /// <summary>按引擎当前状态重建所有区域的内容。每次动作之后调一次。</summary>
         public void Refresh()
         {
             BattleState state = Session.State;
@@ -237,7 +229,9 @@ namespace TCGinFU.View
                 $"第 {state.Round} 轮 · {PhaseName(state.Phase)} · 命刻 {state.SceneClock}"
                 + (state.Outcome == BattleOutcome.Ongoing
                     ? ""
-                    : state.Outcome == BattleOutcome.Victory ? "　<color=#7dff7d>★ 胜利</color>" : "　<color=#ff7d7d>✖ 失败</color>");
+                    : state.Outcome == BattleOutcome.Victory
+                        ? "　<color=#7dff7d>★ 胜利</color>"
+                        : "　<color=#ff7d7d>✖ 失败</color>");
 
             _messageText.text = Session.LastActionFailed
                 ? $"<color=#ff9a9a>{Session.Message}</color>"
@@ -245,23 +239,23 @@ namespace TCGinFU.View
 
             UpdateContextButton(pending);
 
-            var liveCardUids = new HashSet<int>();
-            var liveCombatantIds = new HashSet<string>();
+            var liveCards = new HashSet<int>();
+            var liveCombatants = new HashSet<string>();
 
             foreach (ZoneView zone in _zones)
             {
-                zone.gameObject.SetActive(zone.Layout.visible);
+                zone.Root.gameObject.SetActive(zone.Layout.visible);
                 if (!zone.Layout.visible) continue;
 
                 zone.BeginRebuild();
 
-                if (zone.Layout.IsCombatantZone) FillCombatantZone(zone, liveCombatantIds, liveCardUids);
-                else FillCardZone(zone, liveCardUids);
+                if (zone.Layout.IsCombatantZone) FillCombatantZone(zone, liveCombatants, liveCards);
+                else FillCardZone(zone, liveCards);
 
                 zone.Arrange();
             }
 
-            Prune(liveCardUids, liveCombatantIds);
+            Prune(liveCards, liveCombatants);
         }
 
         private void FillCardZone(ZoneView zone, HashSet<int> live)
@@ -273,15 +267,10 @@ namespace TCGinFU.View
 
             foreach (CardInstance card in cards)
             {
-                if (!_cardViews.TryGetValue(card.Uid, out CardView view))
-                {
-                    view = RentCardView();
-                    _cardViews[card.Uid] = view;
-                }
-
-                view.gameObject.SetActive(true);
+                CardView view = RentCardView(card.Uid);
+                view.Root.gameObject.SetActive(true);
                 view.Bind(card, zone, zone.Layout.faceDown, draggable, zone.SlotSize);
-                zone.Add(view.Rect);
+                zone.Add(view);
                 live.Add(card.Uid);
             }
         }
@@ -297,56 +286,64 @@ namespace TCGinFU.View
 
                 if (!_combatantViews.TryGetValue(combatant.Id, out CombatantView view))
                 {
-                    // 角色本身就是一张卡，尺寸直接用区域的卡位尺寸
-                    view = CombatantView.Create(zone.Rect, zone.SlotSize, withChargeStack: !isEnemy);
+                    view = CombatantView.Create(zone.Root, zone.SlotSize, withChargeStack: !isEnemy);
                     view.DropFilter = CombatantAcceptsCard;
                     view.DropHandler = HandleCombatantDrop;
                     view.ClickHandler = HandleCombatantClick;
                     _combatantViews[combatant.Id] = view;
                     _dropTargets.Add(view);
-                    // 充能堆只负责显示，不作为放置目标——充能走右键菜单，
-                    // 不必靠「拖到卡的哪一块」来区分打出和充能
                 }
 
                 bool selected = isEnemy
                     ? Session.SelectedEnemyId == combatant.Id
                     : Session.SelectedPlayerId == combatant.Id;
 
-                view.gameObject.SetActive(true);
-                view.Bind(combatant, isEnemy, selected, zone.SlotSize);
-                zone.Add(view.Rect);
+                view.Root.gameObject.SetActive(true);
+                view.Bind(combatant, isEnemy, selected);
+                zone.AddCombatant(view);
                 live.Add(combatant.Id);
 
-                FillChargeStrip(view, combatant, liveCards);
+                FillChargeStack(view, combatant, liveCards);
             }
         }
 
-        /// <summary>
-        /// 把该角色充能区里的牌横置摆到他的角色卡上——实体打牌里给队友充能
-        /// 就是在他的角色卡上横放一张牌（§5.2），所以充能不单独占一块场地。
-        /// </summary>
-        private void FillChargeStrip(CombatantView view, Combatant combatant, HashSet<int> liveCards)
+        /// <summary>把该角色的充能牌横置摆到他的角色卡背后。</summary>
+        private void FillChargeStack(CombatantView view, Combatant combatant, HashSet<int> liveCards)
         {
             if (view.ChargeStack == null || combatant is not PlayerCharacter player) return;
 
-            ZoneView strip = view.ChargeStack;
-            strip.BeginRebuild();
+            ZoneView stack = view.ChargeStack;
+            stack.BeginRebuild();
 
             foreach (ChargeToken token in player.Zones.Charges.Tokens)
             {
-                if (!_cardViews.TryGetValue(token.Card.Uid, out CardView cardView))
-                {
-                    cardView = RentCardView();
-                    _cardViews[token.Card.Uid] = cardView;
-                }
-
-                cardView.gameObject.SetActive(true);
-                cardView.Bind(token.Card, strip, faceDown: true, draggable: false, strip.SlotSize);
-                strip.Add(cardView.Rect);
+                CardView cardView = RentCardView(token.Card.Uid);
+                cardView.Root.gameObject.SetActive(true);
+                cardView.Bind(token.Card, stack, faceDown: true, draggable: false, stack.SlotSize);
+                stack.Add(cardView);
                 liveCards.Add(token.Card.Uid);
             }
 
-            strip.Arrange();
+            stack.Arrange();
+        }
+
+        private CardView RentCardView(int uid)
+        {
+            if (_cardViews.TryGetValue(uid, out CardView existing)) return existing;
+
+            CardView view;
+            if (_cardPool.Count > 0)
+            {
+                view = _cardPool[^1];
+                _cardPool.RemoveAt(_cardPool.Count - 1);
+            }
+            else
+            {
+                view = CardView.Create(BoardRoot, this);
+            }
+
+            _cardViews[uid] = view;
+            return view;
         }
 
         private void Prune(HashSet<int> liveCards, HashSet<string> liveCombatants)
@@ -355,24 +352,15 @@ namespace TCGinFU.View
             {
                 CardView view = _cardViews[uid];
                 _cardViews.Remove(uid);
-                view.gameObject.SetActive(false);
-                view.Rect.SetParent(_board, false);
+                view.Root.SetParent(_cardGraveyard, false);
+                view.Root.gameObject.SetActive(false);
                 _cardPool.Add(view);
             }
 
             foreach (string id in _combatantViews.Keys.Where(id => !liveCombatants.Contains(id)).ToList())
             {
-                _combatantViews[id].gameObject.SetActive(false);
+                _combatantViews[id].Root.gameObject.SetActive(false);
             }
-        }
-
-        private CardView RentCardView()
-        {
-            if (_cardPool.Count == 0) return CardView.Create(_board, this);
-
-            CardView view = _cardPool[^1];
-            _cardPool.RemoveAt(_cardPool.Count - 1);
-            return view;
         }
 
         // ──────────────────────────── 区域内容解析 ────────────────────────────
@@ -418,6 +406,8 @@ namespace TCGinFU.View
 
         public void OnCardBeginDrag(CardView card)
         {
+            _contextMenu.Close();
+
             foreach (IDropTarget target in _dropTargets)
             {
                 target.SetDropHighlight(target.CanAccept(card) ? CardHighlight.合法 : CardHighlight.正常);
@@ -463,26 +453,38 @@ namespace TCGinFU.View
         }
 
         /// <summary>
-        /// 用矩形命中而不是 GraphicRaycast：拖拽中的卡本身会挡住射线，
-        /// 而且区域底板是否勾了 raycastTarget 不该影响能不能放。
+        /// 射线找鼠标下方的放置目标。拖拽中的卡自己的碰撞体已经关掉，
+        /// 所以不会挡住下面的目标。
         /// </summary>
         private IDropTarget FindTargetUnder(PointerEventData eventData)
         {
-            Camera camera = Canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : Canvas.worldCamera;
+            if (BoardCamera == null) return null;
 
-            // 倒序遍历：后注册的（角色面板）压在区域底板上面
-            for (int i = _dropTargets.Count - 1; i >= 0; i--)
+            Ray ray = BoardCamera.ScreenPointToRay(eventData.position);
+            int count = Physics.RaycastNonAlloc(ray, _hits, 1000f);
+            if (count == 0) return null;
+
+            System.Array.Sort(_hits, 0, count, RaycastDistanceComparer.Instance);
+
+            for (int i = 0; i < count; i++)
             {
-                IDropTarget target = _dropTargets[i];
-                if (target.Rect == null || !target.Rect.gameObject.activeInHierarchy) continue;
+                Transform hit = _hits[i].collider.transform;
 
-                if (RectTransformUtility.RectangleContainsScreenPoint(target.Rect, eventData.position, camera))
-                {
-                    return target;
-                }
+                // 角色卡优先于它底下的区域底板
+                var combatant = hit.GetComponentInParent<CombatantView>();
+                if (combatant != null && _dropTargets.Contains(combatant)) return combatant;
+
+                var zone = hit.GetComponentInParent<ZoneView>();
+                if (zone != null && _dropTargets.Contains(zone)) return zone;
             }
 
             return null;
+        }
+
+        private sealed class RaycastDistanceComparer : IComparer<RaycastHit>
+        {
+            public static readonly RaycastDistanceComparer Instance = new();
+            public int Compare(RaycastHit a, RaycastHit b) => a.distance.CompareTo(b.distance);
         }
 
         public void OnCardHover(CardView card, bool entered)
@@ -493,39 +495,12 @@ namespace TCGinFU.View
 
         public void OnCardClick(CardView card)
         {
-            // 点一下也能出牌：用当前选中的目标，省得每次都拖
             if (!card.Draggable || card.Zone == null) return;
 
-            PlayerCharacter player = ResolvePlayer(card.Zone.Layout.playerIndex);
-            if (player == null) return;
+            PlayerCharacter owner = ResolvePlayer(card.Zone.Layout.playerIndex);
+            if (owner == null) return;
 
-            string target = BattleSession.NeedsAllyTarget(card.Definition())
-                ? player.Id
-                : Session.SelectedEnemyId;
-
-            Session.Submit(new PlayCardAction(player.Id, card.Card.Uid, target), $"打出「{card.Card.Name}」。");
-            Refresh();
-        }
-
-        /// <summary>点可查看的叠放区域 → 把里面的牌全部摊开（弃牌堆是公开信息）。</summary>
-        private void HandleZoneClick(ZoneView zone)
-        {
-            if (!zone.Layout.peekable) return;
-
-            IReadOnlyList<CardInstance> cards = ResolveCards(zone.Layout);
-            if (cards.Count == 0)
-            {
-                Session.SetMessage($"{zone.Layout.displayName}是空的。");
-                Refresh();
-                return;
-            }
-
-            PlayerCharacter owner = ResolvePlayer(zone.Layout.playerIndex);
-            string title = owner == null
-                ? zone.Layout.displayName
-                : $"{owner.Name} 的{zone.Layout.displayName}";
-
-            _peekPanel.Open(title, cards, this);
+            PlayCard(owner, card.Card);
         }
 
         private bool ZoneAcceptsCard(ZoneView zone, CardView card)
@@ -553,13 +528,13 @@ namespace TCGinFU.View
         {
             if (card.Zone == null || !card.Zone.Layout.draggable) return false;
 
-            CardDefinition def = card.Definition();
+            CardDefinition def = card.Card.Definition;
             bool needsEnemy = def.Effects.Any(e => e.Target.Scope == TargetScope.SingleEnemy);
             bool needsAlly = def.Effects.Any(e => e.Target.Scope == TargetScope.SingleAlly);
 
             if (needsEnemy) return view.Combatant is Enemy;
             if (needsAlly) return view.Combatant is PlayerCharacter;
-            return true; // 不需要指定目标的牌，拖到谁身上都算打出
+            return true;
         }
 
         private void HandleCombatantDrop(CombatantView view, CardView card)
@@ -578,9 +553,35 @@ namespace TCGinFU.View
                 $"打出「{card.Card.Name}」→ {view.Combatant.Name}。");
         }
 
+        /// <summary>点可查看的叠放区域 → 把里面的牌全部摊开（弃牌堆是公开信息）。</summary>
+        private void HandleZoneClick(ZoneView zone)
+        {
+            if (_pendingChargeCard != null)
+            {
+                CancelChargeTargeting();
+                return;
+            }
+
+            if (!zone.Layout.peekable) return;
+
+            IReadOnlyList<CardInstance> cards = ResolveCards(zone.Layout);
+            if (cards.Count == 0)
+            {
+                Session.SetMessage($"{zone.Layout.displayName}是空的。");
+                Refresh();
+                return;
+            }
+
+            PlayerCharacter owner = ResolvePlayer(zone.Layout.playerIndex);
+            string title = owner == null
+                ? zone.Layout.displayName
+                : $"{owner.Name} 的{zone.Layout.displayName}";
+
+            _peekPanel.Open(title, cards);
+        }
+
         private void HandleCombatantClick(CombatantView view)
         {
-            // 正在选充能目标时，点角色 = 选中它并二次确认
             if (_pendingChargeCard != null)
             {
                 PickChargeTarget(view);
@@ -623,12 +624,11 @@ namespace TCGinFU.View
             Refresh();
         }
 
-        /// <summary>进入「选充能目标」状态，下一次点角色卡就是选目标。</summary>
         private void BeginChargeTargeting(PlayerCharacter owner, CardInstance card)
         {
             _pendingChargeCard = card;
             _pendingChargeOwnerId = owner.Id;
-            Session.SetMessage($"选择要给谁贴充能（「{card.Name}」）——点一名队友的角色卡，或按右键取消。");
+            Session.SetMessage($"选择要给谁贴充能（「{card.Name}」）——点一名队友的角色卡，或点棋盘空处取消。");
             Refresh();
         }
 
@@ -674,7 +674,7 @@ namespace TCGinFU.View
 
         private void UpdateContextButton(PendingDecision pending)
         {
-            string label = pending.Kind switch
+            _contextButtonLabel.text = pending.Kind switch
             {
                 DecisionKind.TransformDeclaration => "不升变",
                 DecisionKind.PlayerActions => "结束行动",
@@ -683,7 +683,6 @@ namespace TCGinFU.View
                 _ => "—",
             };
 
-            _contextButtonLabel.text = label;
             _contextButton.interactable = pending.Kind != DecisionKind.None
                                           && Session.State.Outcome == BattleOutcome.Ongoing;
         }
@@ -693,7 +692,6 @@ namespace TCGinFU.View
             PlayerCharacter player = Session.SelectedPlayer;
             PendingDecision pending = Session.Engine.Pending;
 
-            // 当前选中的角色不在待办列表里时，直接处理第一个在等的人，省得用户先去点头像
             if (player == null || !pending.WaitingOn.Contains(player.Id))
             {
                 string first = pending.WaitingOn.FirstOrDefault();
@@ -740,10 +738,5 @@ namespace TCGinFU.View
             RoundPhase.Finished => "战斗结束",
             _ => phase.ToString(),
         };
-    }
-
-    internal static class CardViewExtensions
-    {
-        public static CardDefinition Definition(this CardView view) => view.Card.Definition;
     }
 }

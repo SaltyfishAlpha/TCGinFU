@@ -27,39 +27,70 @@ TCGinFU.Core / Content  规则引擎与内容
 
 ---
 
-## 1.5 3D 视角：世界空间 Canvas + 透视相机
+## 1.5 棋盘是真 3D：每张卡都是带厚度的网格
 
-桌面是一块 **World Space Canvas**，被一台**透视相机**斜着看。
-靠近手牌的一侧更大、远处的敌人更小，就是真实的 3D 透视。
-
-**为什么不做成真 3D 物体**：`CardView` / `ZoneView` / `CombatantView` 这些
-uGUI 组件可以原样复用，拖拽、射线、布局全不用重写。把 Canvas 放进世界空间
-就已经是 3D 了——卡牌本来就是平面，没必要建模。
+卡牌不是贴图也不是 UI 元素，而是**真正的 3D 物体**——所以牌堆叠起来
+能直接看出有多少张，卡组、弃牌堆、充能堆都有可观察的厚度。
 
 ```
-BoardCanvas   WorldSpace，绕 X 轴倾斜 boardTilt 度，1 像素 = 0.01 世界单位
-BoardCamera   透视，按桌面尺寸与 FOV 反算距离，自带 AudioListener
-HudCanvas     ScreenSpaceOverlay，sortingOrder = 100
+Board            根节点，缩放 1/100，绕 X 轴 -boardTilt 度
+  Table          桌布面片
+  Zone_*         区域：底板面片 + BoxCollider + 标题
+    Card         卡牌
+      Body       扁盒子网格（w × h × 厚度）——露出来的侧面就是厚度
+      FaceQuad   卡面片，略小一圈，于是四周留出一圈深色描边
+      Highlight  高亮片，平时隐藏
+      Face       世界空间 Canvas，画文字
+BoardCamera      透视相机 + PhysicsRaycaster + AudioListener
+HudCanvas        ScreenSpaceOverlay，sortingOrder = 100
 ```
 
-顶栏和各种弹窗放在 **HudCanvas**，**不**跟着桌面倾斜——倾斜的文字没法读。
-HUD 的 `sortingOrder` 更高，所以弹窗开着时会优先吃掉点击，自然挡住棋盘操作。
+### 单位：根节点底下一律用设计像素
+
+`Board` 根节点缩放成 `1 / PixelsPerUnit`，于是它底下的所有坐标、尺寸、
+厚度**全部直接写设计像素**，只在根节点换算一次到世界单位。
+布局资产里的锚点数值因此可以原样用，不必到处乘换算系数。
+
+### 立体感靠配色，不靠灯光
+
+材质用 **Unlit**，场景里没有灯。卡的立体感来自「卡身比卡面暗」：
+卡身是深色盒子，卡面是亮色的、略小一圈的片，于是边缘自然形成深色描边，
+叠起来就是一摞深色层 + 最上面一张亮面。
+
+这样做的好处是不用管光照设置、不用管 URP 的灯光配置，颜色所见即所得。
+代价是没有阴影和高光。
+
+> 顺带：桌面上的网格**一律不透明**（Unlit 没开混合），所以区域底板那种
+> 半透明配色会先被 `OpaqueOnTable` 压到桌布上算成实色。
+
+### 拾取与拖拽都走物理射线
+
+相机上挂 `PhysicsRaycaster`，卡牌和区域各有 `BoxCollider`，
+所以 `IPointerClickHandler` / `IBeginDragHandler` 这些接口和做 uGUI 时**完全一样**，
+事件代码一行没改。
+
+- **拖拽**：屏幕射线 → 与桌面平面求交 → 卡贴着平面移动（抬高 `DragLift` 像素）
+- **命中放置目标**：`Physics.RaycastNonAlloc` 按距离排序，角色卡优先于它底下的区域底板
+- 拖起来的卡会**关掉自己的碰撞体**，否则射线永远先打中它自己，找不到下面的目标
+
+### 顶栏与弹窗仍是屏幕空间 uGUI
+
+倾斜的文字没法读，所以顶栏、牌堆查看、右键菜单、确认框都挂在
+`HudCanvas`（`ScreenSpaceOverlay`）。它的 `sortingOrder` 更高，
+弹窗开着时自然优先吃掉点击。
+
+牌堆查看面板里的卡用的是 `PeekCardView`（平面 uGUI 版），
+翻看牌堆不需要厚度，也不该把 3D 卡从棋盘上搬过来。
 
 布局资产里的 3D 参数：
 
 | 字段 | 作用 |
 | ----- | ----- |
-| `boardTilt` | 桌面后仰角度。0 = 平面视角，越大越像趴在桌上看 |
-| `cameraFov` | 相机视野。越小透视越弱、越接近平面 |
+| `boardTilt` | 桌面后仰角度。0 = 正对镜头，越大越像趴在桌上看 |
+| `cameraFov` | 相机视野。越小透视越弱 |
 | `cameraMargin` | 取景余量。1 = 刚好装下桌面 |
 | `cameraHeight` | 相机抬高量（按桌面高度比例），越高越俯视 |
-
-两处必须用对相机的地方（搞错就会出现「拖拽的牌跟不上鼠标」）：
-
-- `CardView.OnDrag` 的 `ScreenPointToLocalPointInRectangle`
-- `BattleView.FindTargetUnder` 的 `RectangleContainsScreenPoint`
-
-两者都按 `Canvas.renderMode` 决定传 `null` 还是 `Canvas.worldCamera`。
+| `CardMeshFactory.CardThickness` | 卡厚（设计像素）。调大牌堆更明显，调小更写实 |
 
 > 战斗场景用 `NewSceneSetup.EmptyScene` 生成：`BattleView` 自己建相机，
 > 留着默认的 Main Camera 会变成两台相机同时渲染、天空盒盖在桌面上。

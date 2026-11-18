@@ -1,0 +1,105 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace TCGinFU.View
+{
+    /// <summary>
+    /// 3D 卡牌用到的网格与材质。
+    /// <para>
+    /// 整块桌面放在一个缩放为 1/<see cref="BattleLayoutAsset.PixelsPerUnit"/> 的根节点下，
+    /// 所以这一层里所有尺寸都直接用**设计像素**，只在根节点换算一次到世界单位。
+    /// </para>
+    /// </summary>
+    public static class CardMeshFactory
+    {
+        /// <summary>卡牌厚度（设计像素）。一张实体卡约 0.3mm，这里夸张一点才看得见。</summary>
+        public const float CardThickness = 3.2f;
+
+        private static Mesh _box;
+        private static Mesh _quad;
+        private static readonly Dictionary<Color, Material> Materials = new();
+        private static Shader _shader;
+
+        /// <summary>1×1×1 的立方体，轴心在中心。</summary>
+        public static Mesh Box => _box ??= BuildBox();
+
+        /// <summary>1×1 的面片，法线朝 +Z。</summary>
+        public static Mesh Quad => _quad ??= BuildQuad();
+
+        /// <summary>
+        /// 取一个纯色材质。用的是 Unlit——场景里没有灯光，
+        /// 卡的立体感靠「卡身比卡面暗」造出来，不靠光照。
+        /// </summary>
+        public static Material ColorMaterial(Color color)
+        {
+            if (Materials.TryGetValue(color, out Material cached) && cached != null) return cached;
+
+            _shader ??= Shader.Find("Universal Render Pipeline/Unlit")
+                        ?? Shader.Find("Unlit/Color")
+                        ?? Shader.Find("Sprites/Default");
+
+            var material = new Material(_shader) { name = $"Card_{ColorUtility.ToHtmlStringRGBA(color)}" };
+
+            // URP Unlit 用 _BaseColor，内置 Unlit/Color 用 _Color，两边都设一下
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
+            if (material.HasProperty("_Color")) material.SetColor("_Color", color);
+
+            Materials[color] = material;
+            return material;
+        }
+
+        /// <summary>造一个带网格的子物体。</summary>
+        public static Transform CreateMeshObject(string name, Transform parent, Mesh mesh, Color color)
+        {
+            var go = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer));
+            go.transform.SetParent(parent, false);
+
+            go.GetComponent<MeshFilter>().sharedMesh = mesh;
+
+            var renderer = go.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = ColorMaterial(color);
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+
+            return go.transform;
+        }
+
+        public static void SetColor(Transform meshObject, Color color)
+        {
+            if (meshObject == null) return;
+            if (meshObject.TryGetComponent(out MeshRenderer renderer))
+            {
+                renderer.sharedMaterial = ColorMaterial(color);
+            }
+        }
+
+        private static Mesh BuildBox()
+        {
+            // 直接用 Unity 内置立方体，省得自己摆 24 个顶点
+            var temp = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Mesh mesh = Object.Instantiate(temp.GetComponent<MeshFilter>().sharedMesh);
+            mesh.name = "CardBox";
+            Object.DestroyImmediate(temp);
+            return mesh;
+        }
+
+        private static Mesh BuildQuad()
+        {
+            var mesh = new Mesh { name = "CardQuad" };
+            mesh.SetVertices(new List<Vector3>
+            {
+                new(-0.5f, -0.5f, 0f), new(-0.5f, 0.5f, 0f),
+                new(0.5f, 0.5f, 0f), new(0.5f, -0.5f, 0f),
+            });
+            mesh.SetUVs(0, new List<Vector2> { new(0f, 0f), new(0f, 1f), new(1f, 1f), new(1f, 0f) });
+            // 法线朝 +Z，也就是朝镜头那一面
+            mesh.SetTriangles(new[] { 0, 1, 2, 0, 2, 3 }, 0);
+            mesh.SetNormals(new List<Vector3>
+            {
+                Vector3.forward, Vector3.forward, Vector3.forward, Vector3.forward,
+            });
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+    }
+}
