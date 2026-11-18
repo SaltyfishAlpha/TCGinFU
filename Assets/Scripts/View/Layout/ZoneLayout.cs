@@ -12,6 +12,7 @@ namespace TCGinFU.View
         手牌,
         卡组,
         弃牌堆,
+        /// <summary>独立充能区。默认布局不用它——充能按实体打牌的做法横置在角色卡上。</summary>
         充能区,
         持续区,
         形态卡组,
@@ -35,6 +36,8 @@ namespace TCGinFU.View
         堆叠,
         /// <summary>网格</summary>
         网格,
+        /// <summary>横置叠放：卡牌旋转 90° 依次压住，对应实体打牌里「横置一张牌表示充能」</summary>
+        横置,
     }
 
     /// <summary>
@@ -71,7 +74,14 @@ namespace TCGinFU.View
 
         [Header("排布")]
         public ZoneArrange arrange = ZoneArrange.横排;
-        public Vector2 cardSize = new(120f, 168f);
+
+        [Tooltip("卡牌缩放。实际尺寸 = 布局资产里的标准卡牌尺寸 × 这个值，比例恒定不变形")]
+        [Range(0.2f, 2f)]
+        public float cardScale = 1f;
+
+        [Tooltip("角色面板尺寸。只有排位区域（前排/后排）用得到")]
+        public Vector2 combatantSize = new(210f, 150f);
+
         public float spacing = 12f;
 
         [Tooltip("扇形排布的总张开角度（度）")]
@@ -83,11 +93,15 @@ namespace TCGinFU.View
         [Range(1, 12)]
         public int gridColumns = 4;
 
+        [Tooltip("至少预留几个卡位。没有牌时也会画出空卡位，保证区域不塌、牌位不跳")]
+        [Range(0, 12)]
+        public int reservedSlots = 1;
+
         [Header("交互")]
         [Tooltip("这个区域的卡牌能不能拖")]
         public bool draggable;
 
-        [Tooltip("能不能把卡牌拖到这个区域上（例如充能区）")]
+        [Tooltip("能不能把卡牌拖到这个区域上")]
         public bool acceptsDrop;
 
         [Tooltip("背面朝上。卡组、充能指示物用")]

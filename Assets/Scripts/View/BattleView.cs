@@ -37,10 +37,8 @@ namespace TCGinFU.View
         private readonly List<CardView> _cardPool = new();
 
         private RectTransform _board;
-        private RectTransform _logPanel;
         private Text _statusText;
         private Text _messageText;
-        private Text _logText;
         private Button _contextButton;
         private Text _contextButtonLabel;
         private IDropTarget _hoveredTarget;
@@ -52,6 +50,10 @@ namespace TCGinFU.View
         private void Start()
         {
             if (layout == null) layout = BattleLayoutAsset.CreateDefault();
+
+            // 旧版布局资产升级后，新加的字段会是零值（Unity 不会套用 C# 字段初始值），
+            // 这里兜一下，免得卡牌被缩成 0 看不见
+            layout.Normalize();
 
             Session = new BattleSession { Seed = seed, PartySize = partySize, EnemyPreset = scenario };
             Session.Restart();
@@ -87,7 +89,11 @@ namespace TCGinFU.View
 
             foreach (ZoneLayout zoneLayout in layout.zones)
             {
-                ZoneView zone = ZoneView.Create(_board, zoneLayout);
+                Vector2 slotSize = zoneLayout.IsCombatantZone
+                    ? zoneLayout.combatantSize
+                    : layout.CardSizeFor(zoneLayout);
+
+                ZoneView zone = ZoneView.Create(_board, zoneLayout, slotSize);
                 zone.DropFilter = ZoneAcceptsCard;
                 zone.DropHandler = HandleZoneDrop;
                 _zones.Add(zone);
@@ -95,7 +101,6 @@ namespace TCGinFU.View
             }
 
             BuildTopBar(canvasGo.transform);
-            BuildLogPanel(canvasGo.transform);
 
             // 拖拽层放最后，保证拖起来的牌画在所有区域之上
             DragLayer = UiBuilder.CreateRect("DragLayer", canvasGo.transform);
@@ -145,25 +150,7 @@ namespace TCGinFU.View
             UiBuilder.CreateButton("自动出牌", bar.transform, 86f, () => { Session.AutoPlay(); Refresh(); });
             UiBuilder.CreateButton("跳过本步", bar.transform, 86f, () => { Session.SkipPending(); Refresh(); });
             UiBuilder.CreateButton("自动打完", bar.transform, 86f, () => { Session.SkipToEnd(); Refresh(); });
-            UiBuilder.CreateButton("战报", bar.transform, 64f,
-                () => _logPanel.gameObject.SetActive(!_logPanel.gameObject.activeSelf));
             UiBuilder.CreateButton("重开", bar.transform, 64f, () => { Session.Restart(); Refresh(); });
-        }
-
-        private void BuildLogPanel(Transform parent)
-        {
-            Image panel = UiBuilder.CreateImage("LogPanel", parent, new Color(0f, 0f, 0f, 0.82f));
-            _logPanel = panel.rectTransform;
-            _logPanel.anchorMin = new Vector2(1f, 0f);
-            _logPanel.anchorMax = new Vector2(1f, 1f);
-            _logPanel.pivot = new Vector2(1f, 0.5f);
-            _logPanel.sizeDelta = new Vector2(360f, -48f);
-            _logPanel.anchoredPosition = new Vector2(0f, -24f);
-
-            _logText = UiBuilder.CreateText("LogText", _logPanel, "", 13, TextAnchor.LowerLeft);
-            _logText.rectTransform.Stretch(8f);
-
-            _logPanel.gameObject.SetActive(false);
         }
 
         // ──────────────────────────── 刷新 ────────────────────────────
@@ -186,12 +173,6 @@ namespace TCGinFU.View
 
             UpdateContextButton(pending);
 
-            if (_logPanel.gameObject.activeSelf)
-            {
-                string[] lines = Session.Log.Split('\n');
-                _logText.text = string.Join("\n", lines.Skip(Mathf.Max(0, lines.Length - 46)));
-            }
-
             var liveCardUids = new HashSet<int>();
             var liveCombatantIds = new HashSet<string>();
 
@@ -202,7 +183,7 @@ namespace TCGinFU.View
 
                 zone.BeginRebuild();
 
-                if (zone.Layout.IsCombatantZone) FillCombatantZone(zone, liveCombatantIds);
+                if (zone.Layout.IsCombatantZone) FillCombatantZone(zone, liveCombatantIds, liveCardUids);
                 else FillCardZone(zone, liveCardUids);
 
                 zone.Arrange();
@@ -227,39 +208,97 @@ namespace TCGinFU.View
                 }
 
                 view.gameObject.SetActive(true);
-                view.Bind(card, zone, zone.Layout.faceDown, draggable, zone.Layout.cardSize);
+                view.Bind(card, zone, zone.Layout.faceDown, draggable, zone.SlotSize);
                 zone.Add(view.Rect);
                 live.Add(card.Uid);
             }
         }
 
-        private void FillCombatantZone(ZoneView zone, HashSet<string> live)
+        private void FillCombatantZone(ZoneView zone, HashSet<string> live, HashSet<int> liveCards)
         {
             IReadOnlyList<Combatant> combatants = ResolveCombatants(zone.Layout);
             zone.SetLabel(zone.Layout.displayName);
 
             foreach (Combatant combatant in combatants)
             {
+                bool isEnemy = combatant is Enemy;
+
                 if (!_combatantViews.TryGetValue(combatant.Id, out CombatantView view))
                 {
-                    view = CombatantView.Create(zone.Rect);
+                    // 充能牌横置压在角色卡上，用标准卡牌的一个缩小比例
+                    view = CombatantView.Create(
+                        zone.Rect, layout.CardSize * 0.38f, withChargeStrip: !isEnemy);
                     view.DropFilter = CombatantAcceptsCard;
                     view.DropHandler = HandleCombatantDrop;
                     view.ClickHandler = HandleCombatantClick;
                     _combatantViews[combatant.Id] = view;
                     _dropTargets.Add(view);
+
+                    if (view.ChargeStrip != null)
+                    {
+                        view.ChargeStrip.DropFilter = (_, card) => card.Zone != null && card.Zone.Layout.draggable;
+                        view.ChargeStrip.DropHandler = HandleChargeDrop;
+                        // 排在角色面板之后：命中判定倒序遍历，充能条才会优先于面板本体
+                        _dropTargets.Add(view.ChargeStrip);
+                    }
                 }
 
-                bool isEnemy = combatant is Enemy;
                 bool selected = isEnemy
                     ? Session.SelectedEnemyId == combatant.Id
                     : Session.SelectedPlayerId == combatant.Id;
 
                 view.gameObject.SetActive(true);
-                view.Bind(combatant, isEnemy, selected, zone.Layout.cardSize);
+                view.Bind(combatant, isEnemy, selected, zone.SlotSize);
                 zone.Add(view.Rect);
                 live.Add(combatant.Id);
+
+                FillChargeStrip(view, combatant, liveCards);
             }
+        }
+
+        /// <summary>
+        /// 把该角色充能区里的牌横置摆到他的角色卡上——实体打牌里给队友充能
+        /// 就是在他的角色卡上横放一张牌（§5.2），所以充能不单独占一块场地。
+        /// </summary>
+        private void FillChargeStrip(CombatantView view, Combatant combatant, HashSet<int> liveCards)
+        {
+            if (view.ChargeStrip == null || combatant is not PlayerCharacter player) return;
+
+            ZoneView strip = view.ChargeStrip;
+            strip.BeginRebuild();
+
+            foreach (ChargeToken token in player.Zones.Charges.Tokens)
+            {
+                if (!_cardViews.TryGetValue(token.Card.Uid, out CardView cardView))
+                {
+                    cardView = RentCardView();
+                    _cardViews[token.Card.Uid] = cardView;
+                }
+
+                cardView.gameObject.SetActive(true);
+                cardView.Bind(token.Card, strip, faceDown: true, draggable: false, strip.SlotSize);
+                strip.Add(cardView.Rect);
+                liveCards.Add(token.Card.Uid);
+            }
+
+            strip.Arrange();
+        }
+
+        /// <summary>拖到角色卡的充能条上 = 给这名角色贴充能。</summary>
+        private void HandleChargeDrop(ZoneView strip, CardView card)
+        {
+            PlayerCharacter owner = ResolvePlayer(card.Zone.Layout.playerIndex);
+            CombatantView host = strip.GetComponentInParent<CombatantView>();
+
+            if (owner == null || host?.Combatant is not PlayerCharacter target)
+            {
+                card.ReturnHome();
+                return;
+            }
+
+            Session.Submit(
+                new PlaceChargeAction(owner.Id, card.Card.Uid, target.Id),
+                $"「{card.Card.Name}」横置到 {target.Name} 身上，作为充能。");
         }
 
         private void Prune(HashSet<int> liveCards, HashSet<string> liveCombatants)

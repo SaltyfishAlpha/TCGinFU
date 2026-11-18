@@ -28,6 +28,9 @@ namespace TCGinFU.View.Editor
             var go = new GameObject("BattleView");
             var view = go.AddComponent<BattleView>();
 
+            // 调试浮层：正式发版时把这个组件（和它那个文件）删掉即可，BattleView 不依赖它
+            go.AddComponent<Debugging.BattleDebugOverlay>();
+
             // layout 是私有 [SerializeField]，用 SerializedObject 赋值，避免为了建场景把字段开成 public
             var serialized = new SerializedObject(view);
             SerializedProperty property = serialized.FindProperty("layout");

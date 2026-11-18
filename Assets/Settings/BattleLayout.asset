@@ -1,0 +1,206 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bf3d0bb54cbd783428beb2b955c4069a, type: 3}
+  m_Name: BattleLayout
+  m_EditorClassIdentifier: TCGinFU.View::TCGinFU.View.BattleLayoutAsset
+  referenceResolution: {x: 1920, y: 1080}
+  tableColor: {r: 0.11, g: 0.12, b: 0.15, a: 1}
+  zones:
+  - key: enemy_front
+    displayName: "\u654C\u65B9\u524D\u6392"
+    visible: 1
+    source: 9
+    playerIndex: -1
+    anchorMin: {x: 0.12, y: 0.7}
+    anchorMax: {x: 0.88, y: 0.96}
+    offsetMin: {x: 0, y: 0}
+    offsetMax: {x: 0, y: 0}
+    arrange: 0
+    cardSize: {x: 190, y: 150}
+    spacing: 18
+    fanAngle: 14
+    fanArc: 26
+    gridColumns: 4
+    draggable: 0
+    acceptsDrop: 1
+    faceDown: 0
+    showLabel: 1
+    background: {r: 0.6, g: 0.2, b: 0.2, a: 0.07}
+    border: {r: 1, g: 1, b: 1, a: 0.18}
+  - key: enemy_back
+    displayName: "\u654C\u65B9\u540E\u6392"
+    visible: 1
+    source: 10
+    playerIndex: -1
+    anchorMin: {x: 0.12, y: 0.575}
+    anchorMax: {x: 0.88, y: 0.69}
+    offsetMin: {x: 0, y: 0}
+    offsetMax: {x: 0, y: 0}
+    arrange: 0
+    cardSize: {x: 190, y: 110}
+    spacing: 18
+    fanAngle: 14
+    fanArc: 26
+    gridColumns: 4
+    draggable: 0
+    acceptsDrop: 1
+    faceDown: 0
+    showLabel: 1
+    background: {r: 0.6, g: 0.2, b: 0.2, a: 0.05}
+    border: {r: 1, g: 1, b: 1, a: 0.18}
+  - key: party_front
+    displayName: "\u6211\u65B9\u524D\u6392"
+    visible: 1
+    source: 7
+    playerIndex: -1
+    anchorMin: {x: 0.12, y: 0.395}
+    anchorMax: {x: 0.88, y: 0.565}
+    offsetMin: {x: 0, y: 0}
+    offsetMax: {x: 0, y: 0}
+    arrange: 0
+    cardSize: {x: 200, y: 140}
+    spacing: 18
+    fanAngle: 14
+    fanArc: 26
+    gridColumns: 4
+    draggable: 0
+    acceptsDrop: 1
+    faceDown: 0
+    showLabel: 1
+    background: {r: 0.2, g: 0.45, b: 0.7, a: 0.07}
+    border: {r: 1, g: 1, b: 1, a: 0.18}
+  - key: party_back
+    displayName: "\u6211\u65B9\u540E\u6392"
+    visible: 1
+    source: 8
+    playerIndex: -1
+    anchorMin: {x: 0.12, y: 0.225}
+    anchorMax: {x: 0.88, y: 0.385}
+    offsetMin: {x: 0, y: 0}
+    offsetMax: {x: 0, y: 0}
+    arrange: 0
+    cardSize: {x: 200, y: 140}
+    spacing: 18
+    fanAngle: 14
+    fanArc: 26
+    gridColumns: 4
+    draggable: 0
+    acceptsDrop: 1
+    faceDown: 0
+    showLabel: 1
+    background: {r: 0.2, g: 0.45, b: 0.7, a: 0.05}
+    border: {r: 1, g: 1, b: 1, a: 0.18}
+  - key: deck
+    displayName: "\u5361\u7EC4"
+    visible: 1
+    source: 1
+    playerIndex: -1
+    anchorMin: {x: 0.005, y: 0.02}
+    anchorMax: {x: 0.105, y: 0.21}
+    offsetMin: {x: 0, y: 0}
+    offsetMax: {x: 0, y: 0}
+    arrange: 2
+    cardSize: {x: 110, y: 154}
+    spacing: 12
+    fanAngle: 14
+    fanArc: 26
+    gridColumns: 4
+    draggable: 0
+    acceptsDrop: 0
+    faceDown: 1
+    showLabel: 1
+    background: {r: 1, g: 1, b: 1, a: 0.05}
+    border: {r: 1, g: 1, b: 1, a: 0.18}
+  - key: charge
+    displayName: "\u5145\u80FD\u533A"
+    visible: 1
+    source: 3
+    playerIndex: -1
+    anchorMin: {x: 0.005, y: 0.225}
+    anchorMax: {x: 0.105, y: 0.4}
+    offsetMin: {x: 0, y: 0}
+    offsetMax: {x: 0, y: 0}
+    arrange: 0
+    cardSize: {x: 64, y: 90}
+    spacing: 4
+    fanAngle: 14
+    fanArc: 26
+    gridColumns: 4
+    draggable: 0
+    acceptsDrop: 1
+    faceDown: 1
+    showLabel: 1
+    background: {r: 0.9, g: 0.75, b: 0.2, a: 0.09}
+    border: {r: 1, g: 1, b: 1, a: 0.18}
+  - key: hand
+    displayName: "\u624B\u724C"
+    visible: 1
+    source: 0
+    playerIndex: -1
+    anchorMin: {x: 0.115, y: 0.01}
+    anchorMax: {x: 0.885, y: 0.215}
+    offsetMin: {x: 0, y: 0}
+    offsetMax: {x: 0, y: 0}
+    arrange: 1
+    cardSize: {x: 130, y: 182}
+    spacing: 14
+    fanAngle: 14
+    fanArc: 26
+    gridColumns: 4
+    draggable: 1
+    acceptsDrop: 0
+    faceDown: 0
+    showLabel: 1
+    background: {r: 1, g: 1, b: 1, a: 0.04}
+    border: {r: 1, g: 1, b: 1, a: 0.18}
+  - key: continuous
+    displayName: "\u6301\u7EED\u533A"
+    visible: 1
+    source: 4
+    playerIndex: -1
+    anchorMin: {x: 0.895, y: 0.225}
+    anchorMax: {x: 0.995, y: 0.4}
+    offsetMin: {x: 0, y: 0}
+    offsetMax: {x: 0, y: 0}
+    arrange: 2
+    cardSize: {x: 110, y: 154}
+    spacing: 12
+    fanAngle: 14
+    fanArc: 26
+    gridColumns: 4
+    draggable: 0
+    acceptsDrop: 0
+    faceDown: 0
+    showLabel: 1
+    background: {r: 0.5, g: 0.3, b: 0.8, a: 0.09}
+    border: {r: 1, g: 1, b: 1, a: 0.18}
+  - key: discard
+    displayName: "\u5F03\u724C\u5806"
+    visible: 1
+    source: 2
+    playerIndex: -1
+    anchorMin: {x: 0.895, y: 0.02}
+    anchorMax: {x: 0.995, y: 0.21}
+    offsetMin: {x: 0, y: 0}
+    offsetMax: {x: 0, y: 0}
+    arrange: 2
+    cardSize: {x: 110, y: 154}
+    spacing: 12
+    fanAngle: 14
+    fanArc: 26
+    gridColumns: 4
+    draggable: 0
+    acceptsDrop: 0
+    faceDown: 0
+    showLabel: 1
+    background: {r: 1, g: 1, b: 1, a: 0.05}
+    border: {r: 1, g: 1, b: 1, a: 0.18}

@@ -25,11 +25,20 @@ namespace TCGinFU.View
         public RectTransform Rect { get; private set; }
         public Combatant Combatant { get; private set; }
 
+        /// <summary>
+        /// 贴在角色卡上的充能条。实体打牌里给队友充能就是在他的角色卡上横置一张牌，
+        /// 所以充能不单独占一块场地，而是长在角色面板上（§5.2）。玩家角色才有。
+        /// </summary>
+        public ZoneView ChargeStrip { get; private set; }
+
         public System.Func<CombatantView, CardView, bool> DropFilter { get; set; }
         public System.Action<CombatantView, CardView> DropHandler { get; set; }
         public System.Action<CombatantView> ClickHandler { get; set; }
 
-        public static CombatantView Create(Transform parent)
+        /// <summary>充能条占角色面板下缘的高度比例。</summary>
+        private const float ChargeStripHeight = 0.36f;
+
+        public static CombatantView Create(Transform parent, Vector2 chargeCardSize, bool withChargeStrip)
         {
             RectTransform rect = UiBuilder.CreateRect("Combatant", parent);
             var view = rect.gameObject.AddComponent<CombatantView>();
@@ -67,9 +76,10 @@ namespace TCGinFU.View
             view._hpFill.fillOrigin = (int)Image.OriginHorizontal.Left;
 
             view._statsText = UiBuilder.CreateText("Stats", rect, "", 13, TextAnchor.UpperLeft);
-            view._statsText.rectTransform.anchorMin = Vector2.zero;
+            // 有充能条时把下缘让出来，别让文字压在横置的充能牌上
+            view._statsText.rectTransform.anchorMin = new Vector2(0f, withChargeStrip ? ChargeStripHeight : 0f);
             view._statsText.rectTransform.anchorMax = Vector2.one;
-            view._statsText.rectTransform.offsetMin = new Vector2(6f, 4f);
+            view._statsText.rectTransform.offsetMin = new Vector2(6f, 2f);
             view._statsText.rectTransform.offsetMax = new Vector2(-6f, -42f);
 
             view._intentText = UiBuilder.CreateText(
@@ -79,6 +89,28 @@ namespace TCGinFU.View
             view._intentText.rectTransform.pivot = new Vector2(0.5f, 0f);
             view._intentText.rectTransform.sizeDelta = new Vector2(-12f, 34f);
             view._intentText.rectTransform.anchoredPosition = new Vector2(0f, 4f);
+
+            if (withChargeStrip)
+            {
+                view.ChargeStrip = ZoneView.Create(rect, new ZoneLayout
+                {
+                    key = "charge_strip",
+                    displayName = "充能",
+                    source = ZoneSource.充能区,
+                    arrange = ZoneArrange.横置,
+                    acceptsDrop = true,
+                    faceDown = true,
+                    showLabel = false,
+                    reservedSlots = 0,
+                    spacing = 2f,
+                    anchorMin = new Vector2(0.03f, 0f),
+                    anchorMax = new Vector2(0.97f, ChargeStripHeight),
+                    offsetMin = new Vector2(0f, 4f),
+                    offsetMax = new Vector2(0f, 0f),
+                    background = new Color(0.9f, 0.75f, 0.2f, 0.06f),
+                    border = new Color(0.9f, 0.75f, 0.2f, 0.22f),
+                }, chargeCardSize);
+            }
 
             return view;
         }

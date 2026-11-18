@@ -47,7 +47,7 @@ BattleLayoutAsset (ScriptableObject)
 | 标识 | `key`（代码里找它用）、`displayName`、`visible` |
 | 内容 | `source`（手牌 / 卡组 / 弃牌堆 / 充能区 / 持续区 / 形态卡组 / 已完成升变区 / 四个排位 / 空）、`playerIndex` |
 | 位置 | `anchorMin/Max` + `offsetMin/Max`——锚点是 0–1 相对坐标，所以分辨率自适应 |
-| 排布 | `arrange`（横排 / 扇形 / 堆叠 / 网格）、`cardSize`、`spacing`、`fanAngle`、`fanArc`、`gridColumns` |
+| 排布 | `arrange`（横排 / 扇形 / 堆叠 / 网格 / 横置）、`cardScale`、`combatantSize`、`spacing`、`fanAngle`、`fanArc`、`gridColumns`、`reservedSlots` |
 | 交互 | `draggable`（里面的卡能拖出去）、`acceptsDrop`（能拖进来）、`faceDown` |
 | 外观 | `background`、`border`、`showLabel` |
 
@@ -64,14 +64,52 @@ BattleLayoutAsset (ScriptableObject)
 **真要加一种全新的内容来源**（比如「秘宝展示区」），才需要动两处代码：
 `ZoneSource` 加一个枚举值，`BattleView.ResolveCards` 加一个分支。
 
+### 卡牌尺寸恒定为标准大卡
+
+卡牌比例**不可单独调**：布局资产上只有一个 `cardWidth`，高度恒按美式扑克
+（2.5 × 3.5 英寸，即 1 : 1.4）算出。各区域只能用 `cardScale` 整体缩放，
+所以无论怎么改都不会出现被拉扁拉长的卡。
+
+角色面板不是卡，另有 `combatantSize` 自由设置宽高。
+
+### 空区域不塌陷
+
+每个区域有 `reservedSlots`：即使一张牌都没有，也会画出这么多个**空卡位轮廓**。
+好处有两个——区域永远看得出有多大，以及牌位固定，不会因为张数变化整排乱跳。
+
+另外 `ZoneView` 会在区域实际尺寸装不下一个卡位时**打一次警告**
+（`[战斗布局] 区域「X」实际大小 … 装不下一个卡位 …`）。
+改锚点很容易把某块调得过小，与其让卡默默画到框外，不如直接报出来。
+
 ### 排布算法
 
-都在 `ZoneView.Arrange()` 里，按 `arrange` 分发：
+都在 `ZoneView.Arrange()` 里，按 `arrange` 分发。它统一先算出 N 个「卡位姿态」
+（位置 + 旋转），真卡占前面几个，剩下的画成空卡位：
 
 - **横排**：居中平铺，放不下时自动压缩间距（允许负间距让卡互相叠）
 - **扇形**：在横排基础上加弧线下沉与旋转，手牌用
 - **堆叠**：只露最上面几张并轻微错位，牌堆/弃牌堆用
 - **网格**：左上起按 `gridColumns` 换行
+- **横置**：卡旋转 90° 依次压住，充能用（见下）
+
+### 排位的朝向
+
+敌方按**敌人自己的视角**排：它们的后排在更远处，也就是屏幕**更上方**。
+我方按玩家视角排：前排靠近敌人（上），后排靠近自己（下）。
+所以从上到下依次是：敌后排 → 敌前排 → 我前排 → 我后排 → 手牌。
+
+### 充能贴在角色卡上
+
+实体打牌时「给队友充能」就是**在他的角色卡上横置一张牌**，所以充能
+不单独占一块场地：每个玩家角色面板下缘有一条 `ChargeStrip`
+（一个 `arrange = 横置` 的 `ZoneView`），牌旋转 90° 依次压住。
+
+拖拽时这条就是独立的放置目标：
+
+- 拖到角色面板**主体** → 对这个角色打出此牌
+- 拖到面板**下缘的充能条** → 给这个角色贴充能
+
+`ZoneSource.充能区` 这个枚举仍然保留，想要一块独立的充能区照样可以在布局里加。
 
 ---
 
@@ -140,6 +178,27 @@ interface IDropTarget {
 
 卡牌视图按 `CardInstance.Uid` 做字典缓存 + 对象池，角色视图按 `Combatant.Id` 缓存，
 所以刷新不会每帧 `Instantiate`。没有动画、没有补间——**先把状态显示对，动效之后再说**。
+
+---
+
+## 4.5 调试浮层
+
+`BattleDebugOverlay`（`View/Debugging/`）是**调试工具，不是游戏功能**。按 **F1** 开关，显示：
+
+- 种子、轮次、阶段、命刻、当前 `PendingDecision` 与待结算的敌人意图
+- 全体角色的完整状态快照（HP/MP/AP、两种护盾及其中自动盾的部分、各区域张数、
+  充能牌及其**原持有者**、升变状态、状态列表、本轮/上轮造成伤害）
+- 本局累计统计
+- 完整战报（可滚动，可关掉自动跟随）
+
+**怎么移除**：删掉 `BattleDebugOverlay.cs`，再删掉 `BattleSceneBuilder` 里
+`AddComponent<BattleDebugOverlay>()` 那一行。`BattleView` 不引用它。
+
+不删也没关系：正式构建（非 Development Build）下它在 `Awake` 里直接销毁自己。
+**刻意没有把整个类包进 `#if UNITY_EDITOR`**——那样做会让正式包里的场景留下
+missing script 警告。
+
+它用 IMGUI 而不是 uGUI：不往场景层级里留任何节点，删掉就是真的干净。
 
 ---
 
