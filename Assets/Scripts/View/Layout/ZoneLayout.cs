@@ -111,7 +111,7 @@ namespace TCGinFU.View
         [Tooltip("背面朝上。卡组、充能指示物用")]
         public bool faceDown;
 
-        [Tooltip("能不能点开查看里面所有的牌。弃牌堆、已完成升变区这类公开信息应当打开")]
+        [Tooltip("强制允许点开查看。正面朝上的叠放区域本来就能看，不用勾")]
         public bool peekable;
 
         public bool showLabel = true;
@@ -119,6 +119,20 @@ namespace TCGinFU.View
         [Header("外观")]
         public Color background = new(1f, 1f, 1f, 0.05f);
         public Color border = new(1f, 1f, 1f, 0.18f);
+
+        /// <summary>
+        /// 能不能点开查看里面所有的牌。
+        /// <para>
+        /// **正面朝上的叠放区域一律可看**（弃牌堆、持续区、已完成升变区都是公开信息），
+        /// 背面朝上的牌堆则不行。`peekable` 只用来额外强开。
+        /// </para>
+        /// <para>
+        /// 刻意不单靠那个 bool：它是后加的序列化字段，Unity 给**已存在的资产**补新字段
+        /// 用的是类型零值 false 而不是 C# 初始值，于是旧布局资产上全都是关的，
+        /// 表现就是「弃牌堆点不开」。靠排布方式推导就不会有这个问题。
+        /// </para>
+        /// </summary>
+        public bool CanPeek => peekable || (!faceDown && arrange == ZoneArrange.堆叠);
 
         /// <summary>这个区域装的是角色而不是卡牌。</summary>
         public bool IsCombatantZone => source is ZoneSource.我方前排 or ZoneSource.我方后排

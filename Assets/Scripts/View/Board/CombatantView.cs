@@ -37,6 +37,15 @@ namespace TCGinFU.View
         /// </summary>
         public ZoneView ChargeStack { get; private set; }
 
+        /// <summary>
+        /// 升变期间盖在角色卡**上方**的那张升变牌——它就是这一局里的新角色卡（§6.2 ②）。
+        /// <para>
+        /// 往上错开一截而不是严丝合缝盖住：升变牌挡住名条和插画位就够表达「换了形态」，
+        /// 下面的 HP 条、数值栏、意图栏还得看得见，否则升变期间就没法打牌了。
+        /// </para>
+        /// </summary>
+        public ZoneView TransformSlot { get; private set; }
+
         public System.Func<CombatantView, CardView, bool> DropFilter { get; set; }
         public System.Action<CombatantView, CardView> DropHandler { get; set; }
         public System.Action<CombatantView> ClickHandler { get; set; }
@@ -80,7 +89,11 @@ namespace TCGinFU.View
 
             view.BuildFace(sizePx, t);
 
-            if (withChargeStack) view.BuildChargeStack(sizePx);
+            if (withChargeStack)
+            {
+                view.BuildChargeStack(sizePx);
+                view.BuildTransformSlot(sizePx);
+            }
 
             return view;
         }
@@ -136,6 +149,34 @@ namespace TCGinFU.View
                 background = Color.clear,
                 border = Color.clear,
             }, sizePx, Vector2.zero);
+        }
+
+        private void BuildTransformSlot(Vector2 sizePx)
+        {
+            // 往上错开 22%：盖住名条与插画位，留出下半截的 HP 条和数值栏
+            const float riseRatio = 0.22f;
+
+            TransformSlot = ZoneView.Create(Root, new ZoneLayout
+            {
+                key = "transform_overlay",
+                displayName = "升变",
+                source = ZoneSource.空,
+                arrange = ZoneArrange.堆叠,
+                acceptsDrop = false,
+                showLabel = false,
+                reservedSlots = 0,
+                cardScale = 1f,
+                anchorMin = new Vector2(0.5f, 0.5f),
+                anchorMax = new Vector2(0.5f, 0.5f),
+                offsetMin = new Vector2(-sizePx.x * 0.5f, -sizePx.y * (0.5f - riseRatio)),
+                offsetMax = new Vector2(sizePx.x * 0.5f, sizePx.y * (0.5f + riseRatio)),
+                background = Color.clear,
+                border = Color.clear,
+            }, sizePx, Vector2.zero);
+
+            // 推到角色卡前面去，否则会被不透明的卡面挡住
+            TransformSlot.Root.localPosition += new Vector3(
+                0f, 0f, CardMeshFactory.TowardCamera * CardMeshFactory.CardThickness * 3f);
         }
 
         public void Bind(Combatant combatant, bool isEnemy, bool selected)

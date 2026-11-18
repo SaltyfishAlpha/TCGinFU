@@ -308,7 +308,33 @@ namespace TCGinFU.View
                 live.Add(combatant.Id);
 
                 FillChargeStack(view, combatant, liveCards);
+                FillTransformSlot(view, combatant, liveCards);
             }
+        }
+
+        /// <summary>
+        /// 升变期间把升变牌盖到角色卡上——它就是这一局的新角色卡（§6.2 ②）。
+        /// </summary>
+        private void FillTransformSlot(CombatantView view, Combatant combatant, HashSet<int> liveCards)
+        {
+            if (view.TransformSlot == null) return;
+
+            ZoneView slot = view.TransformSlot;
+            slot.BeginRebuild();
+
+            if (combatant is PlayerCharacter player
+                && player.Transform.Active
+                && player.Transform.TransformCard != null)
+            {
+                CardInstance card = player.Transform.TransformCard;
+                CardView cardView = RentCardView(card.Uid);
+                cardView.Root.gameObject.SetActive(true);
+                cardView.Bind(card, slot, faceDown: false, draggable: false, slot.SlotSize);
+                slot.Add(cardView);
+                liveCards.Add(card.Uid);
+            }
+
+            slot.Arrange();
         }
 
         /// <summary>把该角色的充能牌横置摆到他的角色卡背后。</summary>
@@ -560,13 +586,19 @@ namespace TCGinFU.View
         /// <summary>点可查看的叠放区域 → 把里面的牌全部摊开（弃牌堆是公开信息）。</summary>
         private void HandleZoneClick(ZoneView zone)
         {
+            // 正在选充能目标时，点空处**不**取消。
+            // 点在角色卡边缘稍微偏一点就会命中区域底板而不是卡，
+            // 要是这里顺手取消掉，用户看到的就是「贴充能毫无反应」。
             if (_pendingChargeCard != null)
             {
-                CancelChargeTargeting();
+                Session.SetMessage(
+                    $"还在选充能目标（「{_pendingChargeCard.Name}」）——请点一名**队友的角色卡**，"
+                    + "或用顶栏的「取消充能」。", isWarning: true);
+                Refresh();
                 return;
             }
 
-            if (!zone.Layout.peekable) return;
+            if (!zone.Layout.CanPeek) return;
 
             IReadOnlyList<CardInstance> cards = ResolveCards(zone.Layout);
             if (cards.Count == 0)
@@ -607,11 +639,11 @@ namespace TCGinFU.View
             PlayerCharacter owner = ResolvePlayer(card.Zone.Layout.playerIndex);
             if (owner == null) return;
 
+            // 打出不放进菜单：左键点牌、或者把牌拖到目标身上，本来就是打出，
+            // 菜单里再放一遍只是重复。右键专门用来做「拖拽表达不了」的事。
             CardInstance instance = card.Card;
             var options = new List<(string, System.Action)>
             {
-                ($"打出（→ {Session.State.Find(Session.SelectedEnemyId)?.Name ?? "当前目标"}）",
-                    () => PlayCard(owner, instance)),
                 ("贴充能…", () => BeginChargeTargeting(owner, instance)),
             };
 
@@ -630,9 +662,25 @@ namespace TCGinFU.View
 
         private void BeginChargeTargeting(PlayerCharacter owner, CardInstance card)
         {
+            // 先把「这轮根本贴不了」的情况说清楚，而不是让用户点完目标、点完确认，
+            // 最后才在状态栏看到一行拒绝理由
+            if (Session.Engine.Pending.Kind != DecisionKind.PlayerActions)
+            {
+                Session.SetMessage("贴充能只能在玩家阶段。", isWarning: true);
+                Refresh();
+                return;
+            }
+
+            if (owner.HasPlacedChargeThisRound)
+            {
+                Session.SetMessage($"{owner.Name} 本轮已经贴过充能了（每轮限 1 次）。", isWarning: true);
+                Refresh();
+                return;
+            }
+
             _pendingChargeCard = card;
             _pendingChargeOwnerId = owner.Id;
-            Session.SetMessage($"选择要给谁贴充能（「{card.Name}」）——点一名队友的角色卡，或点棋盘空处取消。");
+            Session.SetMessage($"选择要给谁贴充能（「{card.Name}」）——点一名**队友的角色卡**，或用顶栏的「取消充能」。");
             Refresh();
         }
 
@@ -650,7 +698,10 @@ namespace TCGinFU.View
         {
             if (view.Combatant is not PlayerCharacter target)
             {
-                Session.SetMessage("充能只能贴给队友的角色卡。", isWarning: true);
+                // 保持选择状态，让用户直接再点一个队友，不用重新走一遍右键菜单
+                Session.SetMessage(
+                    $"{view.Combatant.Name} 是敌人，充能只能贴给队友。请点一名队友的角色卡。",
+                    isWarning: true);
                 Refresh();
                 return;
             }
@@ -678,6 +729,14 @@ namespace TCGinFU.View
 
         private void UpdateContextButton(PendingDecision pending)
         {
+            // 选充能目标期间，这个按钮临时变成唯一的取消入口
+            if (_pendingChargeCard != null)
+            {
+                _contextButtonLabel.text = "取消充能";
+                _contextButton.interactable = true;
+                return;
+            }
+
             _contextButtonLabel.text = pending.Kind switch
             {
                 DecisionKind.TransformDeclaration => "不升变",
@@ -693,6 +752,12 @@ namespace TCGinFU.View
 
         private void SubmitContextAction()
         {
+            if (_pendingChargeCard != null)
+            {
+                CancelChargeTargeting();
+                return;
+            }
+
             PlayerCharacter player = Session.SelectedPlayer;
             PendingDecision pending = Session.Engine.Pending;
 
