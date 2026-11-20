@@ -132,6 +132,11 @@ namespace TCGinFU.View
             scrollRect.horizontal = false;
             scroll.gameObject.AddComponent<RectMask2D>();
 
+            // 同 CardDetailPanel：滚动区得有个能接射线的东西，
+            // 否则鼠标停在卡与卡之间的空隙上滚轮就没反应
+            Image catcher = UiBuilder.CreateImage("ScrollCatcher", scroll, Color.clear);
+            catcher.rectTransform.Stretch();
+
             panel._grid = UiBuilder.CreateRect("Grid", scroll);
             panel._grid.anchorMin = new Vector2(0f, 1f);
             panel._grid.anchorMax = new Vector2(1f, 1f);

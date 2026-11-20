@@ -122,6 +122,14 @@ namespace TCGinFU.View
             viewport.gameObject.AddComponent<RectMask2D>();
             scrollRect.viewport = viewport;
 
+            // 必须在滚动区里放一个**能接射线**的东西，否则 EventSystem 没有对象可以
+            // 把滚轮和拖拽事件冒泡给 ScrollRect——结果就是只有滚动条手柄能拖，
+            // 滚轮和拖正文都没反应。正文 Text 的 raycastTarget 是关掉的（文字不该吃点击），
+            // 所以这里铺一张全透明但接射线的 Image。
+            // 注意它要在 Content 之前创建，否则会盖在文字上面。
+            Image catcher = UiBuilder.CreateImage("ScrollCatcher", viewport, Color.clear);
+            catcher.rectTransform.Stretch();
+
             // 刻意**不用** VerticalLayoutGroup + ContentSizeFitter：
             // 它们和手动锚点是两套互相覆盖的机制，结果是宽度还没定下来就去量高度，
             // 文字既不换行又被 RectMask2D 裁掉。这里改成自己算：
