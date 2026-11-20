@@ -50,6 +50,9 @@ namespace TCGinFU.View
         public System.Action<CombatantView, CardView> DropHandler { get; set; }
         public System.Action<CombatantView> ClickHandler { get; set; }
 
+        /// <summary>右键角色卡 = 看详情。左键留给选中目标，否则每切一次目标都弹窗。</summary>
+        public System.Action<CombatantView> ContextHandler { get; set; }
+
         public static CombatantView Create(Transform parent, Vector2 sizePx, bool withChargeStack)
         {
             var go = new GameObject("CharacterCard", typeof(BoxCollider));
@@ -260,6 +263,10 @@ namespace TCGinFU.View
             _highlight.gameObject.SetActive(color.a > 0.01f);
         }
 
-        public void OnPointerClick(PointerEventData eventData) => ClickHandler?.Invoke(this);
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData.button == PointerEventData.InputButton.Right) ContextHandler?.Invoke(this);
+            else ClickHandler?.Invoke(this);
+        }
     }
 }

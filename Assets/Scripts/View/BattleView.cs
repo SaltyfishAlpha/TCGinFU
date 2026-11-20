@@ -333,6 +333,7 @@ namespace TCGinFU.View
                     view.DropFilter = CombatantAcceptsCard;
                     view.DropHandler = HandleCombatantDrop;
                     view.ClickHandler = HandleCombatantClick;
+                    view.ContextHandler = v => _detailPanel.Open(v.Combatant);
                     _combatantViews[combatant.Id] = view;
                     _dropTargets.Add(view);
                 }
@@ -578,6 +579,19 @@ namespace TCGinFU.View
         public void OnCardClick(CardView card)
         {
             if (card.Card == null) return;
+
+            // 背面朝上的牌是暗信息：卡组、以及横置在角色卡上的充能牌。
+            // 能点开看等于白给对手情报，也违背实体打牌的常识。
+            if (card.FaceDown)
+            {
+                Session.SetMessage(
+                    card.Zone != null && card.Zone.Layout.source == ZoneSource.充能区
+                        ? "充能指示物是背面朝下的，看不到是哪张牌。"
+                        : "卡组是背面朝上的暗信息，不能查看。",
+                    isWarning: true);
+                Refresh();
+                return;
+            }
 
             // 看牌是只读的，选充能目标期间也允许——不会打断那条流程。
             // 公式按这张牌所属角色的面板算（卡组/弃牌堆这类区域也能定位到人）

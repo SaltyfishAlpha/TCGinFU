@@ -141,6 +141,174 @@ namespace TCGinFU.View
             _content.anchoredPosition = Vector2.zero;
         }
 
+        /// <summary>棋盘上的角色详情。复用同一个面板——版式（标题 / 副标题 / 正文）正好合适。</summary>
+        public void Open(Combatant combatant)
+        {
+            if (combatant == null) return;
+
+            bool isEnemy = combatant is Enemy;
+            bool crisis = combatant is PlayerCharacter pc && pc.IsInCrisis;
+            _accent.color = UiBuilder.TeamColor(isEnemy, combatant.IsDown, crisis);
+
+            _title.text = combatant.Name;
+            _subtitle.text = BuildCombatantSubtitle(combatant);
+            _body.text = BuildCombatantBody(combatant);
+
+            gameObject.SetActive(true);
+            transform.SetAsLastSibling();
+            ResizeContent();
+        }
+
+        private static string BuildCombatantSubtitle(Combatant combatant)
+        {
+            string row = combatant.Row == Row.Front ? "前排" : "后排";
+            var parts = new List<string> { $"{row} {combatant.Slot} 号位" };
+
+            if (combatant is PlayerCharacter player)
+            {
+                parts.Add($"总 {player.Sheet.TotalLevel} 级");
+                parts.Add(string.Join(" / ", player.Sheet.Classes.Select(c => $"{c.ClassId} {c.Level}")));
+            }
+            else if (combatant is Enemy enemy)
+            {
+                parts.Add(enemy.Rank switch
+                {
+                    EnemyRank.Normal => "普通小怪",
+                    EnemyRank.Elite => "精英",
+                    EnemyRank.Boss => "首领",
+                    _ => enemy.Rank.ToString(),
+                });
+            }
+
+            if (combatant.IsDown) parts.Add("<color=#ff8080>已倒下</color>");
+            return string.Join("　|　", parts);
+        }
+
+        private static string BuildCombatantBody(Combatant combatant)
+        {
+            var builder = new StringBuilder();
+
+            builder.AppendLine("<b>当前状态</b>");
+            builder.AppendLine($"· HP {combatant.Hp} / {combatant.MaxHp}");
+            builder.AppendLine(
+                $"· 护盾　物理 {combatant.Shields.Physical}"
+                + $"（其中自动 {combatant.Shields.AutoPhysical}，轮末清零）"
+                + $"　魔法 {combatant.Shields.Magical}"
+                + $"（其中自动 {combatant.Shields.AutoMagical}）");
+
+            if (combatant is PlayerCharacter player) AppendPlayer(builder, player);
+            else if (combatant is Enemy enemy) AppendEnemy(builder, enemy);
+
+            if (combatant.Statuses.All.Count > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine("<b>状态</b>");
+                foreach (StatusEffect status in combatant.Statuses.All) builder.AppendLine($"· {status}");
+            }
+
+            return builder.ToString().TrimEnd();
+        }
+
+        private static void AppendPlayer(StringBuilder builder, PlayerCharacter player)
+        {
+            CharacterSheet sheet = player.Sheet;
+
+            builder.AppendLine($"· MP {player.Mp} / {player.MaxMp}　AP {player.Ap}");
+            builder.AppendLine(
+                $"· 危机值 {sheet.CrisisThreshold}"
+                + (player.IsInCrisis ? "　<color=#ff8080>已进入危机</color>" : ""));
+
+            builder.AppendLine();
+            builder.AppendLine("<b>属性骰</b>");
+            builder.AppendLine(
+                $"· 力量 d{sheet.Dice.Face(AttributeColor.Might)}"
+                + $"　洞察 d{sheet.Dice.Face(AttributeColor.Insight)}"
+                + $"　敏捷 d{sheet.Dice.Face(AttributeColor.Dexterity)}"
+                + $"　意志 d{sheet.Dice.Face(AttributeColor.Willpower)}");
+
+            builder.AppendLine();
+            builder.AppendLine("<b>派生数值</b>　<color=#999999>（规则书 §2.1 的公式）</color>");
+            builder.AppendLine(
+                $"· 最大 HP = 总等级 {sheet.TotalLevel} + 力量骰面 {sheet.Dice.Face(AttributeColor.Might)} × 5"
+                + $"{BonusText(sheet.HpBonus)} = {sheet.MaxHp}");
+            builder.AppendLine(
+                $"· 最大 MP = 总等级 {sheet.TotalLevel} + 意志骰面 {sheet.Dice.Face(AttributeColor.Willpower)} × 5"
+                + $"{BonusText(sheet.MpBonus)} = {sheet.MaxMp}");
+            builder.AppendLine(
+                $"· 每轮自动护盾　物理 {sheet.AutoPhysicalShield}（敏捷 ÷ 2）"
+                + $"　魔法 {sheet.AutoMagicShield}（洞察 ÷ 2）");
+            builder.AppendLine($"· 等级加值 L_bonus = {sheet.LevelBonus}　装备阶梯 {player.Tier}");
+
+            builder.AppendLine();
+            builder.AppendLine("<b>装备与形态基准</b>");
+            builder.AppendLine(
+                $"· 武器 {player.Weapon.Name}　本阶伤害 {player.Weapon.DamageAt(player.Tier)}"
+                + $"　→ B_atk = {player.FormAttackBase}");
+            builder.AppendLine(
+                $"· 防具 {player.Armor.Name}　本阶护盾 {player.Armor.ShieldAt(player.Tier)}"
+                + $"　→ B_def = {player.FormDefenseBase}");
+
+            builder.AppendLine();
+            builder.AppendLine("<b>区域</b>");
+            builder.AppendLine(
+                $"· 手牌 {player.Zones.Hand.Count}　卡组 {player.Zones.Deck.Count}"
+                + $"　弃牌堆 {player.Zones.Discard.Count}"
+                + $"　已完成升变 {player.Zones.CompletedTransform.Count}");
+            builder.AppendLine(
+                $"· 充能 {player.Zones.Charges.Count} / {player.Zones.Charges.Capacity}"
+                + $"　持续区 {player.Zones.Continuous?.Name ?? "空"}");
+
+            if (player.Transform.Active)
+            {
+                builder.AppendLine();
+                builder.AppendLine(
+                    $"<b>升变中</b>　<color=#ffd24d>{player.Transform.TransformCard?.Name}"
+                    + $"（{player.Transform.ClassId}，剩 {player.Transform.RoundsRemaining} 轮）</color>");
+            }
+
+            builder.AppendLine();
+            builder.AppendLine(
+                $"<b>本局输出</b>　本轮 {player.DamageDealtThisRound}　上轮 {player.DamageDealtLastRound}"
+                + "　<color=#999999>（前排全空时，仇恨指向上轮输出最高者）</color>");
+        }
+
+        private static void AppendEnemy(StringBuilder builder, Enemy enemy)
+        {
+            builder.AppendLine($"· 暴击抵抗 {enemy.CritResist}");
+            builder.AppendLine(
+                $"· 意图可见度　{(enemy.IntentFullyVisible ? "完全公开" : "半公开（数值与目标隐藏）")}");
+
+            builder.AppendLine();
+            builder.AppendLine("<b>属性克制</b>");
+            builder.AppendLine("· " + BattleSession.AffinitySummary(enemy));
+
+            if (enemy.Intents.Count == 0) return;
+
+            builder.AppendLine();
+            builder.AppendLine("<b>本轮意图</b>　<color=#999999>（自上而下依次结算）</color>");
+            foreach (EnemyIntent intent in enemy.Intents)
+            {
+                builder.AppendLine(enemy.IntentFullyVisible
+                    ? $"· {intent.Label}　{intent.Damage} 点{intent.Element.DisplayName()}"
+                      + $"　→ {IntentTargetName(intent)}"
+                    : $"· {intent.Label}（数值与目标隐藏）");
+            }
+        }
+
+        private static string IntentTargetName(EnemyIntent intent) => intent.Targeting switch
+        {
+            IntentTargeting.DefaultSingle => "常规单体（优先前排）",
+            IntentTargeting.FrontRowAoe => "前排全体",
+            IntentTargeting.BackRowAoe => "后排全体",
+            IntentTargeting.AllPlayers => "我方全体",
+            IntentTargeting.DesignatedRowSingle =>
+                $"{(intent.DesignatedRow == Row.Front ? "前" : "后")}排单体",
+            _ => "不指向我方",
+        };
+
+        private static string BonusText(int bonus)
+            => bonus == 0 ? "" : bonus > 0 ? $" + 加值 {bonus}" : $" − 补正 {-bonus}";
+
         private static string BuildSubtitle(CardDefinition def)
         {
             var parts = new List<string>
