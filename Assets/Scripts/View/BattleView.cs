@@ -194,7 +194,8 @@ namespace TCGinFU.View
             // 详情面板最后建：它要盖在牌堆查看面板之上，
             // 这样在弃牌堆里点一张牌也能看详情
             _detailPanel = CardDetailPanel.Create(hudGo.transform);
-            _peekPanel.CardClickHandler = _detailPanel.Open;
+            // 查看面板里的牌按「当前操作角色」的面板算公式
+            _peekPanel.CardClickHandler = card => _detailPanel.Open(card, Session.SelectedPlayer);
         }
 
         private void BuildTopBar(Transform parent)
@@ -578,8 +579,13 @@ namespace TCGinFU.View
         {
             if (card.Card == null) return;
 
-            // 看牌是只读的，选充能目标期间也允许——不会打断那条流程
-            _detailPanel.Open(card.Card);
+            // 看牌是只读的，选充能目标期间也允许——不会打断那条流程。
+            // 公式按这张牌所属角色的面板算（卡组/弃牌堆这类区域也能定位到人）
+            PlayerCharacter viewer = card.Zone != null
+                ? ResolvePlayer(card.Zone.Layout.playerIndex)
+                : Session.SelectedPlayer;
+
+            _detailPanel.Open(card.Card, viewer);
         }
 
         /// <summary>
@@ -715,7 +721,7 @@ namespace TCGinFU.View
             {
                 ($"打出（→ {target}）", () => PlayCard(owner, instance)),
                 ("贴充能…", () => BeginChargeTargeting(owner, instance)),
-                ("查看详情", () => _detailPanel.Open(instance)),
+                ("查看详情", () => _detailPanel.Open(instance, owner)),
             };
 
             _contextMenu.Open(instance.Name, screenPosition, options);
