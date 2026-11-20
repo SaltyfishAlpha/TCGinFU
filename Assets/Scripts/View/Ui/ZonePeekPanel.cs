@@ -10,7 +10,7 @@ namespace TCGinFU.View
     /// 查看面板里的一张卡。棋盘上的卡是 3D 网格，但这个面板挂在屏幕空间 HUD 上，
     /// 所以单独做一个平面版本——翻看牌堆不需要厚度。
     /// </summary>
-    public sealed class PeekCardView : MonoBehaviour
+    public sealed class PeekCardView : MonoBehaviour, IPointerClickHandler
     {
         private Image _background;
         private Text _nameText;
@@ -18,6 +18,15 @@ namespace TCGinFU.View
         private Text _typeText;
 
         public RectTransform Rect { get; private set; }
+        public CardInstance Card { get; private set; }
+
+        /// <summary>点一张牌看详情，和棋盘上的左键一致。</summary>
+        public System.Action<CardInstance> ClickHandler { get; set; }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (Card != null) ClickHandler?.Invoke(Card);
+        }
 
         public static PeekCardView Create(Transform parent)
         {
@@ -51,6 +60,7 @@ namespace TCGinFU.View
 
         public void Bind(CardInstance card, Vector2 size)
         {
+            Card = card;
             CardDefinition def = card.Definition;
             Rect.sizeDelta = size;
             _background.color = CardView.ColorOf(def.Category);
@@ -72,6 +82,9 @@ namespace TCGinFU.View
         private RectTransform _grid;
         private Text _title;
         private Vector2 _cardSize;
+
+        /// <summary>点查看面板里的某张牌时回调，由 <see cref="BattleView"/> 接到详情面板上。</summary>
+        public System.Action<CardInstance> CardClickHandler { get; set; }
 
         public bool IsOpen => gameObject.activeSelf;
 
@@ -154,6 +167,7 @@ namespace TCGinFU.View
                 }
 
                 view.gameObject.SetActive(true);
+                view.ClickHandler = CardClickHandler;
                 view.Bind(cards[i], _cardSize);
 
                 int column = i % Columns;

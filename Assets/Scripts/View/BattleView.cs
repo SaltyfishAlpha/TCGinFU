@@ -42,6 +42,7 @@ namespace TCGinFU.View
         private ZonePeekPanel _peekPanel;
         private CardContextMenu _contextMenu;
         private ConfirmDialog _confirmDialog;
+        private CardDetailPanel _detailPanel;
         private IDropTarget _hoveredTarget;
 
         private CardInstance _pendingChargeCard;
@@ -189,6 +190,11 @@ namespace TCGinFU.View
             _peekPanel = ZonePeekPanel.Create(hudGo.transform, layout.CardSize);
             _contextMenu = CardContextMenu.Create(hudGo.transform);
             _confirmDialog = ConfirmDialog.Create(hudGo.transform);
+
+            // 详情面板最后建：它要盖在牌堆查看面板之上，
+            // 这样在弃牌堆里点一张牌也能看详情
+            _detailPanel = CardDetailPanel.Create(hudGo.transform);
+            _peekPanel.CardClickHandler = _detailPanel.Open;
         }
 
         private void BuildTopBar(Transform parent)
@@ -563,15 +569,17 @@ namespace TCGinFU.View
             card.SetHighlight(entered ? CardHighlight.悬停 : CardHighlight.正常);
         }
 
+        /// <summary>
+        /// 左键 = 看详情，**不是**打出。
+        /// 棋盘上的 3D 卡塞不下卡面规则文字，而那恰恰是打牌时最需要读的东西；
+        /// 而且「点一下就把牌打出去」太容易误触。打出走拖拽。
+        /// </summary>
         public void OnCardClick(CardView card)
         {
-            if (IsBlockedByTargeting("出牌")) return;
-            if (!card.Draggable || card.Zone == null) return;
+            if (card.Card == null) return;
 
-            PlayerCharacter owner = ResolvePlayer(card.Zone.Layout.playerIndex);
-            if (owner == null) return;
-
-            PlayCard(owner, card.Card);
+            // 看牌是只读的，选充能目标期间也允许——不会打断那条流程
+            _detailPanel.Open(card.Card);
         }
 
         /// <summary>
@@ -696,12 +704,18 @@ namespace TCGinFU.View
             PlayerCharacter owner = ResolvePlayer(card.Zone.Layout.playerIndex);
             if (owner == null) return;
 
-            // 打出不放进菜单：左键点牌、或者把牌拖到目标身上，本来就是打出，
-            // 菜单里再放一遍只是重复。右键专门用来做「拖拽表达不了」的事。
+            // 左键已经改成「看详情」，所以打出得回到菜单里——
+            // 否则除了拖拽就没有别的出牌方式了
             CardInstance instance = card.Card;
+            string target = BattleSession.NeedsAllyTarget(instance.Definition)
+                ? owner.Name
+                : Session.State.Find(Session.SelectedEnemyId)?.Name ?? "当前目标";
+
             var options = new List<(string, System.Action)>
             {
+                ($"打出（→ {target}）", () => PlayCard(owner, instance)),
                 ("贴充能…", () => BeginChargeTargeting(owner, instance)),
+                ("查看详情", () => _detailPanel.Open(instance)),
             };
 
             _contextMenu.Open(instance.Name, screenPosition, options);
