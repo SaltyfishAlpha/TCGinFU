@@ -23,6 +23,40 @@ namespace TCGinFU.View
         private Text _body;
         private Image _accent;
         private RectTransform _content;
+        private ScrollRect _scrollRect;
+        private Scrollbar _scrollbar;
+
+        /// <summary>
+        /// 手搓一根竖直滚动条。uGUI 的 Scrollbar 需要 handleRect 才能工作，
+        /// 层级必须是 Scrollbar → SlidingArea → Handle，少一层就不滑。
+        /// </summary>
+        private static Scrollbar CreateScrollbar(Transform parent, float width)
+        {
+            Image track = UiBuilder.CreateImage("Scrollbar", parent, new Color(1f, 1f, 1f, 0.08f));
+            RectTransform rect = track.rectTransform;
+            rect.anchorMin = new Vector2(1f, 0f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(1f, 0.5f);
+            rect.sizeDelta = new Vector2(width, 0f);
+            rect.anchoredPosition = Vector2.zero;
+
+            var slidingArea = UiBuilder.CreateRect("SlidingArea", rect);
+            slidingArea.anchorMin = Vector2.zero;
+            slidingArea.anchorMax = Vector2.one;
+            slidingArea.offsetMin = Vector2.zero;
+            slidingArea.offsetMax = Vector2.zero;
+
+            Image handle = UiBuilder.CreateImage("Handle", slidingArea, new Color(1f, 1f, 1f, 0.42f));
+            handle.rectTransform.offsetMin = Vector2.zero;
+            handle.rectTransform.offsetMax = Vector2.zero;
+
+            var scrollbar = track.gameObject.AddComponent<Scrollbar>();
+            scrollbar.direction = Scrollbar.Direction.BottomToTop;
+            scrollbar.handleRect = handle.rectTransform;
+            scrollbar.targetGraphic = handle;
+
+            return scrollbar;
+        }
 
         public bool IsOpen => gameObject.activeSelf;
 
@@ -63,7 +97,9 @@ namespace TCGinFU.View
             panel._subtitle.rectTransform.sizeDelta = new Vector2(-36f, 54f);
             panel._subtitle.rectTransform.anchoredPosition = new Vector2(0f, -72f);
 
-            // 正文可滚动：真实卡池里的规则文字有的很长
+            // 正文可滚动：真实卡池里的规则文字很长，角色详情更长（实测要 476 像素，视口只有 354）
+            const float scrollbarWidth = 12f;
+
             var scroll = UiBuilder.CreateRect("Scroll", window.transform);
             scroll.anchorMin = Vector2.zero;
             scroll.anchorMax = Vector2.one;
@@ -72,13 +108,25 @@ namespace TCGinFU.View
 
             var scrollRect = scroll.gameObject.AddComponent<ScrollRect>();
             scrollRect.horizontal = false;
-            scroll.gameObject.AddComponent<RectMask2D>();
+            scrollRect.vertical = true;
+            scrollRect.movementType = ScrollRect.MovementType.Clamped;
+            scrollRect.scrollSensitivity = 28f;
+
+            // 显式建 Viewport：挂滚动条时 ScrollRect 需要一个真实的 viewport，
+            // 省略它会让 AutoHide 之类的算不对
+            var viewport = UiBuilder.CreateRect("Viewport", scroll);
+            viewport.anchorMin = Vector2.zero;
+            viewport.anchorMax = Vector2.one;
+            viewport.offsetMin = Vector2.zero;
+            viewport.offsetMax = new Vector2(-(scrollbarWidth + 4f), 0f);
+            viewport.gameObject.AddComponent<RectMask2D>();
+            scrollRect.viewport = viewport;
 
             // 刻意**不用** VerticalLayoutGroup + ContentSizeFitter：
             // 它们和手动锚点是两套互相覆盖的机制，结果是宽度还没定下来就去量高度，
             // 文字既不换行又被 RectMask2D 裁掉。这里改成自己算：
             // 宽度由锚点拉伸确定 → 强制刷新一次 → 按真实宽度取 preferredHeight。
-            panel._content = UiBuilder.CreateRect("Content", scroll);
+            panel._content = UiBuilder.CreateRect("Content", viewport);
             panel._content.anchorMin = new Vector2(0f, 1f);
             panel._content.anchorMax = new Vector2(1f, 1f);
             panel._content.pivot = new Vector2(0.5f, 1f);
@@ -90,6 +138,12 @@ namespace TCGinFU.View
             panel._body.rectTransform.anchorMax = Vector2.one;
             panel._body.rectTransform.offsetMin = Vector2.zero;
             panel._body.rectTransform.offsetMax = Vector2.zero;
+
+            panel._scrollRect = scrollRect;
+            panel._scrollbar = CreateScrollbar(scroll, scrollbarWidth);
+            scrollRect.verticalScrollbar = panel._scrollbar;
+            // 内容装得下时自动收起滚动条，装不下才出现——这样「有没有被截断」一眼可见
+            scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
 
             Button close = UiBuilder.CreateButton("关闭", window.transform, 110f, panel.Close);
             RectTransform closeRect = close.GetComponent<RectTransform>();
@@ -139,6 +193,13 @@ namespace TCGinFU.View
             float height = _body.preferredHeight + 12f;
             _content.sizeDelta = new Vector2(0f, height);
             _content.anchoredPosition = Vector2.zero;
+
+            // 每次打开都从顶部看起，否则会停在上一张牌滚到的位置
+            if (_scrollRect != null)
+            {
+                Canvas.ForceUpdateCanvases();
+                _scrollRect.verticalNormalizedPosition = 1f;
+            }
         }
 
         /// <summary>棋盘上的角色详情。复用同一个面板——版式（标题 / 副标题 / 正文）正好合适。</summary>
