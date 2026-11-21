@@ -227,6 +227,10 @@ namespace TCGinFU.View
             UiBuilder.CreateButton("跳过本步", bar.transform, 86f, () => { Session.SkipPending(); Refresh(); });
             UiBuilder.CreateButton("自动打完", bar.transform, 86f, () => { Session.SkipToEnd(); Refresh(); });
             UiBuilder.CreateButton("重开", bar.transform, 64f, () => { Session.Restart(); Refresh(); });
+
+            // 退出键（Esc）之外再给一个看得见的出口：构建产物是全屏的，
+            // 万一键盘焦点出问题，没有可点的退出按钮就只能用任务管理器
+            UiBuilder.CreateButton("退出", bar.transform, 64f, AppExit.Quit);
         }
 
         // ──────────────────────────── 刷新 ────────────────────────────

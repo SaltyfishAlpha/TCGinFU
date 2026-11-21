@@ -53,3 +53,7 @@ crashlytics-build.properties
 /[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# ─── 导出的构建产物 ───
+# 整个目录都是从工程重新生成的，一次构建 150MB+，不进版本库
+/export/

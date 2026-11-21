@@ -44,6 +44,9 @@ namespace TCGinFU.View.Editor
             // 调试浮层：正式发版时把这个组件（和它那个文件）删掉即可，BattleView 不依赖它
             go.AddComponent<Debugging.BattleDebugOverlay>();
 
+            // 构建产物是全屏的，没有退出键就只能用任务管理器关掉
+            go.AddComponent<QuitOnEscape>();
+
             // layout / scenario 都是私有 [SerializeField]，用 SerializedObject 赋值，
             // 避免为了建场景把字段开成 public
             var serialized = new SerializedObject(view);

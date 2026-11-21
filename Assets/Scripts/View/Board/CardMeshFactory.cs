@@ -35,6 +35,34 @@ namespace TCGinFU.View
         private static Shader _shader;
 
         /// <summary>1×1×1 的立方体，轴心在中心。</summary>
+        /// <summary>桌面网格用的 shader 名。</summary>
+        public const string ShaderName = "Universal Render Pipeline/Unlit";
+
+        /// <summary>
+        /// 取 shader。
+        /// <para>
+        /// **这里必须大声失败。** 材质是运行时 new 出来的，没有任何资产引用这个 shader，
+        /// 所以构建时它会被剥离——除非它在 Project Settings → Graphics →
+        /// Always Included Shaders 里。少了它，Shader.Find 在播放器里返回 null，
+        /// 一路退到 Sprites/Default（ZWrite Off 的透明 shader，还会乘顶点色），
+        /// 结果就是编辑器里好好的，Build 出来区域底板、选中环、高亮全不见了。
+        /// 这种只在构建产物里复现的问题最难查，所以宁可报错也不要悄悄降级。
+        /// </para>
+        /// </summary>
+        private static Shader ResolveShader()
+        {
+            Shader shader = Shader.Find(ShaderName);
+            if (shader != null) return shader;
+
+            Debug.LogError(
+                $"[桌面渲染] 找不到 shader「{ShaderName}」。"
+                + "如果这是构建产物，说明它被剥离了——请把它加到 "
+                + "Project Settings → Graphics → Always Included Shaders。"
+                + "现在会退到备用 shader，画面大概率不对。");
+
+            return Shader.Find("Unlit/Color") ?? Shader.Find("Sprites/Default");
+        }
+
         public static Mesh Box => _box ??= BuildBox();
 
         /// <summary>1×1 的面片，法线朝 +Z。</summary>
@@ -48,9 +76,7 @@ namespace TCGinFU.View
         {
             if (Materials.TryGetValue(color, out Material cached) && cached != null) return cached;
 
-            _shader ??= Shader.Find("Universal Render Pipeline/Unlit")
-                        ?? Shader.Find("Unlit/Color")
-                        ?? Shader.Find("Sprites/Default");
+            _shader ??= ResolveShader();
 
             var material = new Material(_shader) { name = $"Card_{ColorUtility.ToHtmlStringRGBA(color)}" };
 
@@ -120,6 +146,10 @@ namespace TCGinFU.View
             {
                 Vector3.forward, Vector3.forward, Vector3.forward, Vector3.forward,
             });
+
+            // 显式写白色顶点色：有些 shader（例如 Sprites/Default）会把顶点色乘进去，
+            // 网格没有颜色流时结果是未定义的，可能整片变黑或透明
+            mesh.SetColors(new List<Color> { Color.white, Color.white, Color.white, Color.white });
             mesh.RecalculateBounds();
             return mesh;
         }
