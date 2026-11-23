@@ -41,19 +41,34 @@ namespace TCGinFU.Core
             => _handlers.TryGetValue(kind, out handler);
 
         /// <summary>按顺序结算一串效果，逐条检查附加条件。</summary>
-        public void ApplyAll(EffectContext ctx, IReadOnlyList<EffectData> effects)
+        /// <summary>
+        /// 从 <paramref name="from"/> 开始逐条结算。
+        ///
+        /// <para>返回**挂起在第几条**，没有挂起则返回 -1。效果要求挂起时
+        /// （<see cref="EffectContext.Suspended"/>）这条效果已经整条做完了，
+        /// 所以恢复时从返回值的下一条接着走。</para>
+        /// </summary>
+        public int ApplyAll(EffectContext ctx, IReadOnlyList<EffectData> effects, int from = 0)
         {
-            if (effects == null) return;
+            if (effects == null) return -1;
 
-            foreach (EffectData data in effects)
+            for (int i = from < 0 ? 0 : from; i < effects.Count; i++)
             {
+                EffectData data = effects[i];
                 if (!TryGet(data.Kind, out IEffectHandler handler))
                 {
                     throw new InvalidOperationException($"没有注册 {data.Kind} 的执行器");
                 }
 
                 handler.Apply(ctx, data);
+
+                if (!ctx.Suspended) continue;
+
+                ctx.Suspended = false;
+                return i;
             }
+
+            return -1;
         }
     }
 }

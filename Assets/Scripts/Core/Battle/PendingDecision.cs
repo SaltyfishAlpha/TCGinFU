@@ -15,8 +15,9 @@ namespace TCGinFU.Core
         /// <summary>轮末：手牌超过 7 张，需要选择弃牌</summary>
         HandLimitDiscard,
         /// <summary>
-        /// 卡牌给的定向移动结算完毕，等玩家在目标排内选一个落点槽位（裁定 R-17c）。
-        /// <para>只会插在别的窗口中间，选完就原样还原被打断的那个窗口。</para>
+        /// 卡牌给的移动结算到一半，等玩家在卡面允许的范围内选一个落点（裁定 R-17c）。
+        /// <para>只会插在别的窗口中间，选完就原样还原被打断的那个窗口，
+        /// 并从挂起处接着把这张牌剩下的效果结算完。</para>
         /// </summary>
         ChooseSlot,
     }
@@ -48,10 +49,10 @@ namespace TCGinFU.Core
         public int RequiredDiscards { get; init; }
 
         /// <summary>
-        /// ChooseSlot 时，玩家只能在这一排里挑槽位——
-        /// 卡面说的是「移动到后排」，排已经由卡决定了，可选的只有排内的相对位置。
+        /// ChooseSlot 时，卡面对落点的限定。可选范围由它说了算——
+        /// 「移动到后排」只能在后排内挑，「打出后移动 1 次」两排随便挑。
         /// </summary>
-        public Row SlotChoiceRow { get; init; }
+        public MoveRange SlotChoiceRange { get; init; }
 
         public bool IsResolved => WaitingOn.Count == 0;
 

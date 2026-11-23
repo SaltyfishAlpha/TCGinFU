@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace TCGinFU.Core
 {
@@ -73,10 +74,53 @@ namespace TCGinFU.Core
         public bool HasMovedThisRound { get; internal set; }
 
         /// <summary>
-        /// 攒着的「免费移动」次数。卡面写「**可**免费移动1次」时存在这里，
-        /// 由玩家自己决定何时兑现——不花 AP，也不占本轮唯一一次常规走位。
+        /// 攒着的「免费移动」额度，**每一次各自带着自己的落点范围**。
+        /// 卡面写「**可**免费移动1次」时存在这里，由玩家自己决定何时兑现——
+        /// 不花 AP，也不占本轮唯一一次常规走位。
+        ///
+        /// <para>范围不能共用一个全局规则：「在前后排之间移动」要求换排，
+        /// 「打出后移动 1 次」哪都能去，同一个人身上可能同时攒着两种。</para>
         /// </summary>
-        public int FreeMoves { get; internal set; }
+        private readonly List<MoveRange> _freeMoves = new();
+
+        /// <summary>攒着的免费移动次数。</summary>
+        public int FreeMoves => _freeMoves.Count;
+
+        internal void AddFreeMove(MoveRange range) => _freeMoves.Add(range);
+
+        internal void ClearFreeMoves() => _freeMoves.Clear();
+
+        /// <summary>有没有一次额度允许「从 <paramref name="from"/> 排落到这个点」。</summary>
+        internal bool HasFreeMoveFor(Row from, Row row, int? slot)
+            => IndexOfFreeMoveFor(from, row, slot) >= 0;
+
+        /// <summary>兑现一次允许落在这个点上的额度；没有则返回 false。</summary>
+        internal bool ConsumeFreeMove(Row from, Row row, int? slot)
+        {
+            int index = IndexOfFreeMoveFor(from, row, slot);
+            if (index < 0) return false;
+
+            _freeMoves.RemoveAt(index);
+            return true;
+        }
+
+        /// <summary>
+        /// 落点未定（<paramref name="slot"/> 为 null）时只要求「这一排里有格子可去」，
+        /// 具体哪一格留到真的移动时再核。
+        /// </summary>
+        private int IndexOfFreeMoveFor(Row from, Row row, int? slot)
+        {
+            for (int i = 0; i < _freeMoves.Count; i++)
+            {
+                bool ok = slot.HasValue
+                    ? _freeMoves[i].Allows(from, row, slot.Value)
+                    : _freeMoves[i].AllowsAnyIn(from, row);
+
+                if (ok) return i;
+            }
+
+            return -1;
+        }
 
         /// <summary>玩家阶段是否已宣布行动完毕。</summary>
         public bool IsReady { get; internal set; }
@@ -127,7 +171,7 @@ namespace TCGinFU.Core
         {
             Ap = 0;
             // 没用掉的免费移动不留到下一轮——卡面给的是「本轮」的一次机动
-            FreeMoves = 0;
+            ClearFreeMoves();
             Shields.ClearAuto();
             RollDamageStats();
         }

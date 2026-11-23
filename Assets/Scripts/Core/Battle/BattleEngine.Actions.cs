@@ -170,7 +170,35 @@ namespace TCGinFU.Core
             });
 
             if (behaviour != null) Invoke(behaviour, nameof(ICardBehaviour.OnPlay), () => behaviour.OnPlay(ctx));
-            Effects.ApplyAll(ctx, def.Effects);
+
+            // 玩家出牌这条路径支持中途挂起：需要玩家选落点的效果会停在半路，
+            // 选完再从下一条接着走（裁定 R-17c）
+            ctx.CanSuspend = true;
+            int suspendedAt = Effects.ApplyAll(ctx, def.Effects);
+
+            void Tail() => FinishCardResolution(actor, card, behaviour, ctx);
+
+            if (suspendedAt >= 0)
+            {
+                // 收尾不能在这儿跑——它得等剩下的效果结算完
+                SuspendForSlotChoice(ctx, def.Effects, suspendedAt + 1, Tail);
+                return ActionResult.Success;
+            }
+
+            Tail();
+            return ActionResult.Success;
+        }
+
+        /// <summary>
+        /// 一张牌的效果全部结算完之后的收尾。
+        /// 单独拆出来是因为选落点会把结算停在半路，收尾得推迟到恢复之后才跑——
+        /// 不然卡牌会在效果还没做完时就进了弃牌堆。
+        /// </summary>
+        private void FinishCardResolution(
+            PlayerCharacter actor, CardInstance card, ICardBehaviour behaviour, EffectContext ctx)
+        {
+            ctx.CanSuspend = false;
+
             if (behaviour != null) Invoke(behaviour, nameof(ICardBehaviour.OnResolved), () => behaviour.OnResolved(ctx));
 
             // 行为层可能已经把这张牌安置到别处了（「顺风充能」把自己变成充能指示物）
@@ -179,10 +207,6 @@ namespace TCGinFU.Core
             FireTrigger(actor, BattleTrigger.CardPlayed, new TriggerSignal { Card = card });
 
             State.CheckOutcome();
-
-            // 这张牌要求玩家挑落点的话，窗口开在**整张牌结算完之后**（裁定 R-17c）
-            BeginSlotChoiceIfAny();
-            return ActionResult.Success;
         }
 
         /// <summary>
@@ -393,7 +417,7 @@ namespace TCGinFU.Core
             Row from = actor.Row;
             Row target = action.TargetRow ?? Opposite(from);
 
-            if (!CanPayForMove(actor, target, out bool useFree, out string reason))
+            if (!CanPayForMove(actor, target, action.TargetSlot, out bool useFree, out string reason))
             {
                 return ActionResult.Fail(reason);
             }
@@ -410,7 +434,9 @@ namespace TCGinFU.Core
                     : $"{(target == Row.Front ? "前" : "后")}排已满");
             }
 
-            if (useFree) actor.FreeMoves--;
+            // 记账要用**出发时**的排：这会儿人已经站到目标排了，
+            // 拿现在的位置去核「必须换排」会永远判不通过
+            if (useFree) actor.ConsumeFreeMove(from, target, action.TargetSlot);
             else actor.Ap -= 1;
 
             return ActionResult.Success;
@@ -420,11 +446,16 @@ namespace TCGinFU.Core
         /// 这次走位付得起吗，以及付的是什么。界面画可选范围、引擎受理动作都问这里，
         /// 免得「拖得动却放不下去」。
         ///
-        /// <para>攒着的免费移动**只能用来换排**：给出它的那几张卡（游击速射、翻滚披风）
-        /// 卡面都写的是「在前后排之间移动 1 次」。同排内改变相对位置不在那句话的范围里，
-        /// 只能走常规的 1 AP 走位（裁定 R-17b）。</para>
+        /// <para>免费移动能不能付这一次，取决于**那一次额度自己带的落点范围**
+        /// （<see cref="MoveRange"/>）：「在前后排之间移动 1 次」付不了同排换位，
+        /// 「打出后移动 1 次」则哪都能付。同一个人身上可能同时攒着两种，
+        /// 所以是逐个额度去匹配，而不是一条全局规则（裁定 R-17b）。</para>
+        ///
+        /// <para><paramref name="slot"/> 为 null 表示落点还没定（自动选列），
+        /// 这时只要求范围允许「去那一排」。</para>
         /// </summary>
-        public bool CanPayForMove(PlayerCharacter actor, Row target, out bool useFree, out string reason)
+        public bool CanPayForMove(
+            PlayerCharacter actor, Row target, int? slot, out bool useFree, out string reason)
         {
             useFree = false;
             reason = null;
@@ -432,7 +463,7 @@ namespace TCGinFU.Core
             if (actor == null) { reason = "没有这名角色"; return false; }
             if (actor.IsDown) { reason = $"{actor.Name} 已倒下"; return false; }
 
-            useFree = target != actor.Row && actor.FreeMoves > 0;
+            useFree = actor.HasFreeMoveFor(actor.Row, target, slot);
 
             // 攒着的免费移动在响应窗口里也能兑现——「翻滚披风」给的那次机动，
             // 本来就是为了在敌人落手之前挪开
@@ -444,6 +475,12 @@ namespace TCGinFU.Core
 
             if (!useFree)
             {
+                if (actor.FreeMoves > 0 && actor.Ap < 1)
+                {
+                    reason = "攒着的免费移动去不了这个位置";
+                    return false;
+                }
+
                 if (actor.HasMovedThisRound) { reason = "本轮已经走过位"; return false; }
                 if (actor.Ap < 1) { reason = "行动力不足"; return false; }
             }

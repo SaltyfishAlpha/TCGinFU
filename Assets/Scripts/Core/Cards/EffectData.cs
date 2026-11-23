@@ -73,12 +73,34 @@ namespace TCGinFU.Core
         public Row? RowTarget { get; set; }
 
         /// <summary>
-        /// <see cref="EffectKind.MoveRow"/>：移动是强制的，但**排内站哪由玩家挑**（裁定 R-17c）。
+        /// 落点限定到这一格。「移动到目标敌人正前方」这种卡面用，
+        /// 多数情况下由行为层算出来再调引擎，数据层很少直接写死。
+        /// </summary>
+        public int? SlotTarget { get; set; }
+
+        /// <summary>
+        /// 落点必须换排。卡面写「在前后排之间移动」时为 true；
+        /// 写「移动 1 次」则为 false（哪都能去）。
+        /// </summary>
+        public bool MustChangeRow { get; set; }
+
+        /// <summary>
+        /// <see cref="EffectKind.MoveRow"/>：移动是强制的，但**落点由玩家在范围内挑**（裁定 R-17c）。
         ///
-        /// <para>给「先声夺人」这类自己打出的定向移动用——卡面写死了去哪一排，
-        /// 可选的只有排内的相对位置。敌人造成的强制移动（击退）不开这个，自动选同列。</para>
+        /// <para>给「先声夺人」这类自己打出的移动用。敌人造成的强制移动（击退）不开这个，
+        /// 没人替敌人挑位置，按范围自动落位。</para>
         /// </summary>
         public bool PlayerChoosesSlot { get; set; }
+
+        /// <summary>
+        /// 这条效果对落点的限定，<see cref="EffectKind.MoveRow"/> 与
+        /// <see cref="EffectKind.GrantFreeMove"/> 共用同一套字段。
+        /// </summary>
+        public MoveRange Range => SlotTarget.HasValue && RowTarget.HasValue
+            ? MoveRange.Exactly(RowTarget.Value, SlotTarget.Value)
+            : RowTarget.HasValue ? MoveRange.Into(RowTarget.Value)
+            : MustChangeRow ? MoveRange.RowSwitch
+            : MoveRange.Any;
 
         public static EffectData Damage(ValueExpr amount, DamageElement element = DamageElement.Physical,
             TargetScope scope = TargetScope.SingleEnemy)

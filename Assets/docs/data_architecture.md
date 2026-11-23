@@ -311,7 +311,7 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 | `transformConditionText` | 字符串 | 升变条件的显示文本 |
 | `effects` | 效果数组，见 §4.3 | |
 
-加载器**不读**：`owner`、`formId`（`to_content.js` 用来分文件）、`unmapped` 下除 `ranged` / `requires_back_row` 以外的一切
+加载器**不读**：`owner`、`unmapped` 下除 `ranged` / `requires_back_row` 以外的一切
 （`hits`、`damage_formula`、`legacyDamageAtLevel5`、`conditionalDamageAtLevel5`、`damageType` 等——迁移留痕与测试对账用）。
 
 #### `chargeOptions`：卡面允许玩家额外消耗几个充能

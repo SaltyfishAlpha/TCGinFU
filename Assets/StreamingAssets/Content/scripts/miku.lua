@@ -108,7 +108,8 @@ behaviour("seize_initiative", {
 -- （「打出前」那半句在当前动作模型里等价于：这张牌打出之前玩家本来就能走位。）
 behaviour("skirmish_shot", {
   on_resolved = function(ctx)
-    grant_free_move(ctx.caster, 1)
+    -- 卡面「在前后排之间移动1次」：限定换排，排内落点随意
+    grant_free_move(ctx.caster, 1, "switch")
   end,
 })
 
@@ -129,7 +130,8 @@ behaviour("rolling_cloak", {
     local who = ctx.current_target or ctx.caster
     shield(who, 4, "physical")
     shield(who, 4, "magical")
-    grant_free_move(who, 1)
+    -- 卡面「在前后排之间移动1次」：限定换排，排内落点随意
+    grant_free_move(who, 1, "switch")
   end,
 })
 

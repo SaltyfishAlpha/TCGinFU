@@ -476,15 +476,23 @@ namespace TCGinFU.Core
         /// <para>与直接调 <see cref="SwitchRow"/> 的区别是它**不立刻移动**：
         /// 卡面写的是「可」，什么时候动、动不动由玩家决定。存成额度，
         /// 玩家之后提交 <see cref="MoveRowAction"/> 时优先消耗它，不花 AP 也不占本轮唯一一次走位。</para>
+        ///
+        /// <para><paramref name="range"/> 是卡面对落点的限定，每一次额度各自带着自己的那份：
+        /// 「在前后排之间移动」给 <see cref="MoveRange.RowSwitch"/>，
+        /// 「打出后移动 1 次」给 <see cref="MoveRange.Any"/>。缺省放最宽，
+        /// 卡面没限定就别替它限定。</para>
         /// </summary>
-        public void GrantFreeMove(PlayerCharacter player, int count = 1)
+        public void GrantFreeMove(PlayerCharacter player, int count = 1, MoveRange? range = null)
         {
             if (player == null || count <= 0) return;
 
-            player.FreeMoves += count;
+            MoveRange granted = range ?? MoveRange.Any;
+            for (int i = 0; i < count; i++) player.AddFreeMove(granted);
+
             Emit(new BattleEvent(BattleEventType.FreeMoveGranted, player.Id, player.Id)
             {
                 Amount = count,
+                Text = granted.ToString(),
                 Round = State.Round,
             });
         }

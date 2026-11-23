@@ -68,7 +68,8 @@ namespace TCGinFU.View
 
         public System.Func<ZoneView, CardView, bool> DropFilter { get; set; }
         public System.Action<ZoneView, CardView> DropHandler { get; set; }
-        public System.Action<ZoneView> ClickHandler { get; set; }
+        /// <summary>点击回调。带上事件数据，这样「点了这一排的哪一格」才判得出来（选位窗口要用）。</summary>
+        public System.Action<ZoneView, PointerEventData> ClickHandler { get; set; }
 
         /// <summary>
         /// 按布局在桌面上开一块区域。<paramref name="boardPx"/> 是整张桌面的设计像素尺寸。
@@ -504,6 +505,6 @@ namespace TCGinFU.View
             }
         }
 
-        public void OnPointerClick(PointerEventData eventData) => ClickHandler?.Invoke(this);
+        public void OnPointerClick(PointerEventData eventData) => ClickHandler?.Invoke(this, eventData);
     }
 }

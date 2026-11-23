@@ -342,7 +342,10 @@ namespace TCGinFU.Content.Loading
                 RowTarget = node["rowTarget"].Exists
                     ? node["rowTarget"].AsEnum(Row.Back, $"{where} 的 rowTarget", errors)
                     : (Row?)null,
-                // 去哪一排由卡面定死，排内站哪让玩家挑（裁定 R-17c）
+                // 落点限定：不写就是「哪都能去」，别替卡面加限制
+                SlotTarget = node["slotTarget"].Exists ? node["slotTarget"].AsInt() : (int?)null,
+                MustChangeRow = node["mustChangeRow"].AsBool(),
+                // 落点由玩家在上述范围内挑（裁定 R-17c）
                 PlayerChoosesSlot = node["playerChoosesSlot"].AsBool(),
             };
         }

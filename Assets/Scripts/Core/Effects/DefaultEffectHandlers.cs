@@ -144,24 +144,33 @@ namespace TCGinFU.Core
 
         protected override void ApplyTo(EffectContext ctx, EffectData data, Combatant target)
         {
-            // 去哪一排由卡面定死，排内站哪让玩家挑：登记一笔，
-            // 等整张牌结算完再开选位窗口（裁定 R-17c）
+            // 落点由玩家在卡面允许的范围内挑：结算就停在这条效果上，
+            // 玩家选完再从下一条接着走（裁定 R-17c）
             if (data.PlayerChoosesSlot)
             {
-                ctx.Engine.RequestSlotChoice(target, data.RowTarget ?? Opposite(target.Row));
+                ctx.Engine.RequestSlotChoice(ctx, target, data.Range);
                 return;
             }
 
-            if (data.RowTarget.HasValue) ctx.Engine.MoveRow(target, data.RowTarget.Value, free: true);
-            else ctx.Engine.SwitchRow(target, free: true);
+            if (data.SlotTarget.HasValue && data.RowTarget.HasValue)
+            {
+                ctx.Engine.MoveRow(target, data.RowTarget.Value, data.SlotTarget.Value, free: true);
+            }
+            else if (data.RowTarget.HasValue)
+            {
+                ctx.Engine.MoveRow(target, data.RowTarget.Value, free: true);
+            }
+            else
+            {
+                ctx.Engine.SwitchRow(target, free: true);
+            }
         }
-
-        private static Row Opposite(Row row) => row == Row.Front ? Row.Back : Row.Front;
     }
 
     /// <summary>
     /// 「**可**免费移动1次」。与 <see cref="MoveRowEffectHandler"/> 的区别是它不立刻移动——
     /// 卡面写「可」，动不动、什么时候动由玩家决定。
+    /// <para>卡面对落点的限定（换排 / 任意 / 指定格）一并存进额度里，兑现时才核。</para>
     /// </summary>
     public sealed class GrantFreeMoveEffectHandler : EffectHandlerBase
     {
@@ -171,7 +180,7 @@ namespace TCGinFU.Core
         {
             if (target is not PlayerCharacter pc) return;
             int count = ctx.Resolve(data.Amount);
-            ctx.Engine.GrantFreeMove(pc, count < 1 ? 1 : count);
+            ctx.Engine.GrantFreeMove(pc, count < 1 ? 1 : count, data.Range);
         }
     }
 

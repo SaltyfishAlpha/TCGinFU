@@ -128,6 +128,7 @@ Assets/Plugins/MoonSharp/         Lua 解释器
 | [`view_architecture.md`](Assets/docs/view_architecture.md) | 表现层：3D 桌面、布局数据、交互 | 当前 |
 | [`behaviour_layer_handoff.md`](Assets/docs/behaviour_layer_handoff.md) | Lua 行为层交接：钩子、动词、迁移状态、工程坑 | 当前 |
 | [`ui_todo_handoff.md`](Assets/docs/ui_todo_handoff.md) | UI 待办交接 | 当前 |
+| [`card_reclass_handoff.md`](Assets/docs/card_reclass_handoff.md) | 交接单：卡牌按语义重新分类、混沌法师改名熵术士、形态卡组改由升变牌定义 | 待执行，做完归档 |
 | [`archive/`](Assets/docs/archive/) | 一次性记录：讨论纪要、核对报告、已执行的交接单 | 已归档，仅供查历史 |
 
 改规则前先看裁定表。

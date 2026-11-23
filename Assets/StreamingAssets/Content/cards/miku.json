@@ -157,6 +157,7 @@
         {
           "kind": "MoveRow",
           "target": "Self",
+          "mustChangeRow": true,
           "playerChoosesSlot": true
         },
         {

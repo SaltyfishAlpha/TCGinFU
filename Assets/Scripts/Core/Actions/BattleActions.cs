@@ -154,19 +154,31 @@ namespace TCGinFU.Core
     }
 
     /// <summary>
-    /// 回应 <see cref="DecisionKind.ChooseSlot"/>：在卡牌指定的那一排里挑落点槽位。
+    /// 回应 <see cref="DecisionKind.ChooseSlot"/>：在卡面允许的范围内挑一个落点。
     /// 不花 AP，也不占本轮那一次常规走位——这是卡牌效果的一部分（裁定 R-17c）。
     /// </summary>
     public sealed class ChooseSlotAction : IBattleAction
     {
+        /// <summary>范围已经把排定死时（「移动到后排」）只需给出槽位。</summary>
         public ChooseSlotAction(string actorId, int slot)
         {
             ActorId = actorId;
             Slot = slot;
         }
 
+        /// <summary>范围跨两排时（「打出后移动 1 次」）排也要玩家挑。</summary>
+        public ChooseSlotAction(string actorId, Row row, int slot)
+        {
+            ActorId = actorId;
+            Row = row;
+            Slot = slot;
+        }
+
         public string ActorId { get; }
         public int Slot { get; }
+
+        /// <summary>目标排。为 null 时由范围推导。</summary>
+        public Row? Row { get; }
     }
 
     /// <summary>宣布本轮行动完毕。全员宣布后进入敌人阶段。</summary>

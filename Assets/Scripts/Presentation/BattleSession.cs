@@ -144,6 +144,12 @@ namespace TCGinFU.Presentation
                             player.Zones.Hand.Take(Engine.RequiredDiscards(player))
                                 .Select(c => c.Uid).ToList()));
                         break;
+                    case DecisionKind.ChooseSlot:
+                        // 跳过 = 落在第一个合法落点。移动本身是强制的，跳不掉的
+                        (Row row, int slot) = Engine
+                            .LegalDestinations(player, pending.SlotChoiceRange).First();
+                        Engine.Submit(new ChooseSlotAction(id, row, slot));
+                        break;
                 }
             }
 
@@ -169,6 +175,13 @@ namespace TCGinFU.Presentation
 
                 Message = "自动处理了升变宣告。";
                 LastActionFailed = false;
+                return;
+            }
+
+            // 选位窗口必须就地关掉：移动是强制的，不选就谁也往下走不了
+            if (Engine.Pending.Kind == DecisionKind.ChooseSlot)
+            {
+                SkipPending();
                 return;
             }
 

@@ -168,19 +168,25 @@ namespace TCGinFU.Scripting
                 return DynValue.NewBoolean(Engine?.MoveRow(Who(a[0]), row, Int(a, 2), free: true) ?? false);
             });
 
-            // 「移动到X排」但排内站哪由玩家挑（先声夺人）。移动是强制的，
-            // 只有相对位置可选；窗口开在整张牌结算完之后（裁定 R-17c）
-            g["choose_slot_in"] = DynValue.NewCallback((_, a) =>
+            // 「移动 1 次，落点自己挑」。移动是强制的，可挑的只有范围内的落点；
+            // 结算就停在这儿，玩家选完再从下一条效果接着走（裁定 R-17c）。
+            //   choose_move(who)                 → 任意排任意格
+            //   choose_move(who, "switch")       → 必须换排，排内任意
+            //   choose_move(who, "back")         → 后排内任意
+            //   choose_move(who, "front", 2)     → 只能是前排 2 号位（等于没得挑，会直接移过去）
+            g["choose_move"] = DynValue.NewCallback((_, a) =>
             {
-                Engine?.RequestSlotChoice(Who(a[0]), ParseRow(a[1].CastToString()));
+                Engine?.RequestSlotChoice(CurrentEffect, Who(a[0]), ParseMoveRange(a, 1));
                 return DynValue.Nil;
             });
 
             // 「**可**免费移动1次」——不立刻移动，存成额度等玩家自己兑现。
-            // 兑现时落点是任意排任意槽位，不限于对排
+            // 第 3 个参数起是落点范围，和 choose_move 同一套写法；不写就是哪都能去。
+            //   grant_free_move(who, 1, "switch") ← 卡面「在前后排之间移动1次」
             g["grant_free_move"] = DynValue.NewCallback((_, a) =>
             {
-                Engine?.GrantFreeMove(Player(a[0]), a.Count > 1 ? Int(a, 1) : 1);
+                Engine?.GrantFreeMove(
+                    Player(a[0]), a.Count > 1 ? Int(a, 1) : 1, ParseMoveRange(a, 2));
                 return DynValue.Nil;
             });
 
@@ -400,6 +406,30 @@ namespace TCGinFU.Scripting
             => s != null && s.StartsWith("b", System.StringComparison.OrdinalIgnoreCase)
                 ? Row.Back
                 : Row.Front;
+
+        /// <summary>
+        /// 从第 <paramref name="at"/> 个参数起解析落点范围：
+        /// 不写 / nil → 任意；<c>"switch"</c> → 必须换排；<c>"front"|"back"</c> → 指定排；
+        /// 再跟一个数字 → 指定到那一格。
+        ///
+        /// <para>缺省是**最宽**的范围。卡面没限定落点时别替它限定——
+        /// 反过来（缺省成「只能换排」）会让「打出后移动1次」这类卡悄悄少掉一半可能性。</para>
+        /// </summary>
+        private static MoveRange ParseMoveRange(CallbackArguments a, int at)
+        {
+            if (a.Count <= at || a[at].IsNil()) return MoveRange.Any;
+
+            string spec = a[at].CastToString();
+            if (spec != null && spec.StartsWith("s", System.StringComparison.OrdinalIgnoreCase))
+            {
+                return MoveRange.RowSwitch;
+            }
+
+            Row row = ParseRow(spec);
+            return a.Count > at + 1 && a[at + 1].IsNotNil()
+                ? MoveRange.Exactly(row, Int(a, at + 1))
+                : MoveRange.Into(row);
+        }
 
         internal static AttributeColor ParseColor(string s) => s?.ToLowerInvariant() switch
         {

@@ -175,6 +175,111 @@ namespace TCGinFU.Core.Tests
             Assert.AreEqual(Row.Front, mover.Row);
         }
 
+        // ──────────────── 定向到槽位与挤开（裁定 R-17b） ────────────────
+
+        [Test]
+        public void 同排内可以改变相对位置()
+        {
+            var field = new Battlefield();
+            var player = TestFactory.Player("p");
+            field.PlaceAt(player, Row.Front, 0);
+
+            Assert.IsTrue(field.MoveTo(player, Row.Front, 3));
+            Assert.AreEqual(Row.Front, player.Row);
+            Assert.AreEqual(3, player.Slot);
+        }
+
+        [Test]
+        public void 原地不动不算移动()
+        {
+            var field = new Battlefield();
+            var player = TestFactory.Player("p");
+            field.PlaceAt(player, Row.Front, 1);
+
+            Assert.IsFalse(field.MoveTo(player, Row.Front, 1), "原地不动不该白扣 1 AP");
+            Assert.IsFalse(field.CanMoveTo(player, Row.Front, 1));
+        }
+
+        [Test]
+        public void 落到被占槽位时把占位者朝空槽挤开()
+        {
+            var field = new Battlefield();
+            var mover = TestFactory.Player("mover");
+            var a = TestFactory.Player("a", TestFactory.Sheet("A"));
+            var b = TestFactory.Player("b", TestFactory.Sheet("B"));
+
+            // 前排：[a, b, _, mover]，mover 要插到 0 号位
+            field.PlaceAt(a, Row.Front, 0);
+            field.PlaceAt(b, Row.Front, 1);
+            field.PlaceAt(mover, Row.Front, 3);
+
+            Assert.IsTrue(field.MoveTo(mover, Row.Front, 0));
+
+            // 空槽在右边（mover 腾出来的 3 号位），所以 a、b 整体右移一格
+            Assert.AreEqual(0, mover.Slot);
+            Assert.AreEqual(1, a.Slot);
+            Assert.AreEqual(2, b.Slot);
+        }
+
+        [Test]
+        public void 满排内部仍然调得动站位()
+        {
+            var field = new Battlefield();
+            var mover = TestFactory.Player("mover");
+            field.PlaceAt(mover, Row.Front, 0);
+
+            var others = new PlayerCharacter[3];
+            for (int i = 0; i < 3; i++)
+            {
+                others[i] = TestFactory.Player($"o{i}", TestFactory.Sheet($"O{i}"));
+                field.PlaceAt(others[i], Row.Front, i + 1);
+            }
+
+            // 4 人满排：自己腾出的槽位就是挤开要用的那个空位
+            Assert.IsTrue(field.CanMoveTo(mover, Row.Front, 3), "满排不该把站位锁死");
+            Assert.IsTrue(field.MoveTo(mover, Row.Front, 3));
+
+            Assert.AreEqual(3, mover.Slot);
+            Assert.AreEqual(0, others[0].Slot);
+            Assert.AreEqual(1, others[1].Slot);
+            Assert.AreEqual(2, others[2].Slot);
+        }
+
+        [Test]
+        public void 对排已满时挤不进去()
+        {
+            var field = new Battlefield();
+            var mover = TestFactory.Player("mover");
+            field.PlaceAt(mover, Row.Front, 0);
+
+            for (int i = 0; i < Battlefield.SlotsPerRow; i++)
+            {
+                field.PlaceAt(TestFactory.Player($"blocker{i}", TestFactory.Sheet($"B{i}")), Row.Back, i);
+            }
+
+            Assert.IsFalse(field.CanMoveTo(mover, Row.Back, 2), "对排 4 个人都在，没有可以挤开的方向");
+            Assert.IsFalse(field.MoveTo(mover, Row.Back, 2));
+            Assert.AreEqual(Row.Front, mover.Row);
+        }
+
+        [Test]
+        public void 挤开不会把人挤出排外()
+        {
+            var field = new Battlefield();
+            var mover = TestFactory.Player("mover");
+            var a = TestFactory.Player("a", TestFactory.Sheet("A"));
+
+            field.PlaceAt(mover, Row.Front, 0);
+            field.PlaceAt(a, Row.Back, 0);
+
+            Assert.IsTrue(field.MoveTo(mover, Row.Back, 0));
+
+            Assert.AreEqual((Row.Back, 0), (mover.Row, mover.Slot));
+            Assert.AreEqual(Row.Back, a.Row);
+            Assert.AreEqual(1, a.Slot, "被挤开的人仍然在场上");
+            Assert.AreSame(a, field.At(Row.Back, 1));
+        }
+
         [Test]
         public void 单体仇恨默认指向前排()
         {

@@ -476,6 +476,7 @@ namespace TCGinFU.View
             // 必须放在重建之后：FillCardZone 里的 Bind 会把高亮重置成「正常」，
             // 之前就是因为这个，选完「贴充能」后那张牌的高亮立刻没了，看着像没生效
             ApplyChargeTargetingHighlights();
+            RefreshSlotChoiceHints();
         }
 
         /// <summary>
@@ -940,8 +941,11 @@ namespace TCGinFU.View
         }
 
         /// <summary>点可查看的叠放区域 → 把里面的牌全部摊开（弃牌堆是公开信息）。</summary>
-        private void HandleZoneClick(ZoneView zone)
+        private void HandleZoneClick(ZoneView zone, PointerEventData eventData)
         {
+            // 卡牌要求选落点时，点这一排就等于选中那一格
+            if (Session.Engine.Pending.Kind == DecisionKind.ChooseSlot && TryChooseSlot(zone, eventData)) return;
+
             // 正在选充能目标时，点空处**不**取消。
             // 点在角色卡边缘稍微偏一点就会命中区域底板而不是卡，
             // 要是这里顺手取消掉，用户看到的就是「贴充能毫无反应」。
@@ -1442,12 +1446,74 @@ namespace TCGinFU.View
                 DecisionKind.PlayerActions => "结束行动",
                 DecisionKind.EnemyResponse => "放弃响应",
                 DecisionKind.HandLimitDiscard => "自动弃牌",
+                // 移动是强制的，跳不掉，只能替玩家挑一格
+                DecisionKind.ChooseSlot => "自动选位",
                 _ => "—",
             };
 
             _contextButton.interactable = pending.Kind != DecisionKind.None
                                           && Session.State.Outcome == BattleOutcome.Ongoing;
 
+        }
+
+        // ──────────────────────────── 卡牌给的定向移动：选落点 ────────────────────────────
+
+        /// <summary>
+        /// 选位窗口里点了一排：把点中的那一格提交上去。
+        /// 点在范围外或站不下的格上返回 false，让调用方继续走原来的点击逻辑。
+        /// </summary>
+        private bool TryChooseSlot(ZoneView zone, PointerEventData eventData)
+        {
+            PendingDecision pending = Session.Engine.Pending;
+            PlayerCharacter mover = Session.State.FindPlayer(pending.WaitingOn.FirstOrDefault());
+            if (mover == null || !IsOwnSideZone(zone) || RowZoneOf(zone) is not { } row) return false;
+
+            Vector3? point = ResolveBoardPointAt(eventData);
+            if (!point.HasValue) return false;
+
+            int slot = zone.SlotAtWorldPoint(point.Value);
+            if (!Session.Engine.LegalSlots(mover, row, pending.SlotChoiceRange).Contains(slot)) return false;
+
+            Session.Submit(
+                new ChooseSlotAction(mover.Id, row, slot),
+                $"{mover.Name} 移动到{DescribeDestination(mover, row, slot)}。");
+            Refresh();
+            return true;
+        }
+
+        /// <summary>
+        /// 选位窗口期间把范围内的合法落点一直亮着——
+        /// 引擎停在这里谁也动不了，玩家总得看得见该点哪儿。
+        /// <para>范围可能跨两排（「打出后移动 1 次」），所以两排都得照着范围各画各的。</para>
+        /// </summary>
+        private void RefreshSlotChoiceHints()
+        {
+            PendingDecision pending = Session.Engine.Pending;
+            if (pending.Kind != DecisionKind.ChooseSlot)
+            {
+                ClearMoveRange();
+                return;
+            }
+
+            PlayerCharacter mover = Session.State.FindPlayer(pending.WaitingOn.FirstOrDefault());
+            if (mover == null) return;
+
+            foreach (ZoneView zone in _zones)
+            {
+                if (!IsOwnSideZone(zone) || RowZoneOf(zone) is not { } row) continue;
+
+                zone.ShowSlotHints(Session.Engine.LegalSlots(mover, row, pending.SlotChoiceRange));
+            }
+        }
+
+        /// <summary>把屏幕坐标投到桌面平面上（不跟着某张拖拽中的卡，纯按指针算）。</summary>
+        private Vector3? ResolveBoardPointAt(PointerEventData eventData)
+        {
+            if (BoardCamera == null || BoardRoot == null) return null;
+
+            var plane = new Plane(BoardRoot.forward, BoardRoot.position);
+            Ray ray = BoardCamera.ScreenPointToRay(eventData.position);
+            return plane.Raycast(ray, out float distance) ? ray.GetPoint(distance) : null;
         }
 
         // ──────────────────────────── 拖拽走位 ────────────────────────────
@@ -1642,6 +1708,7 @@ namespace TCGinFU.View
                     Session.Submit(new PassResponseAction(player.Id), $"{player.Name} 放弃响应。");
                     break;
                 case DecisionKind.HandLimitDiscard:
+                case DecisionKind.ChooseSlot:
                     Session.SkipPending();
                     break;
             }

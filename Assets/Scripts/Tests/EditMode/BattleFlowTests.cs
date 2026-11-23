@@ -217,6 +217,246 @@ namespace TCGinFU.Core.Tests
         }
 
         [Test]
+        public void 同排内换位同样消耗一点行动力且占掉本轮那一次()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            Assert.AreEqual((Row.Front, 0), (player.Row, player.Slot));
+
+            // 同排内改变相对位置也是「移动 1 次」（裁定 R-17b）
+            Assert.IsTrue(engine.Submit(new MoveRowAction(player.Id, Row.Front, 2)).Ok);
+            Assert.AreEqual((Row.Front, 2), (player.Row, player.Slot));
+            Assert.AreEqual(2, player.Ap);
+
+            Assert.IsFalse(
+                engine.Submit(new MoveRowAction(player.Id, Row.Back, 0)).Ok,
+                "同排换位已经用掉本轮那一次走位");
+        }
+
+        [Test]
+        public void 原地不动的走位会被拒绝且不扣行动力()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            int apBefore = player.Ap;
+            Assert.IsFalse(engine.Submit(new MoveRowAction(player.Id, player.Row, player.Slot)).Ok);
+            Assert.AreEqual(apBefore, player.Ap, "被拒绝的走位不该留下任何代价");
+            Assert.IsFalse(player.HasMovedThisRound);
+        }
+
+        [Test]
+        public void 限定换排的免费移动付不了同排换位的账()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            // 游击速射、翻滚披风卡面都写「在前后排之间移动 1 次」——
+            // 额度带着这份限定，同排换位不在它的范围里（裁定 R-17b）
+            engine.GrantFreeMove(player, 1, MoveRange.RowSwitch);
+            player.Ap = 0;
+
+            Assert.IsFalse(
+                engine.Submit(new MoveRowAction(player.Id, Row.Front, 2)).Ok,
+                "这一次额度只能用来换排");
+            Assert.AreEqual(1, player.FreeMoves, "被拒绝的走位不该消耗额度");
+
+            Assert.IsTrue(engine.Submit(new MoveRowAction(player.Id, Row.Back, 3)).Ok);
+            Assert.AreEqual((Row.Back, 3), (player.Row, player.Slot), "换排时排内落点可以自选");
+            Assert.AreEqual(0, player.FreeMoves);
+            Assert.IsFalse(player.HasMovedThisRound, "免费移动不占本轮那一次常规走位");
+        }
+
+        [Test]
+        public void 没限定的免费移动同排换位也付得起()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            // 「打出后移动 1 次」没说去哪——范围就该是最宽的，
+            // 把它一律当成「只能换排」是对那三张卡的过度拟合
+            engine.GrantFreeMove(player, 1, MoveRange.Any);
+            player.Ap = 0;
+
+            Assert.IsTrue(engine.Submit(new MoveRowAction(player.Id, Row.Front, 2)).Ok);
+            Assert.AreEqual((Row.Front, 2), (player.Row, player.Slot));
+            Assert.AreEqual(0, player.FreeMoves);
+            Assert.IsFalse(player.HasMovedThisRound);
+        }
+
+        [Test]
+        public void 同时攒着两种范围的免费移动时各走各的账()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            engine.GrantFreeMove(player, 1, MoveRange.RowSwitch);
+            engine.GrantFreeMove(player, 1, MoveRange.Exactly(Row.Back, 0));
+            player.Ap = 0;
+            Assert.AreEqual(2, player.FreeMoves);
+
+            // 同排换位两份额度都付不起
+            Assert.IsFalse(engine.Submit(new MoveRowAction(player.Id, Row.Front, 1)).Ok);
+
+            // 后排 2 号位只有「必须换排」那份付得起，「只能去后排 0 号位」那份不行
+            Assert.IsTrue(engine.Submit(new MoveRowAction(player.Id, Row.Back, 2)).Ok);
+            Assert.AreEqual(1, player.FreeMoves, "该消耗的是换排那一份");
+
+            // 剩下那份限定到后排 0 号位，而人已经在后排了——它仍然付得起同排挪到 0 号位
+            Assert.IsTrue(engine.Submit(new MoveRowAction(player.Id, Row.Back, 0)).Ok);
+            Assert.AreEqual((Row.Back, 0), (player.Row, player.Slot));
+            Assert.AreEqual(0, player.FreeMoves);
+        }
+
+        // ──────────────── 卡牌给的定向移动让玩家选位（裁定 R-17c） ────────────────
+
+        /// <summary>
+        /// 「移动 1 次，然后抽 1 张」。<paramref name="mustChangeRow"/> 对应卡面写没写
+        /// 「在前后排之间」。抽牌排在移动**之后**，用来守住「挂起发生在结算中途」这件事。
+        /// </summary>
+        private static CardDefinition ChooseSlotMoveCard(bool mustChangeRow = true)
+            => new("choose_move", "choose_move", CardCategory.Class, CardPlay.Skill)
+            {
+                ApCost = 0,
+                Colors = new[] { AttributeColor.Dexterity },
+                Effects = new[]
+                {
+                    new EffectData
+                    {
+                        Kind = EffectKind.MoveRow,
+                        Target = TargetSelector.Self,
+                        MustChangeRow = mustChangeRow,
+                        PlayerChoosesSlot = true,
+                    },
+                    EffectData.Draw(1),
+                },
+            };
+
+        [Test]
+        public void 移动卡结算到选落点那条就停下来()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            int hand = player.Zones.Hand.Count;
+            CardInstance card = TestFactory.AddToHand(player, ChooseSlotMoveCard());
+            Assert.IsTrue(engine.Submit(new PlayCardAction(player.Id, card.Uid)).Ok);
+
+            Assert.AreEqual(DecisionKind.ChooseSlot, engine.Pending.Kind);
+            Assert.IsTrue(engine.Pending.SlotChoiceRange.MustChangeRow, "卡面写的是「在前后排之间移动」");
+            CollectionAssert.Contains(engine.Pending.WaitingOn, player.Id);
+            Assert.AreEqual(Row.Front, player.Row, "落点没选定之前人还没动");
+
+            // 关键：停的是**结算中途**，所以排在移动后面的抽牌这会儿还没发生。
+            // 要是挪到整张牌结算完之后才开窗口，这里就已经抽完了——
+            // 「移动到目标敌人正前方后造成伤害」那类卡会按移动**前**的站位结算，结果是错的
+            Assert.AreEqual(hand, player.Zones.Hand.Count, "后续效果必须等落点定下来");
+            Assert.AreEqual(0, player.Zones.Discard.Count, "牌也还没进弃牌堆");
+
+            Assert.IsTrue(engine.Submit(new ChooseSlotAction(player.Id, 3)).Ok);
+
+            Assert.AreEqual((Row.Back, 3), (player.Row, player.Slot));
+            Assert.AreEqual(hand + 1, player.Zones.Hand.Count, "选完之后剩下的效果接着结算");
+            Assert.AreEqual(1, player.Zones.Discard.Count, "收尾也跑完了");
+            Assert.AreEqual(3, player.Ap, "卡牌效果给的移动不花 AP");
+            Assert.IsFalse(player.HasMovedThisRound, "也不占本轮那一次常规走位");
+        }
+
+        [Test]
+        public void 卡面没限定落点时两排都能挑()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            CardInstance card = TestFactory.AddToHand(player, ChooseSlotMoveCard(mustChangeRow: false));
+            engine.Submit(new PlayCardAction(player.Id, card.Uid));
+
+            MoveRange range = engine.Pending.SlotChoiceRange;
+            Assert.IsFalse(range.MustChangeRow);
+            Assert.IsNull(range.Row, "「移动 1 次」没说去哪排，就不该替它限定");
+
+            // 同排换位也在范围内
+            Assert.IsTrue(engine.Submit(new ChooseSlotAction(player.Id, Row.Front, 2)).Ok);
+            Assert.AreEqual((Row.Front, 2), (player.Row, player.Slot));
+        }
+
+        [Test]
+        public void 限定换排时不能用选位窗口留在原排()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            CardInstance card = TestFactory.AddToHand(player, ChooseSlotMoveCard());
+            engine.Submit(new PlayCardAction(player.Id, card.Uid));
+
+            Assert.IsFalse(
+                engine.Submit(new ChooseSlotAction(player.Id, Row.Front, 2)).Ok,
+                "卡面写「在前后排之间移动」，留在原排不在范围内");
+            Assert.AreEqual(DecisionKind.ChooseSlot, engine.Pending.Kind, "拒绝之后窗口还开着");
+        }
+
+        [Test]
+        public void 选完落点后回到被打断的那个窗口()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            CardInstance card = TestFactory.AddToHand(player, ChooseSlotMoveCard());
+            engine.Submit(new PlayCardAction(player.Id, card.Uid));
+            engine.Submit(new ChooseSlotAction(player.Id, 1));
+
+            // 还原的必须是原来那个 PendingDecision 对象：重建一个会把谁已经宣布完毕弄丢
+            Assert.AreEqual(DecisionKind.PlayerActions, engine.Pending.Kind);
+            CollectionAssert.Contains(engine.Pending.WaitingOn, player.Id);
+            Assert.IsTrue(engine.Submit(new DeclareReadyAction(player.Id)).Ok);
+        }
+
+        [Test]
+        public void 选位窗口里选非法落点会被拒绝()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            CardInstance card = TestFactory.AddToHand(player, ChooseSlotMoveCard());
+            engine.Submit(new PlayCardAction(player.Id, card.Uid));
+
+            Assert.IsFalse(engine.Submit(new ChooseSlotAction(player.Id, 9)).Ok, "槽位越界");
+            Assert.AreEqual(DecisionKind.ChooseSlot, engine.Pending.Kind, "拒绝之后窗口还开着");
+        }
+
+        [Test]
+        public void 选位窗口没关之前不能做别的事()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            CardInstance card = TestFactory.AddToHand(player, ChooseSlotMoveCard());
+            engine.Submit(new PlayCardAction(player.Id, card.Uid));
+
+            Assert.IsFalse(engine.Submit(new DeclareReadyAction(player.Id)).Ok);
+            Assert.IsFalse(engine.Submit(new MoveRowAction(player.Id)).Ok);
+        }
+
+        [Test]
+        public void 走位范围覆盖两排且与引擎受理口径一致()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            // 界面画高亮用的就是这个列表，所以亮出来的格子必须真的落得下去
+            CollectionAssert.DoesNotContain(
+                engine.AffordableMoveSlots(player, player.Row), player.Slot,
+                "自己脚下那一格不是合法落点");
+
+            Assert.IsNotEmpty(engine.AffordableMoveSlots(player, Row.Front));
+            Assert.IsNotEmpty(engine.AffordableMoveSlots(player, Row.Back));
+
+            player.Ap = 0;
+            Assert.IsEmpty(engine.AffordableMoveSlots(player, Row.Back), "付不起就一格都不该亮");
+        }
+
+        [Test]
         public void 全员宣布完毕后进入敌人阶段并开启响应窗口()
         {
             (BattleEngine engine, PlayerCharacter player, _) = Setup(intents: TestFactory.Attack(6));

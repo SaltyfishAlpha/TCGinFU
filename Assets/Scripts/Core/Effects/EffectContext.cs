@@ -50,6 +50,21 @@ namespace TCGinFU.Core
         public int ChargeSpent { get; internal set; }
 
         /// <summary>
+        /// 这次结算**停得下来**吗——也就是外层驱动支不支持「停在半路，等玩家做个选择，再从下一条效果接着往下走」。
+        ///
+        /// <para>玩家出牌（<c>HandlePlayCard</c>）支持；敌人意图结算不支持，
+        /// 因为意图是在「逐条意图结算」的循环里跑的，停在半路得连那层循环一起挂起。
+        /// 不支持时需要选择的效果就地取缺省值，不会把结算卡死。</para>
+        /// </summary>
+        public bool CanSuspend { get; internal set; }
+
+        /// <summary>
+        /// 当前这条效果要求结算挂起。由 <see cref="EffectRegistry.ApplyAll"/> 在每条效果之后检查——
+        /// 所以挂起发生在**整条效果做完之后**，同一条效果的多个目标能一起排队，不会漏掉后面的目标。
+        /// </summary>
+        public bool Suspended { get; internal set; }
+
+        /// <summary>
         /// 本次打出**之前**施放者本轮已经打过几张牌。
         /// 「若本轮已打出过其他牌」（瞬影突袭）读它——读角色身上的计数会把这张牌自己算进去。
         /// </summary>

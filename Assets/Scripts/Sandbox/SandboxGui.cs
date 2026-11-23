@@ -286,12 +286,43 @@ namespace TCGinFU.Sandbox
                 case DecisionKind.HandLimitDiscard:
                     DrawDiscardPanel(session, player);
                     break;
+                case DecisionKind.ChooseSlot:
+                    DrawSlotChoicePanel(session, player);
+                    break;
                 default:
                     GUILayout.Label("战斗已结束，点「重开一局」再来。");
                     break;
             }
 
             GUILayout.EndVertical();
+        }
+
+        /// <summary>
+        /// 卡牌给的移动：落点由玩家在卡面允许的范围内挑（裁定 R-17c）。
+        /// 这里一格一个按钮，范围外和站不下的格子根本不画。
+        /// </summary>
+        private static void DrawSlotChoicePanel(BattleSession session, PlayerCharacter player)
+        {
+            MoveRange range = session.Engine.Pending.SlotChoiceRange;
+            GUILayout.Label($"移动到{range}——挑一个落点：");
+
+            GUILayout.BeginHorizontal();
+            foreach ((Row row, int slot) in session.Engine.LegalDestinations(player, range))
+            {
+                string where = $"{(row == Row.Front ? "前" : "后")}排 {slot} 号位";
+                Combatant occupant = session.State.FieldOf(player).At(row, slot);
+                string label = occupant == null || occupant == player
+                    ? where
+                    : $"{where}（挤开 {occupant.Name}）";
+
+                if (GUILayout.Button(label))
+                {
+                    session.Submit(
+                        new ChooseSlotAction(player.Id, row, slot), $"{player.Name} 移动到{where}。");
+                }
+            }
+
+            GUILayout.EndHorizontal();
         }
 
         private static void DrawTransformPanel(BattleSession session, PlayerCharacter player)
@@ -540,6 +571,7 @@ namespace TCGinFU.Sandbox
             DecisionKind.PlayerActions => "玩家行动",
             DecisionKind.EnemyResponse => "响应窗口",
             DecisionKind.HandLimitDiscard => "轮末弃牌",
+            DecisionKind.ChooseSlot => "选择落点",
             _ => "无",
         };
 

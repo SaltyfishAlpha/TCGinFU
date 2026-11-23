@@ -380,6 +380,12 @@ namespace TCGinFU.Tests
                         engine.Submit(new DiscardToHandLimitAction(
                             who, p.Zones.Hand.Take(engine.RequiredDiscards(p)).Select(c => c.Uid).ToList()));
                         break;
+                    case DecisionKind.ChooseSlot:
+                        PlayerCharacter mover = engine.State.FindPlayer(who);
+                        (Row toRow, int toSlot) = engine
+                            .LegalDestinations(mover, pending.SlotChoiceRange).First();
+                        engine.Submit(new ChooseSlotAction(who, toRow, toSlot));
+                        break;
                     default:
                         Assert.Fail("卡在 " + pending.Kind);
                         break;
@@ -968,10 +974,10 @@ namespace TCGinFU.Tests
         // ──────────────────────────── 费用减免 ────────────────────────────
 
         [Test]
-        public void S01_先声夺人打出即自动移位并抽牌()
+        public void S01_先声夺人打出即移位并抽牌且排内落点由玩家挑()
         {
             // 卡面：「在前后排之间移动1次并抽1张牌」——**强制**，不是「可」。
-            // 移动与抽牌纯数据就能表达，写在卡面 effects 里。
+            // 强制的是「换排」；排内站哪卡面没说，所以由玩家挑（裁定 R-17c）。
             (BattleEngine engine, PlayerCharacter player, Enemy _) = RealDuel();
             Assert.That(player.Row, Is.EqualTo(Row.Front));
 
@@ -981,7 +987,15 @@ namespace TCGinFU.Tests
             ActionResult result = engine.Submit(new PlayCardAction(player.Id, card.Uid));
             Assert.That(result.Ok, Is.True, result.Reason);
 
-            Assert.That(player.Row, Is.EqualTo(Row.Back), "打出后应当自动移位");
+            // 卡面是「移动1次**并**抽1张」，移动写在前面，所以结算停在移动这条上：
+            // 抽牌要等落点定下来（裁定 R-17c）
+            Assert.That(engine.Pending.Kind, Is.EqualTo(DecisionKind.ChooseSlot));
+            Assert.That(engine.Pending.SlotChoiceRange.MustChangeRow, Is.True, "卡面写的是「在前后排之间移动」");
+            Assert.That(player.Zones.Hand.Count, Is.EqualTo(hand), "落点没定之前不抽牌");
+
+            Assert.That(engine.Submit(new ChooseSlotAction(player.Id, 2)).Ok, Is.True);
+
+            Assert.That((player.Row, player.Slot), Is.EqualTo((Row.Back, 2)), "移动是强制的，躲不掉");
             // 加进来 +1、打出去 -1、抽牌 +1 → 净 +1
             Assert.That(player.Zones.Hand.Count, Is.EqualTo(hand + 1), "应当抽 1 张");
         }
@@ -1006,6 +1020,10 @@ namespace TCGinFU.Tests
             Assert.That(result.Ok, Is.True, result.Reason);
 
             Assert.That(player.Mp, Is.EqualTo(mp), "第 1 轮不该扣 MP");
+
+            // +1 AP 发在 on_resolved 里，而这张牌会停在选落点上——
+            // 收尾要等落点定下来才跑（裁定 R-17c）
+            Assert.That(engine.Submit(new ChooseSlotAction(player.Id, 0)).Ok, Is.True);
             Assert.That(player.Ap, Is.EqualTo(ap - def.ApCost + 1), "应当额外 +1 AP");
         }
 

@@ -141,7 +141,9 @@ behaviour("<卡的 behaviourId>", {
   `strip_shield`（直接削减护盾，不是伤害）`restore_mp` `gain_ap` `draw` `discard`
 - 状态：`apply_status` `has_status` `status_stacks` `remove_status`
   `remove_negative_status(who, n)`（「移除1个负面状态」，哪些算负面由引擎统一判）
-- 走位：`move_row`（切换）`move_to`（定向）`grant_free_move` `swap_rows`
+- 走位：`move_row`（切换）`move_to`（定向到排）`move_slot`（定向到格，会挤开）
+  `choose_move`（玩家挑落点）`grant_free_move` `swap_rows`。
+  后两个带**落点范围**参数：不写 = 哪都能去，`"switch"` = 必须换排，`"back"` / `"front", 2` = 指定排 / 格
 - 充能：`charge_from`（弃牌堆/牌库/手牌 → 充能区）`charge_this`（把正在打出的这张牌变成充能）
   `grant_charge_placement` `adjust_charge_cap`
 - 查询：`stat` `team_charges` `round` `weakness_of(who)`（第一个【易损】属性，没有则 nil）
@@ -224,13 +226,15 @@ behaviour("<卡的 behaviourId>", {
 
 ### 走位：一个动词不够用
 
-卡面上的「移动」至少有 5 种语义，`SwitchRow` 只覆盖第 1 种：
+卡面上的「移动」至少有 7 种语义，`SwitchRow` 只覆盖第 1 种：
 
 | 语义 | 卡 | 接口 |
 | ----- | ----- | ----- |
-| 在前后排之间切换 | 先声夺人 | `SwitchRow` / `move_row(who)` |
-| 定向移动到某排 | 重力横扫「击退至后排」 | `MoveRow(c, row, free)` / `move_to(who, "back")` |
-| **可**免费移动（玩家决定动不动、何时动） | 游击速射、翻滚披风 | `GrantFreeMove` / `grant_free_move(who)` |
+| 在前后排之间切换 | —— | `SwitchRow` / `move_row(who)` |
+| 定向移动到某排（落点自动取同列） | 重力横扫「击退至后排」 | `MoveRow(c, row, free)` / `move_to(who, "back")` |
+| 定向移动到某排的**某一格** | 同排换位、挤开 | `MoveRow(c, row, slot, free)` / `move_slot(who, "back", 2)` |
+| 移动，**落点由玩家在范围内挑** | 先声夺人 | `RequestSlotChoice` / `choose_move(who, "switch")`，或数据层 `playerChoosesSlot: true` |
+| **可**免费移动（玩家决定动不动、何时动） | 游击速射、翻滚披风 | `GrantFreeMove` / `grant_free_move(who, 1, "switch")` |
 | 把移动权授予**别人** | 翻滚披风（给被保护的目标） | 同上，传目标 |
 | 前后排整体互换，保持列 | 相位折跃 | `SwapRows(playerSide)` / `swap_rows()` |
 
