@@ -184,7 +184,12 @@ namespace TCGinFU.View
                 0f, 0f, CardMeshFactory.TowardCamera * CardMeshFactory.CardThickness * 3f);
         }
 
-        public void Bind(Combatant combatant, bool isEnemy, bool selected)
+        /// <param name="tag">
+        /// 卡面数值之外、只在某个时点成立的一行小字（「分摊：维汀」「援护：维汀」）。
+        /// 这类信息是引擎此刻的**窗口内登记**，不是角色身上的状态，所以由调用方算好传进来——
+        /// 让这里反过来去问引擎，角色卡就得认识 BattleEngine。
+        /// </param>
+        public void Bind(Combatant combatant, bool isEnemy, bool selected, string tag = null)
         {
             Combatant = combatant;
 
@@ -208,7 +213,9 @@ namespace TCGinFU.View
 
             string rowTag = combatant.Row == Row.Front ? "前" : "后";
             _nameText.text = $"{combatant.Name} <color=#aaaaaa>{rowTag}{combatant.Slot}</color>";
-            _statsText.text = BuildStats(combatant);
+            _statsText.text = string.IsNullOrEmpty(tag)
+                ? BuildStats(combatant)
+                : $"{BuildStats(combatant)}\n{tag}";
             _intentText.text = BuildIntent(combatant);
         }
 

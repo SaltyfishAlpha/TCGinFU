@@ -72,6 +72,14 @@ namespace TCGinFU.Core
         /// </summary>
         public Row? RowTarget { get; set; }
 
+        /// <summary>
+        /// <see cref="EffectKind.MoveRow"/>：移动是强制的，但**排内站哪由玩家挑**（裁定 R-17c）。
+        ///
+        /// <para>给「先声夺人」这类自己打出的定向移动用——卡面写死了去哪一排，
+        /// 可选的只有排内的相对位置。敌人造成的强制移动（击退）不开这个，自动选同列。</para>
+        /// </summary>
+        public bool PlayerChoosesSlot { get; set; }
+
         public static EffectData Damage(ValueExpr amount, DamageElement element = DamageElement.Physical,
             TargetScope scope = TargetScope.SingleEnemy)
             => new() { Kind = EffectKind.Damage, Amount = amount, Element = element, Target = new TargetSelector(scope) };

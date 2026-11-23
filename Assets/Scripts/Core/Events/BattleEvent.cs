@@ -7,7 +7,15 @@ namespace TCGinFU.Core
         BattleStarted,
         RoundStarted,
         PhaseChanged,
+        /// <summary>轮始揭示本轮意图：这名敌人这一轮打算做哪些事</summary>
         IntentRevealed,
+        /// <summary>
+        /// 轮到这一条意图了：攻击已经摆出来、响应窗口已经打开，全体 Pass 后就结算。
+        /// <para>与 <see cref="IntentRevealed"/> 的区别是时机——表现层要在**这里**亮出
+        /// 首领的卡面，玩家才来得及据此决定打不打时机牌。等到 CardPlayed 就太晚了，
+        /// 那时响应窗口早已关闭、伤害也结算完了。</para>
+        /// </summary>
+        IntentDeclared,
         CardDrawn,
         DeckReshuffled,
         CardPlayed,
@@ -32,12 +40,16 @@ namespace TCGinFU.Core
         Healed,
         ShieldGained,
         ShieldRefreshed,
+        /// <summary>护盾被卡牌直接削减（「削减所有敌人3点物理护盾」），不是被伤害打掉的</summary>
+        ShieldReduced,
         StatusApplied,
         StatusExpired,
         RowChanged,
         /// <summary>获得一次「可免费移动」的权利，等玩家自己兑现</summary>
         FreeMoveGranted,
         Covered,
+        /// <summary>登记了一次分摊：本次攻击将拆成两半，由原目标与相邻队友各承一份（B-14）</summary>
+        DamageShared,
         CrisisEntered,
         CrisisLeft,
         CombatantDown,

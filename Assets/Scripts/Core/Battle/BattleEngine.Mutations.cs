@@ -61,6 +61,65 @@ namespace TCGinFU.Core
             });
         }
 
+        /// <summary>
+        /// 削减护盾（「并削减所有敌人3点物理护盾」）。返回实际削掉的点数。
+        ///
+        /// <para>复用 <see cref="ShieldPool.Absorb"/> 而不是另写一套扣减：
+        /// 自动双盾与卡牌护盾的消耗次序在那里已经定好了，再写一遍迟早会走岔。</para>
+        /// </summary>
+        public int ReduceShield(Combatant target, ShieldKind kind, int amount)
+        {
+            if (target == null || amount <= 0) return 0;
+
+            int removed = target.Shields.Absorb(kind, amount);
+            if (removed <= 0) return 0;
+
+            Emit(new BattleEvent(BattleEventType.ShieldReduced, null, target.Id)
+            {
+                Amount = removed,
+                Text = kind.ToString(),
+                Round = State.Round,
+            });
+
+            return removed;
+        }
+
+        /// <summary>
+        /// 移除宿主身上最多 <paramref name="count"/> 个负面状态（「移除每名受保护角色身上的1个负面状态」）。
+        /// 「负面」的口径与脚本里的 <c>has_negative_status</c> 一致：带持续伤害、加重受伤、削弱输出或造成易损。
+        /// </summary>
+        /// <returns>实际移除的状态 Id。</returns>
+        public List<string> RemoveNegativeStatuses(Combatant target, int count = 1)
+        {
+            var removed = new List<string>();
+            if (target == null || count <= 0) return removed;
+
+            foreach (StatusEffect status in target.Statuses.All.ToList())
+            {
+                if (removed.Count >= count) break;
+                if (!IsNegative(status)) continue;
+
+                target.Statuses.Remove(status.Id);
+                removed.Add(status.Id);
+
+                Emit(new BattleEvent(BattleEventType.StatusExpired, target.Id, target.Id)
+                {
+                    Text = status.Id,
+                    Round = State.Round,
+                });
+            }
+
+            return removed;
+        }
+
+        private static bool IsNegative(StatusEffect status)
+            => status.DamagePerRound > 0
+               || status.IncomingDamageBonus > 0
+               || status.OutgoingDamageBonus < 0
+               || status.VulnerableElement.HasValue
+               || (status.IncomingMultiplierDenominator > 0
+                   && status.IncomingMultiplierNumerator > status.IncomingMultiplierDenominator);
+
         public void RestoreMp(PlayerCharacter player, int amount)
         {
             if (player == null) return;
@@ -127,6 +186,33 @@ namespace TCGinFU.Core
             }
 
             return drawn;
+        }
+
+        /// <summary>
+        /// 从手牌弃置若干张（<see cref="EffectKind.Discard"/>）。升变期间的形态牌弃进形态弃牌堆。
+        /// </summary>
+        /// <returns>实际弃掉的牌——手牌不够时会少于 <paramref name="count"/>。</returns>
+        public List<CardInstance> DiscardFromHand(PlayerCharacter player, int count)
+        {
+            var discarded = new List<CardInstance>();
+            if (player == null || count <= 0) return discarded;
+
+            for (int i = 0; i < count; i++)
+            {
+                CardInstance card = player.Zones.Hand.DrawBottom();
+                if (card == null) break;
+
+                ReturnToOwnerDiscard(card);
+                discarded.Add(card);
+
+                Emit(new BattleEvent(BattleEventType.CardDiscarded, player.Id)
+                {
+                    CardId = card.Definition.Id,
+                    Round = State.Round,
+                });
+            }
+
+            return discarded;
         }
 
         /// <summary>
@@ -259,13 +345,21 @@ namespace TCGinFU.Core
             Emit(new BattleEvent(BattleEventType.ChargeSpent, player.Id, token.OwnerId)
             {
                 CardId = token.Card.Definition.Id,
-                Text = use.ToString(),
+                Text = ChargeUseText(use),
                 Round = State.Round,
             });
 
             FireTrigger(player, BattleTrigger.ChargeSpent, new TriggerSignal { Card = token.Card });
             return true;
         }
+
+        /// <summary>战报里写的用途。三种用途在战报上必须分得开，否则对不上账。</summary>
+        private static string ChargeUseText(ChargeUse use) => use switch
+        {
+            ChargeUse.ConvertToMp => $"转 {MpPerCharge} MP",
+            ChargeUse.ConvertToAp => "换 1 AP",
+            _ => "支付卡面词条",
+        };
 
         public void ApplyStatus(Combatant target, StatusEffect status)
         {
@@ -291,21 +385,71 @@ namespace TCGinFU.Core
             if (combatant == null) return false;
 
             Battlefield field = State.FieldOf(combatant);
+            int fromSlot = combatant.Slot;
             Row from = combatant.Row;
             if (!field.MoveTo(combatant, target)) return false;
 
+            AfterMove(combatant, from, fromSlot, free);
+            return true;
+        }
+
+        /// <summary>
+        /// 移动到**指定排的指定槽位**。跨排换位与同排内改变相对位置都走这里；
+        /// 目标槽有队友时挤开（见 <see cref="Battlefield.MoveTo(Combatant, Row, int)"/>）。
+        /// 原地不动返回 false。
+        /// </summary>
+        public bool MoveRow(Combatant combatant, Row target, int slot, bool free)
+        {
+            if (combatant == null) return false;
+
+            Battlefield field = State.FieldOf(combatant);
+            int fromSlot = combatant.Slot;
+            Row from = combatant.Row;
+
+            // 挤开会连带挪动队友，播报前先记下他们原来站哪
+            var before = new Dictionary<Combatant, int>();
+            foreach (Combatant other in field.InRow(target))
+            {
+                if (other != combatant) before[other] = other.Slot;
+            }
+
+            if (!field.MoveTo(combatant, target, slot)) return false;
+
+            AfterMove(combatant, from, fromSlot, free);
+
+            // 被挤开的人不花 AP、不算「本轮走过位」——不是他们自己要动的
+            foreach ((Combatant other, int otherFrom) in before)
+            {
+                if (other.Slot == otherFrom) continue;
+
+                Emit(new BattleEvent(BattleEventType.RowChanged, combatant.Id, other.Id)
+                {
+                    Text = $"被挤开 {otherFrom}→{other.Slot} 号位",
+                    Round = State.Round,
+                });
+            }
+
+            return true;
+        }
+
+        /// <summary>记账 + 播报。同排换位也占「本轮一次」，它同样是一次移动（裁定 R-17b）。</summary>
+        private void AfterMove(Combatant combatant, Row from, int fromSlot, bool free)
+        {
             if (!free && combatant is PlayerCharacter player)
             {
                 player.HasMovedThisRound = true;
             }
 
+            // 同排换位时只报槽位，不然「Front→Front」看着像没动
+            string text = from == combatant.Row
+                ? $"{from} {fromSlot}→{combatant.Slot} 号位"
+                : $"{from} {fromSlot}→{combatant.Row} {combatant.Slot} 号位";
+
             Emit(new BattleEvent(BattleEventType.RowChanged, combatant.Id, combatant.Id)
             {
-                Text = $"{from}→{combatant.Row}",
+                Text = text,
                 Round = State.Round,
             });
-
-            return true;
         }
 
         /// <summary>玩家方或敌方的前后排整体互换，保持各自的列（老卡「相位折跃」）。</summary>
@@ -379,6 +523,7 @@ namespace TCGinFU.Core
         {
             if (coverer == null || originalTarget == null) return;
             if (_covers.ContainsKey(originalTarget.Id)) return; // 一次攻击只能被援护一次
+            if (_shares.ContainsKey(originalTarget.Id)) return; // 已经登记分摊就不能再整份转移（B-14）
 
             // §4.3：只有「相邻队友」成为目标时才能援护
             if (!ReferenceEquals(coverer, originalTarget)
@@ -394,6 +539,87 @@ namespace TCGinFU.Core
                 Round = State.Round,
             });
         }
+
+        /// <summary>
+        /// 登记一次分摊：本次攻击拆成两半，由 <paramref name="originalTarget"/> 与
+        /// <paramref name="sharer"/> 各承一份、各自抵扣护盾（因果抹杀令，B-14）。
+        /// </summary>
+        /// <returns>登记成功返回 true；被拒绝时 <paramref name="reason"/> 说明原因，状态不变。</returns>
+        public bool RegisterDamageShare(PlayerCharacter sharer, Combatant originalTarget, out string reason)
+        {
+            if (!CanShareDamage(sharer, originalTarget, out reason)) return false;
+
+            _shares[originalTarget.Id] = sharer;
+            Emit(new BattleEvent(BattleEventType.DamageShared, sharer.Id, originalTarget.Id)
+            {
+                Text = Pending.Intent.Label,
+                Round = State.Round,
+            });
+
+            return true;
+        }
+
+        /// <summary>不关心失败原因时的简写。</summary>
+        public bool RegisterDamageShare(PlayerCharacter sharer, Combatant originalTarget)
+            => RegisterDamageShare(sharer, originalTarget, out _);
+
+        /// <summary>
+        /// 此刻 <paramref name="sharer"/> 能不能替 <paramref name="originalTarget"/> 分摊。
+        /// <see cref="RegisterDamageShare"/> 和界面的候选列表走的是**这一份**判断，
+        /// 免得「按钮亮着却提交失败」这类两套规则不一致的毛病。
+        /// </summary>
+        public bool CanShareDamage(PlayerCharacter sharer, Combatant originalTarget, out string reason)
+        {
+            reason = null;
+            if (sharer == null || originalTarget == null) { reason = "分摊缺少角色"; return false; }
+
+            if (Pending.Kind != DecisionKind.EnemyResponse) { reason = "只能在响应窗口里分摊"; return false; }
+            if (Pending.Intent is not { Shareable: true }) { reason = "这条意图不能分摊"; return false; }
+
+            if (ReferenceEquals(sharer, originalTarget)) { reason = "不能自己和自己分摊"; return false; }
+            if (sharer.IsDown) { reason = $"{sharer.Name} 已倒下"; return false; }
+            if (originalTarget.IsDown) { reason = $"{originalTarget.Name} 已倒下"; return false; }
+
+            if (_pendingAttacks.All(a => !ReferenceEquals(a.Target, originalTarget)))
+            {
+                reason = $"{originalTarget.Name} 不是本次意图的目标";
+                return false;
+            }
+
+            // 卡面写的是「相邻队友」，和援护同一条口径（§4.3）
+            if (!State.PlayerField.AreAdjacent(sharer, originalTarget))
+            {
+                reason = "只有相邻队友才能分摊";
+                return false;
+            }
+
+            // 一次攻击只能挑一种：整份转移（援护）或对半拆（分摊）
+            if (_covers.ContainsKey(originalTarget.Id)) { reason = "这次攻击已被援护"; return false; }
+            if (_shares.ContainsKey(originalTarget.Id)) { reason = "这次攻击已有人分摊"; return false; }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 此刻这名角色可以替**哪些**队友分摊。界面拿它决定按钮亮不亮、要不要让玩家挑人。
+        ///
+        /// <para>范围意图可能同时打中好几个人，队伍也不一定只有两个人，
+        /// 所以这里返回的是一串而不是一个——界面按长度决定直接提交还是先弹菜单。</para>
+        /// </summary>
+        public IReadOnlyList<Combatant> ShareableTargetsFor(PlayerCharacter sharer)
+        {
+            if (sharer == null || !Pending.WaitingOn.Contains(sharer.Id)) return System.Array.Empty<Combatant>();
+
+            return _pendingAttacks
+                .Select(a => a.Target)
+                .Distinct()
+                .Where(t => CanShareDamage(sharer, t, out _))
+                .ToList();
+        }
+
+        /// <summary>替某人挡下整份攻击的那位援护者，没有则为 null。与 <see cref="SharerFor"/> 对称。</summary>
+        public PlayerCharacter CovererFor(Combatant target)
+            => target != null && _covers.TryGetValue(target.Id, out PlayerCharacter coverer) ? coverer : null;
 
         /// <summary>把牌送回它原持有者的弃牌堆。</summary>
         private void ReturnToOwnerDiscard(CardInstance card)

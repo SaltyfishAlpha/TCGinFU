@@ -49,6 +49,21 @@ namespace TCGinFU.Core
         /// <summary>本次打出消耗掉的充能数。</summary>
         public int ChargeSpent { get; internal set; }
 
+        /// <summary>
+        /// 本次打出**之前**施放者本轮已经打过几张牌。
+        /// 「若本轮已打出过其他牌」（瞬影突袭）读它——读角色身上的计数会把这张牌自己算进去。
+        /// </summary>
+        public int CardsPlayedBefore { get; internal set; }
+
+        /// <summary>
+        /// 本次打出到目前为止，数据驱动的 <see cref="EffectKind.Damage"/> 一共打掉了多少 HP。
+        ///
+        /// <para>「回复等同于本次实际伤害一半的HP」（暗言术·活力汲取）这类卡要的是**战果**，
+        /// 不是卡面基础值——护盾、克制、暴击都会让两者差很远。
+        /// 有了它，伤害照旧留在数据层，行为层只管读结果。</para>
+        /// </summary>
+        public int DamageDealt { get; internal set; }
+
         /// <summary>Behaviour 可以往这里塞临时标记，供同一张牌的后续效果读取。</summary>
         public Dictionary<string, int> Scratch { get; } = new();
 
@@ -79,7 +94,7 @@ namespace TCGinFU.Core
         /// 牌面没有【暴击】标识的卡不投，返回 <see cref="CritResult.None"/>。
         /// </summary>
         public CritResult RollCritFor(Combatant target)
-            => Engine.RollCrit(CasterPlayer, Definition, target ?? ChosenTarget);
+            => Engine.RollCrit(CasterPlayer, Definition, target ?? ChosenTarget, ChargeSpent);
 
         public int Resolve(ValueExpr expr) => expr.Resolve(Values);
 

@@ -53,6 +53,16 @@ namespace TCGinFU.Core
         /// <summary>敌人意图造成的伤害会带上这条意图；玩家出牌为 null。</summary>
         public EnemyIntent Intent { get; init; }
 
+        /// <summary>
+        /// 这是一次**分摊**拆出来的半份，值为被分摊的那位（B-14）；不是分摊则为 null。
+        ///
+        /// <para>两个半份各自走一遍完整攻击管线，所以「分别抵扣护盾」是自然结果而不是特例。
+        /// 命中后附带的状态只跟原目标那一半走——分摊的是伤害，不是整条意图。</para>
+        /// </summary>
+        public Combatant SharedFrom { get; init; }
+
+        public bool IsSharedHalf => SharedFrom != null;
+
         /// <summary>卡面/意图写的基础值。</summary>
         public int BaseAmount { get; set; }
 
@@ -115,13 +125,14 @@ namespace TCGinFU.Core
     {
         private readonly List<int> _rolls;
 
-        internal CritRollContext(CritResult rolled, CardDefinition card, Combatant target)
+        internal CritRollContext(CritResult rolled, CardDefinition card, Combatant target, int chargeSpent = 0)
         {
             _rolls = new List<int>(rolled.Rolls);
             CritResist = rolled.CritResist;
             Card = card;
             Target = target;
             DualColor = rolled.Rolls.Count >= 2;
+            ChargeSpent = chargeSpent;
         }
 
         /// <summary>投出的骰值，可直接改（下标从 0 起，与卡面「第 1 颗骰」差 1）。</summary>
@@ -132,6 +143,18 @@ namespace TCGinFU.Core
 
         /// <summary>对暴击抵抗线的修正，负数等于更容易暴击。</summary>
         public int ResistDelta { get; set; }
+
+        /// <summary>
+        /// 「本次攻击**必定**暴击」（暗夜剔骨消耗充能时）。
+        ///
+        /// <para>只能把结果抬成暴击，抬不成超暴击——超暴击是双色两颗骰的关系判出来的，
+        /// 凭一个布尔开关造出来会把 §7.3 那套规则绕过去。骰值本身也不改：
+        /// 战报里该让玩家看见真实点数，而不是一串被篡改过的数字。</para>
+        /// </summary>
+        public bool ForceCrit { get; set; }
+
+        /// <summary>本次打出消耗掉的充能数。「若消耗1个充能指示物，本次攻击必定暴击」要读它。</summary>
+        public int ChargeSpent { get; }
 
         public int CritResist { get; }
         public CardDefinition Card { get; }
@@ -144,7 +167,10 @@ namespace TCGinFU.Core
             var adjusted = new List<int>(_rolls.Count);
             foreach (int roll in _rolls) adjusted.Add(roll + RollBonus);
 
-            return CritResolver.Evaluate(adjusted, CritResist + ResistDelta, DualColor);
+            CritResult result = CritResolver.Evaluate(adjusted, CritResist + ResistDelta, DualColor);
+            if (!ForceCrit || result.IsCrit) return result;
+
+            return new CritResult(true, result.IsSuperCrit, result.Rolls, result.CritResist);
         }
     }
 
@@ -226,6 +252,13 @@ namespace TCGinFU.Core
     {
         /// <summary>宿主受到了伤害（闪避不触发）</summary>
         DamageTaken,
+
+        /// <summary>
+        /// 宿主身上一次攻击结算完毕。与 <see cref="DamageTaken"/> 的区别是它
+        /// **掉 0 血也照样广播**——「若完全抵消本次攻击伤害则反击」（风墙反制）
+        /// 恰恰只在没掉血时才成立，挂在 DamageTaken 上永远等不到。
+        /// </summary>
+        AttackResolved,
 
         /// <summary>宿主造成了伤害</summary>
         DamageDealt,

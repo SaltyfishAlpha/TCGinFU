@@ -9,18 +9,43 @@ namespace TCGinFU.Core
     /// </summary>
     public sealed class CardDefinition
     {
-        public CardDefinition(string id, string name, CardCategory category, CardKind kind)
+        /// <param name="play">
+        /// 打法。升变牌与敌人意图不按打法结算，传 null（见 <see cref="CardRole"/>）。
+        /// </param>
+        public CardDefinition(string id, string name, CardCategory category, CardPlay? play)
         {
             Id = string.IsNullOrWhiteSpace(id) ? throw new ArgumentException("卡牌 Id 不能为空", nameof(id)) : id;
             Name = name ?? id;
             Category = category;
-            Kind = kind;
+            Play = play;
         }
 
         public string Id { get; }
         public string Name { get; }
+
+        /// <summary>类别：这张牌从哪来、谁能编入（§7.1）。</summary>
         public CardCategory Category { get; }
-        public CardKind Kind { get; }
+
+        /// <summary>
+        /// 打法：什么时候打、打出后去哪（§7.1）。
+        /// <para>null 表示这张牌不按打法结算——只有升变牌与敌人意图是这样。</para>
+        /// </summary>
+        public CardPlay? Play { get; }
+
+        /// <summary>打法之外的标记（升变牌 / 形态牌 / 敌人意图）。默认是普通牌。</summary>
+        public CardRole Role { get; init; } = CardRole.Normal;
+
+        /// <summary>
+        /// 英雄技能牌（职业 10 级精通所得，§3.3）。
+        /// <para>这是**标记**不是类别也不是打法：英雄技能牌属于职业牌，可以是任意打法。</para>
+        /// </summary>
+        public bool IsHeroSkill { get; init; }
+
+        /// <summary>
+        /// 形态牌所属的形态卡组标识（<see cref="Role"/> 为 <see cref="CardRole.Form"/> 时有值）。
+        /// 同一组形态牌共用一个值，构筑校验据此确认没把别组的形态牌混进来。
+        /// </summary>
+        public string FormId { get; init; }
 
         /// <summary>卡牌颜色。单色 1 项，还原双属性检定的卡为 2 项（§2.2）。</summary>
         public IReadOnlyList<AttributeColor> Colors { get; init; } = Array.Empty<AttributeColor>();
@@ -28,8 +53,18 @@ namespace TCGinFU.Core
         public int ApCost { get; init; }
         public int MpCost { get; init; }
 
-        /// <summary>卡面「消耗 X 个充能」词条的 X。</summary>
+        /// <summary>卡面「消耗 X 个充能」词条的 X。这是**硬费用**，不打出就是不打出。</summary>
         public int ChargeCost { get; init; }
+
+        /// <summary>
+        /// 卡面允许玩家**额外选择**消耗几个充能（「若消耗1个充能指示物则…」）。
+        /// 空表示这张牌没有可选消耗，<see cref="PlayCardAction.ChargeForEffect"/> 只能是 0。
+        ///
+        /// <para>为什么声明在卡上而不是写在界面里：界面据此自动生成「消耗几个充能？」的提问，
+        /// 不用每补一张这种牌就去改一次表现层；玩家自定义的卡也能用上同一个入口。
+        /// 含 0 表示「可以不消耗」（暗夜剔骨），不含 0 表示至少要选一个（万能灵药）。</para>
+        /// </summary>
+        public IReadOnlyList<int> ChargeOptions { get; init; } = Array.Empty<int>();
 
         /// <summary>卡面是否带【暴击】标识。只有带标识的牌才投暴击骰（§7.3）。</summary>
         public bool HasCrit { get; init; }
@@ -52,7 +87,7 @@ namespace TCGinFU.Core
         /// <summary>可选的脚本化行为钩子 Id，由 <see cref="BehaviourRegistry"/> 解析。</summary>
         public string BehaviourId { get; init; }
 
-        /// <summary>所属职业（职业牌、升变牌、形态牌、英雄牌用，决定形态卡组的配对）。</summary>
+        /// <summary>所属职业（职业牌、升变牌、形态牌、英雄技能牌用，决定形态卡组的配对）。</summary>
         public string ClassId { get; init; }
 
         /// <summary>卡面规则文字，供界面展示。不参与任何结算——结算只看 <see cref="Effects"/> 与 Behaviour。</summary>
@@ -93,10 +128,36 @@ namespace TCGinFU.Core
         public string TransformConditionText { get; init; }
 
         /// <summary>同名牌编入上限：升变牌 1 张，其余 3 张（§3.2）。</summary>
-        public int CopyLimit => Kind == CardKind.Transform ? 1 : 3;
+        public int CopyLimit => Role == CardRole.Transform ? 1 : 3;
 
-        /// <summary>时机牌与防具牌可以在敌人阶段的响应窗口打出（§4.3 / §8 ④）。</summary>
-        public bool IsReactive => Kind == CardKind.Timing || Category == CardCategory.Armor;
+        /// <summary>
+        /// 卡面要玩家指定什么目标。<see cref="CardTargeting.Auto"/> 时按
+        /// <see cref="Effects"/> 推导。
+        ///
+        /// <para>不能只靠推导：「从弃牌堆将最多2张牌贴入**全队任意角色**的充能区」这类卡
+        /// 的目标是给行为层用的，数据效果里一条 SingleAlly 都没有，
+        /// 推导出来就是「不需要目标」——玩家指定的队友会被整个丢掉，永远贴给自己。</para>
+        /// </summary>
+        public CardTargeting Targeting { get; init; } = CardTargeting.Auto;
+
+        /// <summary>算上推导之后，这张牌到底指向谁。</summary>
+        public CardTargeting ResolvedTargeting
+        {
+            get
+            {
+                if (Targeting != CardTargeting.Auto) return Targeting;
+                if (Effects.Any(e => e.Target.Scope == TargetScope.SingleEnemy)) return CardTargeting.Enemy;
+                if (Effects.Any(e => e.Target.Scope == TargetScope.SingleAlly)) return CardTargeting.Ally;
+                return CardTargeting.None;
+            }
+        }
+
+        /// <summary>
+        /// 不指定目标就打不出去。只有**数据效果**真的需要目标时才成立——
+        /// 行为层驱动的「自己或任意队友」自带默认值（不选就是自己），强制指定反而别扭。
+        /// </summary>
+        public bool RequiresExplicitTarget
+            => Effects.Any(e => e.Target.Scope is TargetScope.SingleEnemy or TargetScope.SingleAlly);
 
         public bool IsDualColor => Colors.Count >= 2;
 

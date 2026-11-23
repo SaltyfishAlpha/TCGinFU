@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace TCGinFU.Core
 {
@@ -54,6 +55,18 @@ namespace TCGinFU.Core
         /// </summary>
         public int DamageTakenThisRound { get; internal set; }
 
+        /// <summary>
+        /// 本轮打出过几张牌。「若本轮已打出过其他牌」（瞬影突袭）这类前置条件要读它。
+        /// <see cref="BattleStatKeys.CardsPlayed"/> 记的是整局累计，答不了「本轮」。
+        /// </summary>
+        public int CardsPlayedThisRound { get; internal set; }
+
+        /// <summary>
+        /// 本轮谁对我造成过伤害。「若本轮已有其他队友对该目标造成过伤害」（交叉火力网）
+        /// 要的是**按来源区分**的口径，<see cref="DamageTakenThisRound"/> 只有总量答不了。
+        /// </summary>
+        public HashSet<string> DamagersThisRound { get; } = new(StringComparer.Ordinal);
+
         /// <summary>扣血，返回实际损失的 HP。</summary>
         public int LoseHp(int amount)
         {
@@ -77,6 +90,8 @@ namespace TCGinFU.Core
             DamageDealtLastRound = DamageDealtThisRound;
             DamageDealtThisRound = 0;
             DamageTakenThisRound = 0;
+            CardsPlayedThisRound = 0;
+            DamagersThisRound.Clear();
         }
 
         public override string ToString() => $"{Name}({Hp}/{MaxHp})";

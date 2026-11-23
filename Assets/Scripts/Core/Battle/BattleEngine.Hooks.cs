@@ -150,14 +150,14 @@ namespace TCGinFU.Core
         /// 投一次暴击骰，并让常驻行为在**判定之前**过手骰值。
         /// 所有暴击掷骰都必须走这里，否则「鹰眼锁定：掷骰结果+1」只在部分路径上生效。
         /// </summary>
-        public CritResult RollCrit(PlayerCharacter actor, CardDefinition card, Combatant target)
+        public CritResult RollCrit(PlayerCharacter actor, CardDefinition card, Combatant target, int chargeSpent = 0)
         {
             if (card == null || !card.HasCrit) return CritResult.None;
 
             int resist = target?.CritResist ?? State.LivingEnemies.FirstOrDefault()?.CritResist ?? 0;
             CritResult rolled = CritResolver.Roll(State.Rng, actor.Sheet.Dice, card.Colors, resist);
 
-            var roll = new CritRollContext(rolled, card, target);
+            var roll = new CritRollContext(rolled, card, target, chargeSpent);
 
             ICardBehaviour own = Behaviours.Resolve(card);
             if (own != null) Invoke(own, nameof(ICardBehaviour.ModifyCritRoll), () => own.ModifyCritRoll(roll, actor));
@@ -214,6 +214,13 @@ namespace TCGinFU.Core
 
             attack.Result = result;
             attack.Target.DamageTakenThisRound += result.HpLost;
+
+            // 「若本轮已有其他队友对该目标造成过伤害」（交叉火力网）要按来源区分，
+            // 只记总量答不了「是谁打的」
+            if (result.HpLost > 0 && attack.Source != null)
+            {
+                attack.Target.DamagersThisRound.Add(attack.Source.Id);
+            }
 
             // 一次性状态在这一刻用掉：守方的【破绽】（「下一次**受到**的伤害+3」），
             // 以及攻方的「下一次**攻击**伤害+3」——两边都要清，只清守方会让
@@ -281,6 +288,16 @@ namespace TCGinFU.Core
 
                 State.CheckOutcome();
             }
+
+            // 「本次攻击结算完毕」：掉 0 血也广播。
+            // 「若完全抵消本次攻击伤害则反击」只在没掉血时成立，它等不到下面那个触发
+            FireTrigger(target, BattleTrigger.AttackResolved, new TriggerSignal
+            {
+                Other = source,
+                Amount = result.HpLost,
+                Damage = result,
+                Card = attack.Card,
+            });
 
             // 受伤方的「每当你受到伤害时」：闪避与 0 伤害不触发（老卡「灵智回流」明确写的是受到伤害）
             if (result.HpLost > 0 && target is PlayerCharacter hurt)

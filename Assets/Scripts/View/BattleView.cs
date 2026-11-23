@@ -45,8 +45,25 @@ namespace TCGinFU.View
         private CardShowcase _showcase;
         private IDropTarget _hoveredTarget;
 
-        private CardInstance _pendingChargeCard;
-        private string _pendingChargeOwnerId;
+        /// <summary>
+        /// 「点一名队友的角色卡」这个模式用来干什么。
+        /// 两种用途共用同一套选人流程（高亮、取消、点敌人时的提示），只有落地动作不同。
+        /// </summary>
+        private enum TargetPurpose
+        {
+            /// <summary>把这张牌贴成充能</summary>
+            贴充能,
+            /// <summary>把这张牌打在某个队友身上</summary>
+            打在队友身上,
+        }
+
+        private CardInstance _pendingTargetCard;
+        private string _pendingTargetOwnerId;
+        private TargetPurpose _pendingTargetPurpose;
+
+        /// <summary>选人模式下顶栏按钮与提示语里的动作名。</summary>
+        private string PendingTargetVerb
+            => _pendingTargetPurpose == TargetPurpose.贴充能 ? "贴充能" : "出牌";
 
         private Text _statusText;
         private Text _messageText;
@@ -355,16 +372,19 @@ namespace TCGinFU.View
         private int _eventCursor;
 
         /// <summary>
-        /// 把这次刷新之间新打出的牌送去演出。
+        /// 把这次刷新之间新亮相的牌送去演出。
         ///
         /// <para>状态走 <see cref="Refresh"/> 整体重建，**演出走事件**——
         /// 「现在手里有哪些牌」是状态，「刚才打出了什么」只有事件说得清：
         /// 等 Refresh 跑完，那张牌早就离开手牌进弃牌堆了。</para>
         ///
-        /// <para>玩家出牌和敌人意图发的是同一条 <see cref="BattleEventType.CardPlayed"/>，
-        /// 所以这里不必分两种情况。</para>
+        /// <para><b>玩家的牌和敌人的牌挂在不同的事件上，因为要亮的时机不同。</b>
+        /// 玩家出牌看 <see cref="BattleEventType.CardPlayed"/>，闪一下就够——他知道自己打的是什么。
+        /// 敌人的牌看 <see cref="BattleEventType.IntentDeclared"/>，也就是**响应窗口打开的那一刻**，
+        /// 并且一直钉到窗口关闭：玩家正是要据此决定打不打时机牌。
+        /// 敌人也发 CardPlayed，但那是伤害结算完之后的事，那时亮出来已经没用了。</para>
         /// </summary>
-        private void DrainPlayedCards()
+        private void DrainPresentationEvents()
         {
             if (_showcase == null) return;
 
@@ -376,13 +396,38 @@ namespace TCGinFU.View
                 _showcase.Clear();
             }
 
+            CardDefinition declared = null;
+            string declaredBy = null;
+
             IReadOnlyList<BattleEvent> events = Session.Engine.Events;
             for (; _eventCursor < events.Count; _eventCursor++)
             {
                 BattleEvent e = events[_eventCursor];
-                if (e.Type != BattleEventType.CardPlayed) continue;
 
-                _showcase.Enqueue(e.Card, Session.State?.Find(e.ActorId)?.Name);
+                switch (e.Type)
+                {
+                    case BattleEventType.IntentDeclared:
+                        // 一次提交里可能连着开过好几个窗口（前一条意图结算完就开下一条），
+                        // 留最后一条——那才是此刻还开着的那个
+                        declared = e.Card;
+                        declaredBy = Session.State?.Find(e.ActorId)?.Name;
+                        break;
+
+                    case BattleEventType.CardPlayed when Session.State?.FindPlayer(e.ActorId) != null:
+                        _showcase.Enqueue(e.Card, Session.State.FindPlayer(e.ActorId).Name);
+                        break;
+                }
+            }
+
+            bool responding = Session.Engine.Pending.Kind == DecisionKind.EnemyResponse;
+            if (responding)
+            {
+                // declared 为 null 说明窗口还是上次那个，什么都不做 = 继续钉着
+                if (declared != null) _showcase.Hold(declared, declaredBy);
+            }
+            else
+            {
+                _showcase.Release();
             }
         }
 
@@ -394,7 +439,7 @@ namespace TCGinFU.View
             // 每次刷新都重新指过去：重开一局会换掉引擎，只在建面板时设一次就会留下陈旧引用
             _detailPanel.Engine = Session.Engine;
 
-            DrainPlayedCards();
+            DrainPresentationEvents();
 
             _statusText.text =
                 $"第 {state.Round} 轮 · {PhaseName(state.Phase)} · 命刻 {state.SceneClock}"
@@ -439,7 +484,7 @@ namespace TCGinFU.View
         /// </summary>
         private void ApplyChargeTargetingHighlights()
         {
-            bool targeting = _pendingChargeCard != null;
+            bool targeting = _pendingTargetCard != null;
 
             foreach (CombatantView view in _combatantViews.Values)
             {
@@ -451,7 +496,7 @@ namespace TCGinFU.View
 
             if (!targeting) return;
 
-            if (_cardViews.TryGetValue(_pendingChargeCard.Uid, out CardView card))
+            if (_cardViews.TryGetValue(_pendingTargetCard.Uid, out CardView card))
             {
                 card.SetHighlight(CardHighlight.选中);
             }
@@ -466,7 +511,7 @@ namespace TCGinFU.View
             // 中途还能把别的牌打出去只会让人以为充能没生效
             bool draggable = zone.Layout.draggable
                              && Session.State.Outcome == BattleOutcome.Ongoing
-                             && _pendingChargeCard == null;
+                             && _pendingTargetCard == null;
 
             foreach (CardInstance card in cards)
             {
@@ -500,7 +545,7 @@ namespace TCGinFU.View
                     view.DropFilter = CombatantAcceptsCard;
                     view.DropHandler = HandleCombatantDrop;
                     view.ClickHandler = HandleCombatantClick;
-                    view.ContextHandler = v => _detailPanel.Open(v.Combatant);
+                    view.ContextHandler = OnCombatantContextMenu;
                     view.LongPressHandler = v => _detailPanel.Open(v.Combatant);
                     view.BoardPointResolver = ResolveBoardPoint;
                     view.BeginDragHandler = OnCombatantBeginDrag;
@@ -521,13 +566,26 @@ namespace TCGinFU.View
                                  && CanMoveRow(movable);
 
                 view.Root.gameObject.SetActive(true);
-                view.Bind(combatant, isEnemy, selected);
-                zone.AddCombatant(view);
+                view.Bind(combatant, isEnemy, selected, ResponseTagFor(combatant));
+                zone.AddCombatant(view, combatant.Slot);
                 live.Add(combatant.Id);
 
                 FillChargeStack(view, combatant, liveCards);
                 FillTransformSlot(view, combatant, liveCards);
             }
+        }
+
+        /// <summary>
+        /// 响应窗口里已经替这个人登记了什么：援护（整份转移）或分摊（对半拆）。
+        /// 窗口一关登记就清空，角色卡上的这行小字也跟着消失。
+        /// </summary>
+        private string ResponseTagFor(Combatant combatant)
+        {
+            PlayerCharacter coverer = Session.Engine.CovererFor(combatant);
+            if (coverer != null) return $"<color=#ffd24d>援护：{coverer.Name}</color>";
+
+            PlayerCharacter sharer = Session.Engine.SharerFor(combatant);
+            return sharer == null ? null : $"<color=#ffd24d>分摊：{sharer.Name}</color>";
         }
 
         /// <summary>
@@ -740,7 +798,7 @@ namespace TCGinFU.View
             if (card.IsDragging) return;
 
             // 正在等它选目标的那张牌保持选中高亮，别被「鼠标移开」给清掉
-            if (_pendingChargeCard != null && ReferenceEquals(card.Card, _pendingChargeCard))
+            if (_pendingTargetCard != null && ReferenceEquals(card.Card, _pendingTargetCard))
             {
                 card.SetHighlight(CardHighlight.选中);
                 return;
@@ -799,11 +857,11 @@ namespace TCGinFU.View
         /// </summary>
         private bool IsBlockedByTargeting(string what)
         {
-            if (_pendingChargeCard == null) return false;
+            if (_pendingTargetCard == null) return false;
 
             Session.SetMessage(
-                $"正在选充能目标（「{_pendingChargeCard.Name}」），不能{what}。"
-                + "请点一名<b>队友的角色卡</b>，或用顶栏的「取消充能」。", isWarning: true);
+                $"正在选{PendingTargetVerb}的目标（「{_pendingTargetCard.Name}」），不能{what}。"
+                + $"请点一名<b>队友的角色卡</b>，或用顶栏的「取消{PendingTargetVerb}」。", isWarning: true);
             Refresh();
             return true;
         }
@@ -838,7 +896,7 @@ namespace TCGinFU.View
 
             // 升变牌和别的牌一样是从手里打出去的——拖到**自己**的角色卡上，
             // 因为升变牌就是这一局里的新角色卡（§6.2 ②）
-            if (def.Kind == CardKind.Transform)
+            if (def.Role == CardRole.Transform)
             {
                 if (!transformWindow) return false;
 
@@ -872,7 +930,7 @@ namespace TCGinFU.View
 
             if (view.Combatant is Enemy) Session.SelectedEnemyId = view.Combatant.Id;
 
-            bool transform = card.Card.Definition.Kind == CardKind.Transform;
+            bool transform = card.Card.Definition.Role == CardRole.Transform;
 
             PlayCardWithChoices(
                 player, card.Card, view.Combatant.Id,
@@ -887,11 +945,11 @@ namespace TCGinFU.View
             // 正在选充能目标时，点空处**不**取消。
             // 点在角色卡边缘稍微偏一点就会命中区域底板而不是卡，
             // 要是这里顺手取消掉，用户看到的就是「贴充能毫无反应」。
-            if (_pendingChargeCard != null)
+            if (_pendingTargetCard != null)
             {
                 Session.SetMessage(
-                    $"还在选充能目标（「{_pendingChargeCard.Name}」）——请点一名<b>队友的角色卡</b>，"
-                    + "或用顶栏的「取消充能」。", isWarning: true);
+                    $"还在选{PendingTargetVerb}的目标（「{_pendingTargetCard.Name}」）——请点一名<b>队友的角色卡</b>，"
+                    + $"或用顶栏的「取消{PendingTargetVerb}」。", isWarning: true);
                 Refresh();
                 return;
             }
@@ -916,7 +974,7 @@ namespace TCGinFU.View
 
         private void HandleCombatantClick(CombatantView view)
         {
-            if (_pendingChargeCard != null)
+            if (_pendingTargetCard != null)
             {
                 PickChargeTarget(view);
                 return;
@@ -927,6 +985,139 @@ namespace TCGinFU.View
 
             Refresh();
         }
+
+        /// <summary>
+        /// 右键角色卡 = 弹菜单，和右键手牌一条口径（左键选中、长按看详情、右键菜单、拖拽出牌）。
+        ///
+        /// <para>以前是「默认直接看详情，只有能分摊时才弹菜单」，省掉了一次点击，
+        /// 代价是充能的两种用途在正式界面上**根本没有入口**（B-15）——
+        /// 而且同一个右键在手牌上出菜单、在角色卡上出面板，本身也不好记。</para>
+        /// </summary>
+        private void OnCombatantContextMenu(CombatantView view)
+        {
+            if (_pendingTargetCard != null) return;
+
+            Combatant combatant = view.Combatant;
+            var options = new List<(string, System.Action)>();
+
+            if (combatant is Enemy)
+            {
+                options.Add(("设为目标", () =>
+                {
+                    Session.SelectedEnemyId = combatant.Id;
+                    Refresh();
+                }));
+            }
+            else
+            {
+                options.AddRange(ChargeOptionsFor(combatant));
+                options.AddRange(ShareOptionsFor(combatant));
+            }
+
+            options.Add(("查看详情", () => _detailPanel.Open(combatant)));
+            _contextMenu.Open(combatant.Name, ScreenPointOf(view), options);
+        }
+
+        /// <summary>
+        /// 充能的两种「单独动作」用途：换 1 AP、回复 5 MP（§5.2）。
+        /// 主语是被右键的这名角色，用的是**他自己**的充能区。
+        ///
+        /// <para>第三种用途（支付卡面「消耗 X 个充能」）不在这里：它跟着具体某张牌，
+        /// 在出牌时问（见 <see cref="CardChoiceCatalog"/>）。</para>
+        ///
+        /// <para>能不能点一概问引擎，灰掉时把引擎给的理由原样摆出来——
+        /// 界面自己判一遍阶段和数量，迟早和引擎分家。</para>
+        /// </summary>
+        private List<(string, System.Action)> ChargeOptionsFor(Combatant combatant)
+        {
+            var options = new List<(string, System.Action)>();
+            if (combatant is not PlayerCharacter player) return options;
+
+            BattleEngine engine = Session.Engine;
+            int charges = player.Zones.Charges.Count;
+
+            void Add(ChargeUse use, string label, IBattleAction action, string message)
+            {
+                bool ok = engine.CanSpendChargeFor(player, use, out string reason);
+                string text = $"{label}（剩 {charges} 个充能）";
+
+                // 不可点的条目写成 (text, null)，和「（已替 X 分摊）」同一种写法
+                options.Add(ok
+                    ? (text, () => { Session.Submit(action, message); Refresh(); })
+                    : ($"{text}——{reason}", (System.Action)null));
+            }
+
+            Add(ChargeUse.ConvertToAp,
+                "充能换 1 AP",
+                new SpendChargeForApAction(player.Id),
+                $"{player.Name} 把 1 个充能换成了 1 点 AP。");
+
+            // 满蓝时引擎照样受理（玩家可能就是想清空充能区），但得先说清楚会浪费
+            string mpLabel = player.Mp >= player.MaxMp
+                ? $"充能回复 {BattleEngine.MpPerCharge} MP（MP 已满）"
+                : $"充能回复 {BattleEngine.MpPerCharge} MP";
+
+            Add(ChargeUse.ConvertToMp,
+                mpLabel,
+                new SpendChargeForMpAction(player.Id),
+                $"{player.Name} 把 1 个充能转成了 MP。");
+
+            return options;
+        }
+
+        /// <summary>
+        /// 「可在响应时由相邻队友分摊」（因果抹杀令）在界面上的入口。
+        ///
+        /// <para>菜单挂在**站出来的那个人**身上，不是挂在被打的人身上：
+        /// 玩家的动作是「我替他挡一半」，主语是自己。右键自己人 → 看到可以替哪个邻座分摊。</para>
+        ///
+        /// <para>分摊不花 AP、不打牌，提交后也**不**算放弃响应——还能接着打时机牌。</para>
+        /// </summary>
+        private List<(string, System.Action)> ShareOptionsFor(Combatant combatant)
+        {
+            var options = new List<(string, System.Action)>();
+            if (combatant is not PlayerCharacter sharer) return options;
+
+            BattleEngine engine = Session.Engine;
+
+            // 已经站出来过了：留一条不可点的，让玩家知道这事自己做过。
+            // 「别人替谁分摊了」不进菜单——那是局面信息，写在角色卡上（见 ResponseTagFor）
+            foreach (Combatant target in engine.CurrentIntentTargets)
+            {
+                if (ReferenceEquals(engine.SharerFor(target), sharer))
+                {
+                    options.Add(($"（已替 {target.Name} 分摊）", null));
+                }
+            }
+
+            // 还能替谁分摊**一概问引擎**：界面不自己判相邻、不自己判意图能不能拆。
+            // 各判一份迟早会分家，表现出来就是「菜单里有、点下去却被拒」
+            foreach (Combatant target in engine.ShareableTargetsFor(sharer))
+            {
+                // 把拆完之后各自要吃多少点算出来摆在菜单上。
+                // 玩家要判断的是「我扛得住这一半吗」，让他自己拿卡面的 24 去除以 2 是没必要的
+                AttackContext attack = engine.PendingAttackOn(target);
+                int half = attack == null ? 0 : attack.BaseAmount / 2;
+                string cost = half > 0 ? $"（各 {half} 点）" : "";
+
+                Combatant captured = target;
+                options.Add(($"替 {target.Name} 分摊{cost}", () =>
+                {
+                    Session.Submit(
+                        new ShareDamageAction(sharer.Id, captured.Id),
+                        $"{sharer.Name} 站出来替 {captured.Name} 分摊这次攻击。");
+                    Refresh();
+                }));
+            }
+
+            return options;
+        }
+
+        /// <summary>角色卡在屏幕上的位置，用来决定菜单弹在哪。</summary>
+        private Vector2 ScreenPointOf(CombatantView view)
+            => BoardCamera == null
+                ? new Vector2(Screen.width * 0.5f, Screen.height * 0.5f)
+                : BoardCamera.WorldToScreenPoint(view.Root.position);
 
         // ──────────────────────────── 右键菜单与充能 ────────────────────────────
 
@@ -941,16 +1132,28 @@ namespace TCGinFU.View
             // 左键已经改成「看详情」，所以打出得回到菜单里——
             // 否则除了拖拽就没有别的出牌方式了
             CardInstance instance = card.Card;
-            string target = BattleSession.NeedsAllyTarget(instance.Definition)
-                ? owner.Name
-                : Session.State.Find(Session.SelectedEnemyId)?.Name ?? "当前目标";
 
-            var options = new List<(string, System.Action)>
+            // 指向队友、而且确实有别人可选时，先让玩家点人——
+            // 直接按施放者结算的话，「令1名我方角色…」永远只能作用在自己身上
+            bool needsAlly = BattleSession.NeedsAllyTarget(instance.Definition);
+            bool hasTeammate = Session.State.LivingPlayers.Skip(1).Any();
+
+            var options = new List<(string, System.Action)>();
+
+            if (needsAlly && hasTeammate)
             {
-                ($"打出（→ {target}）", () => PlayCard(owner, instance)),
-                ("贴充能…", () => BeginChargeTargeting(owner, instance)),
-                ("查看详情", () => _detailPanel.Open(instance, owner)),
-            };
+                options.Add(("打出（→ 选队友…）", () => BeginAllyTargeting(owner, instance)));
+            }
+            else
+            {
+                string target = needsAlly
+                    ? owner.Name
+                    : Session.State.Find(Session.SelectedEnemyId)?.Name ?? "当前目标";
+                options.Add(($"打出（→ {target}）", () => PlayCard(owner, instance)));
+            }
+
+            options.Add(("贴充能…", () => BeginChargeTargeting(owner, instance)));
+            options.Add(("查看详情", () => _detailPanel.Open(instance, owner)));
 
             _contextMenu.Open(instance.Name, screenPosition, options);
         }
@@ -976,7 +1179,7 @@ namespace TCGinFU.View
         /// </summary>
         private void PlayCardWithChoices(PlayerCharacter owner, CardInstance card, string targetId, string message)
         {
-            IReadOnlyList<ChoicePrompt> prompts = CardChoiceCatalog.For(card.Definition.Id);
+            IReadOnlyList<ChoicePrompt> prompts = CardChoiceCatalog.For(card.Definition);
             if (prompts.Count == 0)
             {
                 SubmitPlay(owner, card, targetId, message, null, null);
@@ -1105,13 +1308,11 @@ namespace TCGinFU.View
             Dictionary<string, int> answers,
             List<int> pickedUids)
         {
-            // 「为卡面词条付充能」目前只有 ChargeForMp 这一个入口，
-            // 而它的本意是「拿充能抵 MP」——这条链是错的（见 ui_todo_handoff §2）。
-            // 在牌效那边把入口理清之前，先照着它走：调合·万能灵药的 MP 费用是 0，
-            // 所以借道抵扣不会产生副作用，而 ctx.charge_spent 能拿到正确的数字。
-            int chargeForMp = answers != null && answers.TryGetValue("charge", out int charges) ? charges : 0;
+            // 「额外消耗几个充能」是卡面词条的费用，不是拿充能抵 MP——
+            // 抵 MP 已经独立成 SpendChargeForMpAction，不走出牌这条链（B-16）
+            int chargeForEffect = answers != null && answers.TryGetValue("charge", out int charges) ? charges : 0;
 
-            var action = new PlayCardAction(owner.Id, card.Uid, targetId, chargeForMp);
+            var action = new PlayCardAction(owner.Id, card.Uid, targetId, chargeForEffect);
 
             if (answers != null)
             {
@@ -1142,19 +1343,39 @@ namespace TCGinFU.View
                 return;
             }
 
-            _pendingChargeCard = card;
-            _pendingChargeOwnerId = owner.Id;
-            Session.SetMessage($"选择要给谁贴充能（「{card.Name}」）——点一名<b>队友的角色卡</b>，或用顶栏的「取消充能」。");
+            BeginTargeting(owner, card, TargetPurpose.贴充能);
+        }
+
+        /// <summary>
+        /// 「令**1名我方角色**……」「贴入**全队任意角色**的充能区」这类卡的选人入口。
+        ///
+        /// <para>以前这些卡一律按施放者自己结算：界面压根没问过打给谁，
+        /// 引擎那边也把目标丢了（见 <see cref="CardDefinition.ResolvedTargeting"/>）。
+        /// 单人局看不出来——默认值就是自己——组队之后才会发现队友永远选不中。</para>
+        /// </summary>
+        private void BeginAllyTargeting(PlayerCharacter owner, CardInstance card)
+            => BeginTargeting(owner, card, TargetPurpose.打在队友身上);
+
+        private void BeginTargeting(PlayerCharacter owner, CardInstance card, TargetPurpose purpose)
+        {
+            _pendingTargetCard = card;
+            _pendingTargetOwnerId = owner.Id;
+            _pendingTargetPurpose = purpose;
+
+            string what = purpose == TargetPurpose.贴充能 ? "要给谁贴充能" : "把这张牌打给谁";
+            Session.SetMessage(
+                $"选择{what}（「{card.Name}」）——点一名<b>队友的角色卡</b>，"
+                + $"或用顶栏的「取消{PendingTargetVerb}」。");
             Refresh();
         }
 
         private void CancelChargeTargeting()
         {
-            if (_pendingChargeCard == null) return;
+            if (_pendingTargetCard == null) return;
 
-            _pendingChargeCard = null;
-            _pendingChargeOwnerId = null;
-            Session.SetMessage("已取消贴充能。");
+            Session.SetMessage($"已取消{PendingTargetVerb}。");
+            _pendingTargetCard = null;
+            _pendingTargetOwnerId = null;
             Refresh();
         }
 
@@ -1164,16 +1385,30 @@ namespace TCGinFU.View
             {
                 // 保持选择状态，让用户直接再点一个队友，不用重新走一遍右键菜单
                 Session.SetMessage(
-                    $"{view.Combatant.Name} 是敌人，充能只能贴给队友。请点一名队友的角色卡。",
+                    $"{view.Combatant.Name} 是敌人，{PendingTargetVerb}只能指定队友。请点一名队友的角色卡。",
                     isWarning: true);
                 Refresh();
                 return;
             }
 
-            CardInstance card = _pendingChargeCard;
-            string ownerId = _pendingChargeOwnerId;
-            _pendingChargeCard = null;
-            _pendingChargeOwnerId = null;
+            CardInstance card = _pendingTargetCard;
+            string ownerId = _pendingTargetOwnerId;
+            TargetPurpose purpose = _pendingTargetPurpose;
+            _pendingTargetCard = null;
+            _pendingTargetOwnerId = null;
+
+            if (purpose == TargetPurpose.打在队友身上)
+            {
+                PlayerCharacter owner = Session.State.FindPlayer(ownerId);
+                if (owner != null)
+                {
+                    PlayCardWithChoices(
+                        owner, card, target.Id, $"对 {target.Name} 打出「{card.Name}」。");
+                }
+
+                Refresh();
+                return;
+            }
 
             _confirmDialog.Open(
                 $"把「{card.Name}」横置到 {target.Name} 的角色卡上作为充能？\n"
@@ -1193,10 +1428,10 @@ namespace TCGinFU.View
 
         private void UpdateContextButton(PendingDecision pending)
         {
-            // 选充能目标期间，这个按钮临时变成唯一的取消入口
-            if (_pendingChargeCard != null)
+            // 选目标期间，这个按钮临时变成唯一的取消入口
+            if (_pendingTargetCard != null)
             {
-                _contextButtonLabel.text = "取消充能";
+                _contextButtonLabel.text = "取消" + PendingTargetVerb;
                 _contextButton.interactable = true;
                 return;
             }
@@ -1217,22 +1452,14 @@ namespace TCGinFU.View
 
         // ──────────────────────────── 拖拽走位 ────────────────────────────
 
-        /// <summary>此刻这名角色走不走得动（时机 + 代价都算上）。</summary>
+        /// <summary>
+        /// 此刻这名角色走不走得动。时机、代价、落点全部问引擎——
+        /// 界面自己抄一份规则，迟早和引擎对不上，变成「拖得动却放不下去」。
+        /// </summary>
         private bool CanMoveRow(PlayerCharacter player)
-        {
-            PendingDecision pending = Session.Engine.Pending;
-            bool free = player.FreeMoves > 0;
-
-            // 攒着的免费移动在响应窗口里也能兑现（「翻滚披风」那次机动就是为了赶在敌人落手前挪开）
-            bool timingOk = pending.Kind == DecisionKind.PlayerActions
-                            || (free && pending.Kind == DecisionKind.EnemyResponse);
-
-            return timingOk
-                   && pending.WaitingOn.Contains(player.Id)
-                   && !player.IsDown
-                   && Session.State.Outcome == BattleOutcome.Ongoing
-                   && (free || (!player.HasMovedThisRound && player.Ap >= 1));
-        }
+            => Session.State.Outcome == BattleOutcome.Ongoing
+               && (Session.Engine.AffordableMoveSlots(player, Row.Front).Count > 0
+                   || Session.Engine.AffordableMoveSlots(player, Row.Back).Count > 0);
 
         /// <summary>把屏幕坐标投到桌面平面上，供角色卡跟着鼠标走。</summary>
         private Vector3? ResolveBoardPoint(CombatantView view, PointerEventData eventData)
@@ -1255,56 +1482,93 @@ namespace TCGinFU.View
 
             // 拖起来的角色卡挂到桌面根节点下，否则它还受所在区域的排布摆布
             view.Root.SetParent(BoardRoot, true);
-            HighlightMoveTarget(view, CardHighlight.合法);
+            ShowMoveRange(view, hover: default);
         }
 
         private void OnCombatantDrag(CombatantView view, PointerEventData eventData)
-        {
-            ZoneView target = FindRowZoneUnder(eventData);
-            HighlightMoveTarget(view, IsOppositeRowZone(view, target) ? CardHighlight.悬停 : CardHighlight.合法);
-        }
+            => ShowMoveRange(view, ResolveDropSlot(view, eventData));
 
         private void OnCombatantEndDrag(CombatantView view, PointerEventData eventData)
         {
-            HighlightMoveTarget(view, CardHighlight.正常);
-
-            ZoneView target = FindRowZoneUnder(eventData);
-            bool moved = IsOppositeRowZone(view, target);
+            (ZoneView zone, int slot, bool legal) = ResolveDropSlot(view, eventData);
+            ClearMoveRange();
 
             // 无论确认与否都先 Refresh：角色卡现在挂在桌面根节点下，
             // 不放回去的话它会一直飘在鼠标松开的位置
             Refresh();
 
-            if (!moved || view.Combatant is not PlayerCharacter player) return;
+            if (!legal || view.Combatant is not PlayerCharacter player) return;
 
-            string destination = player.Row == Row.Front ? "后排" : "前排";
+            Row target = RowZoneOf(zone).Value;
+            string where = DescribeDestination(player, target, slot);
             string cost = player.FreeMoves > 0 ? $"免费（剩 {player.FreeMoves} 次）" : "消耗 1 AP";
 
-            _confirmDialog.Open($"把 {player.Name} 移动到{destination}？\n{cost}", () =>
+            _confirmDialog.Open($"把 {player.Name} 移动到{where}？\n{cost}", () =>
             {
-                Session.Submit(new MoveRowAction(player.Id), $"{player.Name} 移动到{destination}。");
+                Session.Submit(
+                    new MoveRowAction(player.Id, target, slot), $"{player.Name} 移动到{where}。");
                 Refresh();
             });
         }
 
-        private void HighlightMoveTarget(CombatantView view, CardHighlight state)
+        /// <summary>
+        /// 落点文案。同排内换位说「本排 N 号位」，跨排说「前/后排 N 号位」；
+        /// 目标槽有人时点明会把谁挤开，省得玩家松手之后才发现队友也动了。
+        /// </summary>
+        private string DescribeDestination(PlayerCharacter player, Row target, int slot)
+        {
+            string row = target == player.Row ? "本排" : target == Row.Front ? "前排" : "后排";
+            Combatant occupant = Session.State.FieldOf(player).At(target, slot);
+
+            return occupant == null || occupant == player
+                ? $"{row} {slot} 号位"
+                : $"{row} {slot} 号位（挤开 {occupant.Name}）";
+        }
+
+        /// <summary>
+        /// 指针底下的落点：哪个区域、哪个槽位、合不合法。
+        /// 合法性直接问引擎，界面不自己算一套（满员排里哪几格挤得动只有引擎说了算）。
+        /// </summary>
+        private (ZoneView Zone, int Slot, bool Legal) ResolveDropSlot(
+            CombatantView view, PointerEventData eventData)
+        {
+            ZoneView zone = FindRowZoneUnder(eventData);
+            if (zone == null || !IsOwnSideZone(zone) || view.Combatant is not PlayerCharacter player)
+            {
+                return (null, -1, false);
+            }
+
+            Row row = RowZoneOf(zone).Value;
+            int slot = zone.SlotAtWorldPoint(view.Root.position);
+            return (zone, slot, Session.Engine.AffordableMoveSlots(player, row).Contains(slot));
+        }
+
+        /// <summary>
+        /// 画走位范围：两排所有合法槽位都标出来，指针所在那一格标成落点。
+        ///
+        /// <para>范围覆盖**两排**——同排内改变相对位置也是走位（裁定 R-17b），
+        /// 只高亮对排会让玩家以为同排动不了。</para>
+        /// </summary>
+        private void ShowMoveRange(CombatantView view, (ZoneView Zone, int Slot, bool Legal) hover)
         {
             if (view.Combatant is not PlayerCharacter player) return;
 
-            Row target = player.Row == Row.Front ? Row.Back : Row.Front;
             foreach (ZoneView zone in _zones)
             {
-                if (RowZoneOf(zone) == target && IsOwnSideZone(zone)) zone.SetDropHighlight(state);
+                if (!IsOwnSideZone(zone)) continue;
+
+                Row row = RowZoneOf(zone).Value;
+                int preview = hover.Legal && ReferenceEquals(hover.Zone, zone) ? hover.Slot : -1;
+                zone.ShowSlotHints(Session.Engine.AffordableMoveSlots(player, row), preview);
             }
         }
 
-        private bool IsOppositeRowZone(CombatantView view, ZoneView zone)
+        private void ClearMoveRange()
         {
-            if (zone == null || view.Combatant is not PlayerCharacter player) return false;
-            if (!IsOwnSideZone(zone)) return false;
-
-            Row target = player.Row == Row.Front ? Row.Back : Row.Front;
-            return RowZoneOf(zone) == target;
+            foreach (ZoneView zone in _zones)
+            {
+                if (IsOwnSideZone(zone)) zone.ClearSlotHints();
+            }
         }
 
         private static bool IsOwnSideZone(ZoneView zone)
@@ -1340,7 +1604,7 @@ namespace TCGinFU.View
 
         private void SubmitContextAction()
         {
-            if (_pendingChargeCard != null)
+            if (_pendingTargetCard != null)
             {
                 CancelChargeTargeting();
                 return;

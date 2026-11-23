@@ -5,7 +5,7 @@
       "name": "幻影夜行",
       "owner": "miku",
       "category": "Class",
-      "kind": "Transform",
+      "role": "Transform",
       "classId": "浪客",
       "colors": [
         "Dexterity",
@@ -28,7 +28,7 @@
       "name": "鹰眼绝境",
       "owner": "miku",
       "category": "Class",
-      "kind": "Transform",
+      "role": "Transform",
       "classId": "神射手",
       "colors": [
         "Dexterity",
@@ -51,7 +51,7 @@
       "name": "暗算起手",
       "owner": "miku",
       "category": "Class",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [
         "Dexterity",
@@ -84,7 +84,7 @@
       "name": "卑劣打击·壹式",
       "owner": "miku",
       "category": "Class",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [
         "Dexterity",
@@ -117,7 +117,7 @@
       "name": "看破闪避",
       "owner": "miku",
       "category": "Armor",
-      "kind": "Timing",
+      "play": "Timing",
       "classId": "浪客",
       "colors": [
         "Dexterity"
@@ -142,7 +142,7 @@
       "name": "先声夺人",
       "owner": "miku",
       "category": "Class",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [
         "Dexterity"
@@ -156,7 +156,8 @@
       "effects": [
         {
           "kind": "MoveRow",
-          "target": "Self"
+          "target": "Self",
+          "playerChoosesSlot": true
         },
         {
           "kind": "Draw",
@@ -177,7 +178,7 @@
       "name": "压制连射",
       "owner": "miku",
       "category": "Weapon",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [
         "Dexterity"
@@ -187,7 +188,6 @@
       "charge": 0,
       "hasCrit": true,
       "rulesText": "对单个敌人连续射击2次，每次造成5点物理伤害【暴击】；两次射击分别独立投掷敏捷骰判定暴击。",
-      "behaviourId": "suppressing_volley",
       "effects": [
         {
           "kind": "Damage",
@@ -196,7 +196,8 @@
             "add": 5
           },
           "element": "Physical",
-          "target": "SingleEnemy"
+          "target": "SingleEnemy",
+          "rollsOwnCrit": true
         },
         {
           "kind": "Damage",
@@ -205,7 +206,8 @@
             "add": 5
           },
           "element": "Physical",
-          "target": "SingleEnemy"
+          "target": "SingleEnemy",
+          "rollsOwnCrit": true
         }
       ],
       "weaponBaseDamage": 7,
@@ -221,7 +223,7 @@
       "name": "交叉火力网",
       "owner": "miku",
       "category": "Class",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [
         "Dexterity",
@@ -254,7 +256,7 @@
       "name": "鹰眼锁定",
       "owner": "miku",
       "category": "Class",
-      "kind": "Continuous",
+      "play": "Continuous",
       "classId": "浪客",
       "colors": [
         "Dexterity",
@@ -277,7 +279,7 @@
       "name": "穿云狙击",
       "owner": "miku",
       "category": "Class",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [
         "Dexterity",
@@ -311,7 +313,7 @@
       "name": "游击速射",
       "owner": "miku",
       "category": "Weapon",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [
         "Dexterity"
@@ -346,7 +348,7 @@
       "name": "连珠箭雨",
       "owner": "miku",
       "category": "Weapon",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [
         "Dexterity"
@@ -380,7 +382,7 @@
       "name": "翻滚披风",
       "owner": "miku",
       "category": "Armor",
-      "kind": "Timing",
+      "play": "Timing",
       "classId": "浪客",
       "colors": [],
       "ap": 0,
@@ -403,7 +405,7 @@
       "name": "战术隐蔽",
       "owner": "miku",
       "category": "Armor",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [],
       "ap": 1,
@@ -412,7 +414,17 @@
       "hasCrit": false,
       "rulesText": "获得7点物理护盾；若打出时自身处于后排，本轮敌方的常规单体攻击意图无法将你选为目标。",
       "behaviourId": "tactical_concealment",
-      "effects": [],
+      "effects": [
+        {
+          "kind": "GainShield",
+          "amount": {
+            "source": "Flat",
+            "add": 7
+          },
+          "shieldKind": "Physical",
+          "target": "Self"
+        }
+      ],
       "armorBaseShield": 7,
       "shieldKind": "Physical",
       "unmapped": {
@@ -425,7 +437,7 @@
       "name": "顺风充能",
       "owner": "miku",
       "category": "Treasure",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [],
       "ap": 0,
@@ -434,19 +446,29 @@
       "hasCrit": false,
       "rulesText": "抽1张牌，并将此牌直接置入自己或任意队友的充能区，不占用每轮1次的贴充能动作限额。",
       "behaviourId": "tailwind_charge",
-      "effects": [],
+      "effects": [
+        {
+          "kind": "Draw",
+          "amount": {
+            "source": "Flat",
+            "add": 1
+          },
+          "target": "Self"
+        }
+      ],
       "unmapped": {
         "ranged": false,
         "can_target_self": true
       },
-      "art": "cards/tailwind_charge"
+      "art": "cards/tailwind_charge",
+      "targeting": "Ally"
     },
     {
       "id": "verdant_wind_arrow",
       "name": "翠风箭附",
       "owner": "miku",
       "category": "Treasure",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [
         "Dexterity"

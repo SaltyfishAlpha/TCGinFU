@@ -5,7 +5,8 @@
       "name": "瞬影突袭",
       "owner": "miku",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [
         "Dexterity"
@@ -40,7 +41,8 @@
       "name": "暗夜剔骨",
       "owner": "miku",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [
         "Dexterity",
@@ -49,6 +51,10 @@
       "ap": 1,
       "mp": 5,
       "charge": 0,
+      "chargeOptions": [
+        0,
+        1
+      ],
       "hasCrit": true,
       "rulesText": "造成B_atk+4点物理伤害【暴击】（本5级构筑为12点）；若消耗1个充能指示物，本次攻击必定暴击且抽1张牌。",
       "behaviourId": "night_eviscerate",
@@ -76,7 +82,8 @@
       "name": "盗贼戏法",
       "owner": "miku",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Skill",
       "classId": "浪客",
       "colors": [
         "Insight"
@@ -93,14 +100,16 @@
         "ranged": false,
         "can_target_self": true
       },
-      "art": "cards/thieves_trick"
+      "art": "cards/thieves_trick",
+      "targeting": "Ally"
     },
     {
       "id": "smoke_decoy",
       "name": "烟幕替身",
       "owner": "miku",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Timing",
       "classId": "浪客",
       "colors": [
         "Dexterity"
@@ -135,7 +144,8 @@
       "name": "追风连矢",
       "owner": "miku",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Skill",
       "classId": "神射手",
       "colors": [
         "Dexterity"
@@ -170,7 +180,8 @@
       "name": "死神裁决",
       "owner": "miku",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Skill",
       "classId": "神射手",
       "colors": [
         "Dexterity",
@@ -207,7 +218,8 @@
       "name": "箭雨覆盖",
       "owner": "miku",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Skill",
       "classId": "神射手",
       "colors": [
         "Dexterity",
@@ -243,7 +255,8 @@
       "name": "风墙反制",
       "owner": "miku",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Timing",
       "classId": "神射手",
       "colors": [
         "Insight"
@@ -289,7 +302,8 @@
       "name": "视界奇点",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Insight",
@@ -325,7 +339,8 @@
       "name": "无常大轮盘",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Insight",
@@ -361,7 +376,8 @@
       "name": "噬魂狂宴",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Willpower"
@@ -371,7 +387,6 @@
       "charge": 0,
       "hasCrit": false,
       "rulesText": "对单个目标造成B_atk点暗属性伤害（本5级构筑为7点），全队所有角色回复6 HP与10 MP。",
-      "behaviourId": "soul_devouring_feast",
       "effects": [
         {
           "kind": "Damage",
@@ -381,6 +396,22 @@
           },
           "element": "Dark",
           "target": "SingleEnemy"
+        },
+        {
+          "kind": "Heal",
+          "amount": {
+            "source": "Flat",
+            "add": 6
+          },
+          "target": "AllAllies"
+        },
+        {
+          "kind": "RestoreMp",
+          "amount": {
+            "source": "Flat",
+            "add": 10
+          },
+          "target": "AllAllies"
         }
       ],
       "formId": "cosmic",
@@ -396,7 +427,8 @@
       "name": "时间悖论",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Timing",
       "classId": "混沌法师",
       "colors": [
         "Insight"
@@ -440,7 +472,8 @@
       "name": "元素增殖炸弹",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Skill",
       "classId": "造物使",
       "colors": [
         "Insight"
@@ -475,7 +508,8 @@
       "name": "贤者之石解放",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Skill",
       "classId": "造物使",
       "colors": [
         "Insight",
@@ -493,14 +527,16 @@
         "ranged": false,
         "can_target_self": true
       },
-      "art": "cards/philosophers_stone_release"
+      "art": "cards/philosophers_stone_release",
+      "targeting": "Ally"
     },
     {
       "id": "aether_reassembly_crucible",
       "name": "以太重组坩埚",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Skill",
       "classId": "造物使",
       "colors": [
         "Insight"
@@ -516,14 +552,16 @@
       "unmapped": {
         "ranged": false
       },
-      "art": "cards/aether_reassembly_crucible"
+      "art": "cards/aether_reassembly_crucible",
+      "targeting": "Ally"
     },
     {
       "id": "alchemical_protection_field",
       "name": "炼金防护力场",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Form",
+      "role": "Form",
+      "play": "Timing",
       "classId": "造物使",
       "colors": [
         "Insight"
@@ -534,26 +572,7 @@
       "hasCrit": false,
       "rulesText": "敌人阶段打出，为前排全体或后排全体提供B_def点全能护盾（本5级构筑为8点），并移除每名受保护角色身上的1个负面状态。",
       "behaviourId": "alchemical_protection_field",
-      "effects": [
-        {
-          "kind": "GainShield",
-          "amount": {
-            "source": "FormDefense",
-            "add": 0
-          },
-          "shieldKind": "Physical",
-          "target": "SingleAlly"
-        },
-        {
-          "kind": "GainShield",
-          "amount": {
-            "source": "FormDefense",
-            "add": 0
-          },
-          "shieldKind": "Magical",
-          "target": "SingleAlly"
-        }
-      ],
+      "effects": [],
       "formId": "alchemy",
       "unmapped": {
         "ranged": false,

@@ -82,6 +82,17 @@ namespace TCGinFU.View
                     Close();
                     captured?.Invoke();
                 });
+
+                // 没有动作的条目是「摆出来让玩家知道这事存在、但此刻做不了」
+                // （「（已替 X 分摊）」「充能换 1 AP——没有充能」）。
+                // 不置灰的话它看着和能点的一模一样，点下去菜单还会关掉，像是坏了
+                if (captured == null)
+                {
+                    button.interactable = false;
+                    Text text = button.GetComponentInChildren<Text>();
+                    if (text != null) text.color = new Color(1f, 1f, 1f, 0.45f);
+                }
+
                 _buttons.Add(button.gameObject);
             }
 

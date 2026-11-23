@@ -27,7 +27,8 @@
         "phaseTwo": [
           "time_guillotine",
           "fate_turbulence",
-          "causal_erasure"
+          "causal_erasure",
+          "zero_collapse"
         ]
       },
       "intents": [
@@ -183,17 +184,17 @@
           "category": "分摊死刑",
           "damage": 24,
           "element": "Physical",
-          "targeting": "DefaultSingle",
+          "targeting": "HighestHpSingle",
           "designatedRow": "Front",
           "hits": 1,
+          "shareable": true,
           "text": "当前HP最高者受到24点物理伤害；可在响应时由相邻队友分摊，两人各12点并分别抵扣护盾。",
           "unmapped": {
             "target": "highest_hp",
             "damageClass": "physical",
             "mp": 0,
             "pierce": false
-          },
-          "behaviourId": "causal_erasure"
+          }
         },
         {
           "id": "zero_collapse",

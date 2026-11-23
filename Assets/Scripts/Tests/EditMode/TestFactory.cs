@@ -61,7 +61,7 @@ namespace TCGinFU.Core.Tests
             int damage = 5,
             bool hasCrit = false,
             params AttributeColor[] colors)
-            => new(id, id, CardCategory.Weapon, CardKind.Skill)
+            => new(id, id, CardCategory.Weapon, CardPlay.Skill)
             {
                 ApCost = apCost,
                 MpCost = mpCost,
@@ -70,29 +70,43 @@ namespace TCGinFU.Core.Tests
                 Effects = new[] { EffectData.Damage(ValueExpr.Flat(damage)) },
             };
 
-        public static CardDefinition FormStrike(string id = "form_strike", int bonus = 4)
-            => new(id, id, CardCategory.Class, CardKind.Form)
+        /// <summary>形态牌。「形态」是标记，打法另算——这张是「形态 · 技能」。</summary>
+        public static CardDefinition FormStrike(
+            string id = "form_strike",
+            int bonus = 4,
+            CardPlay play = CardPlay.Skill,
+            string formId = "test_form")
+            => new(id, id, CardCategory.Class, play)
             {
+                Role = CardRole.Form,
+                FormId = formId,
                 ApCost = 1,
                 Colors = new[] { AttributeColor.Might },
                 Effects = new[] { EffectData.Damage(ValueExpr.FormAttack(bonus)) },
             };
 
+        /// <summary>升变牌。不按打法结算，所以没有打法。</summary>
         public static CardDefinition TransformCard(
             string id = "transform",
             string classId = "浪客",
             TransformTrigger trigger = TransformTrigger.Immediate)
-            => new(id, id, CardCategory.Class, CardKind.Transform)
+            => new(id, id, CardCategory.Class, play: null)
             {
+                Role = CardRole.Transform,
                 ClassId = classId,
                 TransformTrigger = trigger,
                 Colors = new[] { AttributeColor.Dexterity },
             };
 
-        /// <summary>英雄技能牌：§3.3 要求所属职业满 10 级精通才能编入。</summary>
-        public static CardDefinition HeroCard(string id = "hero", string classId = "浪客")
-            => new(id, id, CardCategory.Class, CardKind.Hero)
+        /// <summary>
+        /// 英雄技能牌：§3.3 要求所属职业满 10 级精通才能编入。
+        /// 「英雄技能」是职业牌上的标记，不是打法——它照样可以是任意打法。
+        /// </summary>
+        public static CardDefinition HeroCard(
+            string id = "hero", string classId = "浪客", CardPlay play = CardPlay.Skill)
+            => new(id, id, CardCategory.Class, play)
             {
+                IsHeroSkill = true,
                 ClassId = classId,
                 ApCost = 3,
                 Colors = new[] { AttributeColor.Dexterity },
@@ -100,7 +114,7 @@ namespace TCGinFU.Core.Tests
             };
 
         public static CardDefinition FillerCard(string id)
-            => new(id, id, CardCategory.Class, CardKind.Skill) { ApCost = 1 };
+            => new(id, id, CardCategory.Class, CardPlay.Skill) { ApCost = 1 };
 
         /// <summary>给角色的主卡组塞 n 张占位牌，让抽牌不会抽空。</summary>
         public static void FillDeck(PlayerCharacter player, int count, CardDefinition def = null)

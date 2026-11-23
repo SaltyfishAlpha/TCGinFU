@@ -257,7 +257,9 @@ BattleLayoutAsset (ScriptableObject)
 | 拖手牌到角色卡上 | 对这个目标打出（与菜单「打出」等价） | `HandleCombatantDrop` |
 | 升变宣告窗口里拖升变牌到**自己**的角色卡 | 发动升变 | `CombatantAcceptsCard` / `HandleCombatantDrop` |
 | 左键点角色卡 | 敌人 → 设为出牌目标；队友 → 切换当前操作角色 | `HandleCombatantClick` |
-| 右键 / 长按角色卡 | 角色详情 | `CombatantView.ContextHandler` / `LongPressHandler` |
+| 右键我方角色卡 | 菜单：`充能换 1 AP` / `充能回复 5 MP` / `替 X 分摊` / `查看详情` | `OnCombatantContextMenu` → `ChargeOptionsFor` / `ShareOptionsFor` |
+| 右键敌方角色卡 | 菜单：`设为目标` / `查看详情` | `OnCombatantContextMenu` |
+| 长按角色卡 | 角色详情 | `CombatantView.LongPressHandler` |
 | 拖自己的角色卡到我方另一排 | 走位，弹确认（「消耗 1 AP」或「免费（剩 N 次）」） | `OnCombatantEndDrag` → `MoveRowAction` |
 | 点弃牌堆 / 持续区 | 摊开查看 | `HandleZoneClick` |
 | F1 | 开关调试浮层 | `BattleDebugOverlay` |
@@ -265,6 +267,18 @@ BattleLayoutAsset (ScriptableObject)
 
 右键菜单的「打出」目标：指向队友的牌（`BattleSession.NeedsAllyTarget`）打给**自己**，
 其余打给当前选中的敌人。要对某个队友打出，用拖拽。
+
+**右键一律出菜单**，手牌和角色卡同一条口径（左键选中 / 长按详情 / 右键菜单 / 拖拽移动或出牌）。
+角色卡以前是「默认直接开详情，只有能分摊时才出菜单」，省掉一次点击，
+代价是充能的两种单独用途在正式界面上根本没有入口（旧 B-15）。
+
+**充能菜单项的主语是被右键的那名角色**，用的是他自己的充能区。
+能不能点**一概问引擎**（`BattleEngine.CanSpendChargeFor(actor, use, out reason)`），
+界面不自己判阶段和数量——各判一份迟早分家，表现出来就是「菜单里有、点下去却被拒」。
+不可用时写成 `(文案——引擎给的理由, null)`，`CardContextMenu` 会把无动作的条目置灰。
+MP 满了**不**禁用，只在文案里加「（MP 已满）」：玩家可能就是想清掉充能区。
+
+充能的第三种用途（支付卡面「消耗 X 个充能」词条）不在这个菜单里，它跟着具体某张牌，在出牌时问（见 §5）。
 
 ### 顶栏
 
@@ -355,7 +369,7 @@ public interface IDropTarget {
 ### 出牌前的玩家选择
 
 右键「打出」和拖拽出牌都走**唯一入口** `BattleView.PlayCardWithChoices`：
-先查 `CardChoiceCatalog.For(cardId)`，有问题就逐个问完，再带着答案提交 `PlayCardAction`。
+先查 `CardChoiceCatalog.For(definition)`，有问题就逐个问完，再带着答案提交 `PlayCardAction`。
 
 - **几选一**（二选一、选元素、消耗几个充能）：弹 `CardContextMenu`；`OptionAvailable` 过滤掉此刻选不了的项，
   `When` 表达依赖（「选了涂油才问元素」）。答案以 `action.With(key, value)` 传给 Lua 的 `ctx.choice(key)`。
@@ -363,13 +377,20 @@ public interface IDropTarget {
   结果以 `action.WithMany("card", uids)` 提交。正在打出的那张不在候选里。
 - 任何一步取消 = 不打出。
 
-目前登记的卡：`emergency_catalyst`（应急催化剂）、`universal_elixir`（调合·万能灵药）、
+**「额外消耗几个充能？」这一问不在 `Table` 里**，而是照卡面的 `chargeOptions` 字段
+（见 [data_architecture.md](data_architecture.md)）现生成，并**排在所有问题最前面**——
+后面的问题可能依赖它（万能灵药消耗 2 个时两项都生效，就不该再问「二选一选哪项」）。
+答案填进 `PlayCardAction.ChargeForEffect`，引擎按同一个 `chargeOptions` 校验。
+带这种词条的牌会越来越多，每张都在表现层写死一份迟早会漏——漏掉的表现正是旧 B-15。
+
+`Table` 里登记的卡：`emergency_catalyst`（应急催化剂）、`universal_elixir`（调合·万能灵药）、
 `thieves_trick`（盗贼戏法）、`aether_reassembly_crucible`（以太重组坩埚）。
 
 > ⚠ **选牌的后端没接**（[known_issues.md](known_issues.md) B-2）：界面会把选中的牌传下去，但引擎的 `ChargeFromZone`
 > 仍然取弃牌堆顶 / 手牌底，不读选择结果。上面三张挑牌的卡「挑了也白挑」。
 >
-> 「消耗几个充能」暂时借道 `PlayCardAction` 的 `chargeForMp` 参数（见 `SubmitPlay` 注释与 `ui_todo_handoff.md` §2）。
+> ⚠ **还有两张形态牌没登记**（B-17）：元素增殖炸弹读 `ctx.choice("element")`、
+> 炼金防护力场读 `ctx.choice("row")`，`Table` 里没有它们，于是永远用默认值。
 >
 > 键名是表现层单方面的约定：`CardChoiceCatalog` 的 key 必须和 `scripts/*.lua` 里 `ctx.choice(...)` 读的一致，
 > 对不上不报错，只会静默退回脚本默认值。
@@ -426,22 +447,35 @@ public interface IDropTarget {
 
 ### 出牌演出：`CardShowcase`
 
-谁打出一张牌，就在画面**左侧**把卡面亮出来约 1.4 秒（淡入 0.12 / 停 1.05 / 淡出 0.25）。
-首领行动尤其需要这一下——只在战报里多一行字，玩家来不及意识到刚才发生了什么。
+谁要打一张牌，就在画面**左侧**把卡面亮出来。卡面同样来自 `CardPreviewStage`，但**单开一座棚子**：
+和详情面板共用的话，打牌时正好开着详情就会两边抢同一张 `RenderTexture`。
 
-- 卡面同样来自 `CardPreviewStage`，但**单开一座棚子**：和详情面板共用的话，
-  打牌时正好开着详情就会两边抢同一张 `RenderTexture`。
-- 整块 `CanvasGroup` 的 `blocksRaycasts = false`——它是在你出牌之后弹出来的，挡住操作就成了负担。
-- 队列上限 4，满了丢最早的：一次敌人阶段可能连续结算好几条意图，排太长会拖到玩家早该操作的时候。
+**玩家的牌和敌人的牌挂在不同的事件上，因为要亮的时机不同：**
+
+| 谁 | 事件 | 时机 | 时长 |
+| ----- | ----- | ----- | ----- |
+| 玩家 | `CardPlayed` | 打出时 | 闪一下（淡入 0.12 / 停 1.05 / 淡出 0.25） |
+| 敌人 | `IntentDeclared` | **响应窗口打开的那一刻** | **钉住**，直到窗口关闭才淡出 |
+
+敌人这条是关键：`IntentDeclared` 在 `OpenNextIntentWindow()` 里、设 `Pending` 之**前**发出，
+所以玩家是先看到首领打的是哪张牌，再决定打不打时机牌。敌人也发 `CardPlayed`，
+但那是响应窗口关闭、伤害结算完之后的事——那时亮出来只剩「回去翻战报」的价值，所以演出不看它。
+
+钉住而不是定时淡出，也是同一个道理：响应窗口会一直开着等玩家，
+定时淡出等于逼他想得久一点就得去翻战报。`Hold()` 把计时卡在完全不透明那一刻，`Release()` 接上淡出。
+
+- 整块 `CanvasGroup` 的 `blocksRaycasts = false`——演出不该挡住操作。
+- 队列上限 4，满了丢最早的；`Hold()` 直接清空队列：此刻最要紧的是「首领要干什么」。
 - **特效还没有。** 现在只负责「亮出来、停一下、收回去」，等特效系统到位时挂在 `CardShowcase.Play` 里。
 
 **状态走 `Refresh` 整体重建，演出走事件。** 「现在手里有哪些牌」是状态；
 「刚才打出了什么」只有事件说得清——等 `Refresh` 跑完，那张牌早就离开手牌进弃牌堆了。
-`BattleView.DrainPlayedCards()` 在引擎只追加的 `Events` 表上记一个游标，
-每次刷新取出新的 `CardPlayed` 送进队列；换引擎（重开一局）时游标归零。
+`BattleView.DrainPresentationEvents()` 在引擎只追加的 `Events` 表上记一个游标，
+每次刷新取出新事件；换引擎（重开一局）时游标归零。
+一次提交里可能连着开过好几个响应窗口（前一条意图结算完就开下一条），所以只留最后一条 `IntentDeclared`。
 
-> 玩家出牌和敌人意图发的是**同一条** `CardPlayed`，所以这里不分两种情况。
-> 这是 2026-11-22 补上的：`PlayIntentCard` 以前不发事件，战报里也看不到敌人打出了哪张牌。
+> 2026-11-23 补的两处 Core 缺口：`PlayIntentCard` 以前不发 `CardPlayed`，战报里看不到敌人打出了哪张牌；
+> `IntentDeclared` 是新加的事件类型，专门给「响应窗口开了」这个时机。
 
 ### 卡图：`CardArtLibrary`
 
@@ -483,8 +517,8 @@ ApplyChargeTargetingHighlights()       选充能目标时的高亮（必须在�
 卡牌视图按 `CardInstance.Uid` 字典缓存 + 对象池，角色视图按 `Combatant.Id` 缓存，
 所以刷新不会每帧 `Instantiate`。除角色卡的 `SlideTween` 外没有补间——**先把状态显示对，动效之后再说**。
 
-**重建只管状态，不管演出。** `Refresh()` 开头调一次 `DrainPlayedCards()`，
-从引擎的事件表里取新的 `CardPlayed` 送去 `CardShowcase`（见 §5）。
+**重建只管状态，不管演出。** `Refresh()` 开头调一次 `DrainPresentationEvents()`，
+从引擎的事件表里取新的 `CardPlayed` / `IntentDeclared` 送去 `CardShowcase`（见 §5）。
 这是全部的事件消费——其余一切仍然是「动作之后整体重建」。
 
 ---

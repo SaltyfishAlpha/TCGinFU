@@ -57,6 +57,15 @@ namespace TCGinFU.Core
 
         public int IncomingMultiplierDenominator { get; set; }
 
+        /// <summary>
+        /// 挂着期间宿主对该属性**易损**（最终伤害 ×2）。null 表示不改克制。
+        ///
+        /// <para>「令目标获得该元素的【易损】状态」（元素增殖炸弹）要的是临时弱点，
+        /// 而 <see cref="Combatant.Affinities"/> 是建角色时定死的。
+        /// 走状态层才能让它按轮过期，也才能被「移除1个负面状态」清掉。</para>
+        /// </summary>
+        public DamageElement? VulnerableElement { get; set; }
+
         public bool IsPermanent => Duration < 0;
         public bool IsExpired => Duration == 0;
 
@@ -110,6 +119,10 @@ namespace TCGinFU.Core
 
         /// <summary>暴击抵抗线的总修正。</summary>
         public int SumCritResistDelta => _statuses.Sum(s => s.CritResistDelta);
+
+        /// <summary>有没有状态让宿主对 <paramref name="element"/> 易损。</summary>
+        public bool IsVulnerableTo(DamageElement element)
+            => _statuses.Any(s => s.VulnerableElement == element);
 
         /// <summary>
         /// 受到伤害的总倍率（多个状态连乘）。没有任何倍率状态时返回 (1,1)。

@@ -22,6 +22,9 @@ namespace TCGinFU.Core
                 BattleEventType.PhaseChanged => $"  [{e.Text}]",
                 BattleEventType.IntentRevealed =>
                     $"  {Name(e.ActorId)} 意图：{e.Text}" + (e.Amount > 0 ? $"（{e.Amount} 点）" : ""),
+                BattleEventType.IntentDeclared =>
+                    $"  {Name(e.ActorId)} 宣告「{e.Text}」" + (e.Amount > 0 ? $"（{e.Amount} 点）" : "")
+                    + (e.TargetId != null ? $" → {Name(e.TargetId)}" : "") + "，响应窗口打开",
                 BattleEventType.CardDrawn => $"  {Name(e.ActorId)} 抽 {e.Amount} 张",
                 BattleEventType.DeckReshuffled => $"  {Name(e.ActorId)} 弃牌堆洗回卡组",
                 BattleEventType.CardPlayed =>

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using TCGinFU.Core;
 using TCGinFU.Presentation;
 using UnityEngine;
@@ -168,7 +169,7 @@ namespace TCGinFU.View
                 _face.SetVisible(true);
                 _nameText.text = def.Name;
                 _costText.text = costText ?? BattleSession.CostText(def);
-                _typeText.text = $"{Short(def.Category)}·{Short(def.Kind)}";
+                _typeText.text = TypeLine(def);
             }
 
             SetHighlight(CardHighlight.正常);
@@ -343,9 +344,9 @@ namespace TCGinFU.View
         /// <para>分类刻意粗——兜底图的作用只是「让这张牌看起来像张牌」，
         /// 不是表达卡义。真卡图一到位（<c>art: cards/&lt;卡id&gt;</c>）就会盖过它。</para>
         /// </summary>
-        public static string FallbackKeyOf(CardDefinition def) => def.Kind switch
+        public static string FallbackKeyOf(CardDefinition def) => def.Role switch
         {
-            CardKind.Transform => "transform",
+            CardRole.Transform => "transform",
             _ when def.Category == CardCategory.Armor => "guard",
             _ when def.DealsDamage => "attack",
             _ => "spell",
@@ -371,15 +372,36 @@ namespace TCGinFU.View
             _ => "?",
         };
 
-        public static string Short(CardKind kind) => kind switch
+        public static string Short(CardPlay play) => play switch
         {
-            CardKind.Skill => "技能",
-            CardKind.Timing => "时机",
-            CardKind.Continuous => "持续",
-            CardKind.Transform => "升变",
-            CardKind.Form => "形态",
-            CardKind.Hero => "英雄",
+            CardPlay.Skill => "技能",
+            CardPlay.Timing => "时机",
+            CardPlay.Continuous => "持续",
             _ => "?",
         };
+
+        public static string Short(CardRole role) => role switch
+        {
+            CardRole.Transform => "升变",
+            CardRole.Form => "形态",
+            CardRole.EnemyIntent => "意图",
+            _ => null,
+        };
+
+        /// <summary>
+        /// 卡面上那行类型文字。类别与打法是两个维度，中间夹标记，例如
+        /// 「职业·形态·时机」「防具·技能」「职业·升变」（升变牌没有打法）。
+        /// </summary>
+        public static string TypeLine(CardDefinition def)
+        {
+            var parts = new List<string> { Short(def.Category) };
+
+            string role = Short(def.Role);
+            if (role != null) parts.Add(role);
+            if (def.IsHeroSkill) parts.Add("英雄");
+            if (def.Play.HasValue) parts.Add(Short(def.Play.Value));
+
+            return string.Join("·", parts);
+        }
     }
 }

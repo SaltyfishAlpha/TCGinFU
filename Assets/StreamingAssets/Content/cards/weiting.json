@@ -5,7 +5,7 @@
       "name": "星穹坍缩",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Transform",
+      "role": "Transform",
       "classId": "混沌法师",
       "colors": [
         "Insight",
@@ -28,7 +28,7 @@
       "name": "真理炼金矩阵",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Transform",
+      "role": "Transform",
       "classId": "造物使",
       "colors": [
         "Insight"
@@ -50,7 +50,7 @@
       "name": "灵智回流·常驻",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Continuous",
+      "play": "Continuous",
       "classId": "混沌法师",
       "colors": [
         "Insight",
@@ -73,7 +73,7 @@
       "name": "苦痛转导",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Willpower"
@@ -95,7 +95,7 @@
       "name": "命运锚点·七",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Insight"
@@ -117,7 +117,7 @@
       "name": "幸运改命",
       "owner": "weiting",
       "category": "Armor",
-      "kind": "Timing",
+      "play": "Timing",
       "classId": "混沌法师",
       "colors": [
         "Insight"
@@ -142,7 +142,7 @@
       "name": "熵之轮盘·无常命运",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Insight",
@@ -171,7 +171,7 @@
       "name": "暗言术·活力汲取",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Insight",
@@ -204,7 +204,7 @@
       "name": "深渊虹吸·活力汲取贰式",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Insight",
@@ -237,7 +237,7 @@
       "name": "调合·万能灵药",
       "owner": "weiting",
       "category": "Class",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Insight"
@@ -245,6 +245,10 @@
       "ap": 1,
       "mp": 0,
       "charge": 0,
+      "chargeOptions": [
+        1,
+        2
+      ],
       "hasCrit": false,
       "rulesText": "打出时需消耗1个充能指示物，从以下两项炼金效果中二选一；若消耗2个充能指示物则两项同时生效。①生命灵药：令1名我方角色回复10 HP与10 MP。②元素涂油：令1名我方角色本轮所有攻击附加指定元素属性（火／冰／雷／风／毒任选），且本轮造成的伤害+3。",
       "behaviourId": "universal_elixir",
@@ -253,14 +257,15 @@
         "ranged": false,
         "can_target_self": true
       },
-      "art": "cards/universal_elixir"
+      "art": "cards/universal_elixir",
+      "targeting": "Ally"
     },
     {
       "id": "emergency_catalyst",
       "name": "应急催化剂",
       "owner": "weiting",
       "category": "Armor",
-      "kind": "Timing",
+      "play": "Timing",
       "classId": "混沌法师",
       "colors": [
         "Insight"
@@ -277,14 +282,15 @@
       "unmapped": {
         "ranged": false
       },
-      "art": "cards/emergency_catalyst"
+      "art": "cards/emergency_catalyst",
+      "targeting": "Ally"
     },
     {
       "id": "weakness_analysis",
       "name": "弱点解析",
       "owner": "weiting",
       "category": "Weapon",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Insight"
@@ -319,7 +325,7 @@
       "name": "秘法冲击",
       "owner": "weiting",
       "category": "Weapon",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Insight"
@@ -354,7 +360,7 @@
       "name": "奥术结界",
       "owner": "weiting",
       "category": "Armor",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [],
       "ap": 1,
@@ -363,7 +369,17 @@
       "hasCrit": false,
       "rulesText": "获得7点魔法护盾，并使自身充能区上限在本轮及下一轮临时+1。",
       "behaviourId": "arcane_barrier",
-      "effects": [],
+      "effects": [
+        {
+          "kind": "GainShield",
+          "amount": {
+            "source": "Flat",
+            "add": 7
+          },
+          "shieldKind": "Magical",
+          "target": "Self"
+        }
+      ],
       "armorBaseShield": 7,
       "shieldKind": "Physical",
       "unmapped": {
@@ -376,7 +392,7 @@
       "name": "睿智法袍",
       "owner": "weiting",
       "category": "Armor",
-      "kind": "Timing",
+      "play": "Timing",
       "classId": "混沌法师",
       "colors": [],
       "ap": 0,
@@ -399,7 +415,7 @@
       "name": "痛觉铭刻",
       "owner": "weiting",
       "category": "Treasure",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Willpower"
@@ -410,17 +426,7 @@
       "hasCrit": false,
       "rulesText": "立即对自身造成2点无视护盾的刺痛伤害；若【魔力激发卷轴】处于关闭状态，则同时将其免费切换为【激活】状态。回复10 MP并抽1张牌。",
       "behaviourId": "pain_inscription",
-      "effects": [
-        {
-          "kind": "Damage",
-          "amount": {
-            "source": "Flat",
-            "add": 2
-          },
-          "element": "Dark",
-          "target": "Self"
-        }
-      ],
+      "effects": [],
       "unmapped": {
         "ranged": false,
         "self_damage": 2
@@ -432,7 +438,7 @@
       "name": "魔力过载仪式",
       "owner": "weiting",
       "category": "Treasure",
-      "kind": "Skill",
+      "play": "Skill",
       "classId": "混沌法师",
       "colors": [
         "Insight",

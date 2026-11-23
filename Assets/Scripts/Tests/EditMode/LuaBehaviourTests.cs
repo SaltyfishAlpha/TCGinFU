@@ -254,7 +254,13 @@ namespace TCGinFU.Tests
             // 卡面「压制连射」：「两次射击**分别独立**投掷敏捷骰判定暴击」。
             // 老引擎每次打牌只投一次骰，两段共享结果——数值期望对，但手感与卡面承诺不符。
             // 这里验的是「两段的暴击结果会出现不一致」，也就是确实分开投了。
-            CardDefinition def = WithOwnCrit(_db.Card("suppressing_volley"));
+            //
+            // 用**内容包里的卡原样**，不再在用例里现场补 rollsOwnCrit：
+            // 以前那样做等于测试自己把漏写的字段补上了，于是 JSON 里一处没设也照样全绿。
+            CardDefinition def = _db.Card("suppressing_volley");
+
+            Assert.That(def.Effects.Where(e => e.Kind == EffectKind.Damage).All(e => e.RollsOwnCrit),
+                Is.True, "卡面 JSON 里每一段伤害都该标上 rollsOwnCrit，否则两段共用一次掷骰");
 
             bool sawSplit = false;
             for (int seed = 1; seed <= 40 && !sawSplit; seed++)
@@ -627,7 +633,10 @@ namespace TCGinFU.Tests
                 }
 
                 int before = player.Zones.Charges.Count;
-                engine.SpendCharge(player, ChargeUse.ConvertToAp);
+
+                // 卡面写的是「每当消耗充能指示物时」，没分用途——
+                // 三种用途轮着来，免得把钩子拆到只剩其中一条路上（充能转 MP 独立成动作时的风险）
+                engine.SpendCharge(player, (ChargeUse)(seed % 3));
 
                 if (player.Zones.Charges.Count == before) retained = true;
                 else discarded = true;
@@ -692,7 +701,7 @@ namespace TCGinFU.Tests
                 foreach (KeyValuePair<string, EnemyIntent> pair in enemy.Intents)
                 {
                     if (pair.Value.Card == null) { missing.Add($"{pair.Key}：没有对应的牌"); continue; }
-                    if (pair.Value.Card.Kind != CardKind.Enemy) missing.Add($"{pair.Key}：kind 不是 Enemy");
+                    if (pair.Value.Card.Role != CardRole.EnemyIntent) missing.Add($"{pair.Key}：role 不是 EnemyIntent");
                 }
             }
 
@@ -805,7 +814,7 @@ namespace TCGinFU.Tests
             var report = new ScriptLoadReport();
             host.Load("behaviour('spin', { on_play = function(ctx) while true do end end })", "spin.lua", report);
 
-            var def = new CardDefinition("spin_card", "死循环", CardCategory.Class, CardKind.Skill)
+            var def = new CardDefinition("spin_card", "死循环", CardCategory.Class, CardPlay.Skill)
             {
                 ApCost = 1,
                 BehaviourId = "spin",
@@ -873,7 +882,7 @@ namespace TCGinFU.Tests
             host.BuildRegistry(_db.DeclaredBehaviourIds, report);
 
             var missing = new List<string>();
-            foreach (CardDefinition card in _db.Cards.Values.Where(c => c.Kind == CardKind.Transform))
+            foreach (CardDefinition card in _db.Cards.Values.Where(c => c.Role == CardRole.Transform))
             {
                 if (!report.Registered.TryGetValue(card.BehaviourId ?? "", out List<string> hooks))
                 {
@@ -1035,7 +1044,7 @@ namespace TCGinFU.Tests
         {
             // 费用位永远是个数字才好一眼横向比较；写「免费」还容易被看成「这里没加载出来」
             string text = BattleSession.CostText(
-                new CardDefinition("x", "x", CardCategory.Treasure, CardKind.Skill));
+                new CardDefinition("x", "x", CardCategory.Treasure, CardPlay.Skill));
 
             Assert.That(text, Is.EqualTo("0"));
             Assert.That(text, Does.Not.Contain("免费"));
@@ -1083,7 +1092,7 @@ namespace TCGinFU.Tests
                 "behaviour('pricey', { on_cost = function(cost, me) cost.mp = cost.mp + 3 end })",
                 "pricey.lua", report);
 
-            var def = new CardDefinition("pricey_card", "贵牌", CardCategory.Class, CardKind.Skill)
+            var def = new CardDefinition("pricey_card", "贵牌", CardCategory.Class, CardPlay.Skill)
             {
                 ApCost = 1,
                 MpCost = 5,
@@ -1304,38 +1313,8 @@ namespace TCGinFU.Tests
             return crits;
         }
 
-        /// <summary>把每条伤害效果标成「各自投骰」，验 R-23 用。</summary>
-        private static CardDefinition WithOwnCrit(CardDefinition source)
-        {
-            var effects = source.Effects
-                .Select(e => new EffectData
-                {
-                    Kind = e.Kind,
-                    Amount = e.Amount,
-                    Target = e.Target,
-                    Element = e.Element,
-                    ShieldKind = e.ShieldKind,
-                    StatusId = e.StatusId,
-                    Duration = e.Duration,
-                    Condition = e.Condition,
-                    RollsOwnCrit = e.Kind == EffectKind.Damage,
-                })
-                .ToArray();
-
-            return new CardDefinition(source.Id, source.Name, source.Category, source.Kind)
-            {
-                Colors = source.Colors,
-                ApCost = source.ApCost,
-                MpCost = 0,
-                HasCrit = source.HasCrit,
-                IsRanged = source.IsRanged,
-                BehaviourId = source.BehaviourId,
-                Effects = effects,
-            };
-        }
-
         private static CardDefinition Bomb(string behaviourId)
-            => new("bomb", "炸弹", CardCategory.Class, CardKind.Skill)
+            => new("bomb", "炸弹", CardCategory.Class, CardPlay.Skill)
             {
                 ApCost = 1,
                 BehaviourId = behaviourId,
@@ -1345,7 +1324,7 @@ namespace TCGinFU.Tests
 
         private List<CardInstance> FormCardsFor(string transformCardId, PlayerCharacter owner)
             => _db.Cards.Values
-                .Where(c => c.Kind == CardKind.Form)
+                .Where(c => c.Role == CardRole.Form)
                 .Take(DeckList.FormDeckSize)
                 .Select(c => new CardInstance(c, owner.Id))
                 .ToList();

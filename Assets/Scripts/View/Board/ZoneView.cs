@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Linq;
+using TCGinFU.Core;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -39,6 +41,17 @@ namespace TCGinFU.View
     {
         /// <summary>区域里摆着的东西。卡和角色卡都是卡，统一按卡位排布。</summary>
         private readonly List<Transform> _items = new();
+
+        /// <summary>
+        /// 角色区专用：按 <see cref="Combatant.Slot"/> 定位的 4 个固定卡位（裁定 R-17）。
+        ///
+        /// <para>不能和 <see cref="_items"/> 一样按加入顺序摆——槽位决定 §4.3 的「正前方同列」，
+        /// 紧凑居中会让画面上挨着的两个人在引擎里判不相邻，援护能不能成立就成了玄学。</para>
+        /// </summary>
+        private readonly Transform[] _slotted = new Transform[Battlefield.SlotsPerRow];
+
+        /// <summary>走位提示用的逐槽高亮框，只在拖拽走位期间亮起。</summary>
+        private readonly Transform[] _slotMarks = new Transform[Battlefield.SlotsPerRow];
         private readonly List<Transform> _ghosts = new();
         private Transform _plate;
         private Transform _highlight;
@@ -134,17 +147,59 @@ namespace TCGinFU.View
 
         // ──────────────────────────── 内容与排布 ────────────────────────────
 
-        public void BeginRebuild() => _items.Clear();
+        public void BeginRebuild()
+        {
+            _items.Clear();
+            System.Array.Clear(_slotted, 0, _slotted.Length);
+        }
 
         public void Add(CardView card) => AddItem(card.Root);
 
-        public void AddCombatant(CombatantView combatant) => AddItem(combatant.Root);
+        /// <summary>把角色卡放进它在引擎里的那个槽位，而不是追加到队尾。</summary>
+        public void AddCombatant(CombatantView combatant, int slot)
+        {
+            combatant.Root.SetParent(Root, false);
+            if (slot >= 0 && slot < _slotted.Length) _slotted[slot] = combatant.Root;
+        }
 
         private void AddItem(Transform item)
         {
             item.SetParent(Root, false);
             _items.Add(item);
         }
+
+        // ──────────────────────── 角色区的固定槽位 ────────────────────────
+
+        /// <summary>槽位中心在区域局部坐标里的 X。拖拽判定落点、画预览都用它。</summary>
+        public float LocalXForSlot(int slot)
+        {
+            float step = RowStep(Battlefield.SlotsPerRow, SlotSize.x, out float startX);
+            return startX + Mathf.Clamp(slot, 0, Battlefield.SlotsPerRow - 1) * step;
+        }
+
+        /// <summary>槽位中心的世界坐标。<see cref="BattleView"/> 把拖拽中的角色卡吸附到这儿。</summary>
+        public Vector3 WorldPositionForSlot(int slot)
+            => Root.TransformPoint(new Vector3(LocalXForSlot(slot), 0f, SlotLift));
+
+        /// <summary>世界坐标落在哪个槽位上。取横向最近的那个，所以区域里任何一点都有归属。</summary>
+        public int SlotAtWorldPoint(Vector3 world)
+        {
+            float x = Root.InverseTransformPoint(world).x;
+
+            int nearest = 0;
+            float best = float.MaxValue;
+            for (int slot = 0; slot < Battlefield.SlotsPerRow; slot++)
+            {
+                float distance = Mathf.Abs(LocalXForSlot(slot) - x);
+                if (distance >= best) continue;
+                best = distance;
+                nearest = slot;
+            }
+
+            return nearest;
+        }
+
+        private static float SlotLift => CardMeshFactory.CardThickness * CardMeshFactory.TowardCamera * 0.5f;
 
         /// <summary>
         /// 真卡**只按实际张数**排布，所以手牌永远是居中的，间距随张数动态收放。
@@ -155,18 +210,72 @@ namespace TCGinFU.View
         /// </summary>
         public void Arrange()
         {
+            if (Layout.IsCombatantZone)
+            {
+                ArrangeSlotted();
+                return;
+            }
+
             if (_items.Count > 0)
             {
                 List<SlotPose> poses = ComputePoses(_items.Count);
 
                 for (int i = 0; i < _items.Count; i++)
                 {
-                    Apply(_items[i], poses[i], animate: Layout.IsCombatantZone);
+                    Apply(_items[i], poses[i], animate: false);
                     _items[i].gameObject.SetActive(true);
                 }
             }
 
             SyncGhosts();
+        }
+
+        /// <summary>
+        /// 角色区：每人落在自己的槽位上，空槽画占位虚框。
+        /// 卡位数固定为 4，所以同一个槽位在前后排永远对齐成一列。
+        /// </summary>
+        private void ArrangeSlotted()
+        {
+            List<SlotPose> poses = ComputePoses(Battlefield.SlotsPerRow);
+
+            for (int slot = 0; slot < _slotted.Length; slot++)
+            {
+                Transform item = _slotted[slot];
+                if (item == null) continue;
+
+                // 走位要滑过去，不然玩家看不出自己动过
+                Apply(item, poses[slot], animate: true);
+                item.gameObject.SetActive(true);
+            }
+
+            SyncSlotGhosts(poses);
+        }
+
+        /// <summary>
+        /// 空槽的占位虚框。和卡牌区不同，这里**一直**画——
+        /// 玩家得随时看得出「哪里还能站人」，走位才有的可想。
+        /// </summary>
+        private void SyncSlotGhosts(List<SlotPose> poses)
+        {
+            while (_ghosts.Count < Battlefield.SlotsPerRow)
+            {
+                Transform ghost = CardMeshFactory.CreateMeshObject(
+                    $"Slot{_ghosts.Count}", _ghostRoot, CardMeshFactory.Quad,
+                    new Color(0.16f, 0.17f, 0.21f, 1f));
+                _ghosts.Add(ghost);
+            }
+
+            for (int i = 0; i < _ghosts.Count; i++)
+            {
+                bool show = i < Battlefield.SlotsPerRow && _slotted[i] == null;
+                _ghosts[i].gameObject.SetActive(show);
+                if (!show) continue;
+
+                _ghosts[i].localPosition = new Vector3(
+                    poses[i].Position.x, poses[i].Position.y, -CardMeshFactory.TowardCamera * 0.3f);
+                _ghosts[i].localRotation = Quaternion.identity;
+                _ghosts[i].localScale = new Vector3(SlotSize.x, SlotSize.y, 1f);
+            }
         }
 
         /// <summary>
@@ -346,6 +455,53 @@ namespace TCGinFU.View
 
             CardMeshFactory.SetColor(_highlight, color);
             _highlight.gameObject.SetActive(color.a > 0.01f);
+        }
+
+        // ──────────────────────── 走位的范围与落点提示 ────────────────────────
+
+        /// <summary>
+        /// 画走位提示：<paramref name="legalSlots"/> 里的槽位标成「可以站」，
+        /// <paramref name="previewSlot"/> 那一格标成「松手就落这儿」。
+        ///
+        /// <para>提示必须逐槽画而不是整排画——「这一排能去」和「这一格能站」是两件事，
+        /// 满员的排只有挤得动的那几格合法。</para>
+        /// </summary>
+        public void ShowSlotHints(IReadOnlyList<int> legalSlots, int previewSlot = -1)
+        {
+            List<SlotPose> poses = ComputePoses(Battlefield.SlotsPerRow);
+            EnsureSlotMarks();
+
+            for (int slot = 0; slot < _slotMarks.Length; slot++)
+            {
+                bool legal = legalSlots != null && legalSlots.Contains(slot);
+                Color color = slot == previewSlot && legal
+                    ? new Color(0.35f, 0.85f, 0.45f, 1f)
+                    : legal ? new Color(0.22f, 0.45f, 0.28f, 1f) : Color.clear;
+
+                bool show = color.a > 0.01f;
+                _slotMarks[slot].gameObject.SetActive(show);
+                if (!show) continue;
+
+                CardMeshFactory.SetColor(_slotMarks[slot], color);
+                _slotMarks[slot].localPosition = new Vector3(
+                    poses[slot].Position.x, poses[slot].Position.y, -CardMeshFactory.TowardCamera * 0.95f);
+                _slotMarks[slot].localScale = new Vector3(SlotSize.x + 8f, SlotSize.y + 8f, 1f);
+            }
+        }
+
+        public void ClearSlotHints()
+        {
+            if (_slotMarks[0] == null) return;
+            foreach (Transform mark in _slotMarks) mark.gameObject.SetActive(false);
+        }
+
+        private void EnsureSlotMarks()
+        {
+            for (int slot = 0; slot < _slotMarks.Length; slot++)
+            {
+                _slotMarks[slot] ??= CardMeshFactory.CreateMeshObject(
+                    $"SlotHint{slot}", _ghostRoot, CardMeshFactory.Quad, Color.clear);
+            }
         }
 
         public void OnPointerClick(PointerEventData eventData) => ClickHandler?.Invoke(this);

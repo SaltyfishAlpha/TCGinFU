@@ -16,7 +16,7 @@
 | JSON 内容包（`Assets/StreamingAssets/Content`）+ 加载器 | ✅ 只加载这一个包 |
 | 组局层（`BattleSession` / `ContentScenario`） | ✅ |
 | 3D 桌面表现层（`TCGinFU.View`）+ IMGUI 沙盒（`TCGinFU.Sandbox`） | ✅ |
-| EditMode 测试 | 205 个（177 个 `[Test]` + 28 个 `[TestCase]`），1 个红（B-4） |
+| EditMode 测试 | ✅ 数量与最近一次结果见 README |
 
 工程里只剩一个场景——样例场景与沙盒场景已于 2026-11-22 移除
 （见 [archive/legacy_cleanup_handoff.md](archive/legacy_cleanup_handoff.md)）：
@@ -225,10 +225,11 @@ EffectData {
 #### 打牌的固定执行顺序（`BattleEngine.HandlePlayCard`）
 
 ```
-时机校验（PlayerActions；EnemyResponse 只收 IsReactive 的时机牌/防具牌；
+时机校验（PlayerActions；EnemyResponse 只收打法为 Timing 的牌，与类别无关；
           TransformDeclaration 只收升变牌，转给 HandleDeclareTransform）
   → ResolveCost：卡自己的 ModifyCost → ActiveBehaviours 的 ModifyCost
-  → 校验 AP / RequiresBackRow / 充能（抵 MP 的 + 卡面充能费）/ MP（每个充能抵 5，R-09）
+  → 校验 AP / RequiresBackRow / 充能（卡面硬费用 + 玩家额外选的 ChargeForEffect，
+    后者必须是卡面 chargeOptions 里的一档）/ MP（充能**不**在这里抵 MP，R-09 已改写）
   → 校验显式目标
   → 建 EffectContext（ChosenTarget / CurrentTarget / ChargeSpent / Choices）
   → Behaviour.CanPlay
@@ -248,6 +249,8 @@ EffectData {
 敌人意图挂的那张「敌人的牌」（`EnemyIntent.Card`）在意图结算后由 `PlayIntentCard` 打出，同样是 `发 CardPlayed 事件 → OnPlay → EffectData[] → OnResolved`。**两套机制共用同一条结算流水线**，钩子只是在固定位置插桩，不另起一套结算路径。
 
 `CardPlayed` 事件带 `Card`（`CardDefinition`）而不只是 `CardId`：敌人的意图牌内嵌在 `EnemyContent` 里，不进内容包的卡牌索引，按 id 查不到。表现层的出牌演出靠它拿卡面。注意这个字段**不可序列化**，将来下发给远端客户端时要落回 `CardId`。
+
+敌人还多发一条 `IntentDeclared`，在 `OpenNextIntentWindow()` 里、设 `Pending` 之**前**发出。它和 `CardPlayed` 的区别是时机：表现层要在响应窗口**打开时**就亮出首领的卡面，玩家才来得及据此决定打不打时机牌；等到 `CardPlayed` 时窗口早已关闭、伤害也结算完了。（与轮始的 `IntentRevealed` 也不同：那是「这一轮我打算做这些事」的总览。）
 
 ### 2.3 动态数值：`ValueExpr`
 
@@ -270,7 +273,8 @@ struct ValueExpr {
 - `B_def = 当前防具牌基础护盾（含阶梯补正） + LevelBonus`
 - 阶梯补正（§7.2）：一阶 +0 / 二阶 +3 / 三阶 +6，`EquipMath.TierBonus(tier)`
 - 一阶武器伤害换算（§7.1）：`EquipMath.Tier1WeaponDamage(fu) = fu / 2 + 3`
-- `ChargeSpent`：本次打出这张牌消耗的充能数（含抵 MP 的），经 `ValueContext.ChargeSpent` 带入
+- `ChargeSpent`：本次打出这张牌付给**卡面词条**的充能数（硬费用 + 玩家额外选的），
+  经 `ValueContext.ChargeSpent` 带入。换 MP / 换 AP 的充能是独立动作，不计入这里（§5.2 三选一）
 
 这样同一张形态牌在 5 级和 50 级分别算出 12 和 27 点伤害，不需要为每个等级做一套卡。
 
@@ -363,7 +367,7 @@ RoundStart ──▶ Draw ──▶ PlayerPhase ──▶ EnemyPhase ──▶ R
 | `RoundStart`（`BeginRound`） | 轮数 +1 → 各玩家 `BeginRound`（AP 重置、贴充能/走位次数重置、自动双盾按敏捷÷2 / 洞察÷2 重新授予）→ **结算退出升变** → **`RoundStart` 触发** → **敌人揭示意图** | `TransformDeclaration`（等能升变的人宣告或放弃，含第 3 轮保底） |
 | `Draw`（`ProceedToDraw`） | 常态：第 1 轮 5 张，之后每轮 3 张；升变首轮形态组抽 5；升变次轮把形态组剩余全抽（`DrawCountFor`） | — |
 | `PlayerPhase` | 每人 3 AP，全队自由穿插。逐个 `DeclareReady`，全员 ready 后推进 | `PlayerActions` |
-| `EnemyPhase`（`ProceedToEnemyPhase` / `OpenNextIntentWindow`） | 按意图自上而下：先把这次攻击摆成 `AttackContext`，开响应窗口；全员 Pass 后结算（重解析目标 → 援护改写 → `ResolveAttack` → 上状态 → `PlayIntentCard`） | 每条意图一次 `EnemyResponse`（R-11） |
+| `EnemyPhase`（`ProceedToEnemyPhase` / `OpenNextIntentWindow`） | 按意图自上而下：先把这次攻击摆成 `AttackContext`，发 `IntentDeclared`，开响应窗口；全员 Pass 后结算（重解析目标 → 援护改写 → `ResolveAttack` → 上状态 → `PlayIntentCard`） | 每条意图一次 `EnemyResponse`（R-11） |
 | `RoundEnd`（`BeginRoundEnd`） | 场景命刻 +1 → 轮末持续伤害/恢复 → **`RoundEnd` 触发** → 状态递减与过期 → 判胜负 | `HandLimitDiscard`（手牌超 7 的人，R-15） |
 | （`FinishRound`） | 升变计时 −1 → 各玩家 `EndRound`（清 AP、免费移动、自动盾，伤害统计滚动）→ 敌人统计滚动、清意图 → 下一轮 | — |
 
@@ -422,13 +426,13 @@ RoundStart ──▶ Draw ──▶ PlayerPhase ──▶ EnemyPhase ──▶ R
 | `BattleEngine.Hooks.cs` | `ActiveBehaviours`、意图牌打出、`ResolveCost`、`RollCrit`、`ResolveAttack` 攻击管线、触发广播（`FireTrigger` / `FireTriggerAll`）、行为调用的异常隔离 |
 | `BattleEngine.Transform.cs` | `TransformCandidates`、宣告 / 放弃 / 洗回、`EnterTransform` / `ExitTransform` |
 
-玩家动作（`IBattleAction`）：`PlayCardAction`（带 `ChargeForMp`、`Choices`）/ `PlaceChargeAction` / `SpendChargeForApAction` / `MoveRowAction` / `DeclareReadyAction` / `DeclareTransformAction` / `DeclineTransformAction` / `ShuffleBackTransformAction` / `PassResponseAction` / `DiscardToHandLimitAction`。
+玩家动作（`IBattleAction`）：`PlayCardAction`（带 `ChargeForEffect`、`Choices`）/ `PlaceChargeAction` / `SpendChargeForApAction` / `SpendChargeForMpAction`（消耗 1 个充能回复 5 MP，玩家阶段与响应窗口都可用） / `MoveRowAction` / `DeclareReadyAction` / `DeclareTransformAction` / `DeclineTransformAction` / `ShuffleBackTransformAction` / `ShareDamageAction`（响应窗口里替相邻队友分摊，伤害对半拆） / `PassResponseAction` / `DiscardToHandLimitAction`。
 
 ---
 
 ## 3. 测试与编译检查
 
-当前 `Tests/EditMode` 下 **205** 个用例（177 个 `[Test]` + 28 个 `[TestCase]` 特性；2026-11-22 移除遗留内容后计数，此前为 227）。其中 1 个红：`L02`，对应已知缺陷 B-4。`Core` 通过 `InternalsVisibleTo("TCGinFU.Core.Tests")` 让测试直接摆出中间状态，不必先跑完一整轮。
+测试数量与最近一次运行结果统一记在 [README](../../README.md)。`Core` 通过 `InternalsVisibleTo("TCGinFU.Core.Tests")` 让测试直接摆出中间状态，不必先跑完一整轮。
 
 测试不再依赖任何成套内容：引擎规则一律用 `TestFactory` 就地造最小卡（见 `CardEffectRuleTests`），
 「整套内容接上去能不能跑完一局」那一层交给读 JSON 内容包的 `LegacyContentTests` / `LuaBehaviourTests`。

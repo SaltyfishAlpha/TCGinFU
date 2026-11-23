@@ -171,13 +171,17 @@ behaviour("philosophers_stone_release", {
 -- ───────────────────────── 以太重组坩埚 ─────────────────────────
 -- 「从你的弃牌堆将最多2张牌直接贴入全队任意角色的充能区，随后抽1张牌。」
 --
--- 抽牌走数据。「全队任意角色」在没有逐张选目标的 UI 之前，
--- 指定了目标就全贴给他，没指定就贴给自己。
+-- 「全队任意角色」在没有逐张选目标的 UI 之前，指定了目标就全贴给他，没指定就贴给自己。
+--
+-- 抽牌**必须**在贴充能之后，所以写在这里而不是卡面 effects 里：
+-- 数据效果跑在 on_resolved 之前，先抽牌会在牌库空时把弃牌堆洗回卡组，
+-- 「从弃牌堆贴2张」就没得可贴了。卡面写的也是「随后」。
 behaviour("aether_reassembly_crucible", {
   on_resolved = function(ctx)
     local who = ctx.target or ctx.caster
     local placed = charge_from(ctx.caster, who, "discard", 2)
     log("以太重组坩埚：从弃牌堆贴入 " .. placed .. " 个充能。")
+    draw(ctx.caster, 1)
   end,
 })
 
@@ -199,6 +203,100 @@ behaviour("emergency_catalyst", {
       shield(who, 4, "physical")
       shield(who, 4, "magical")
     end
+  end,
+})
+
+-- ───────────────────────── 暗言术·活力汲取 ─────────────────────────
+-- 「对单个目标造成6点暗属性魔法伤害【双色暴击】，
+--   你自己或1名队友回复等同于**本次实际伤害**一半（向上取整）的HP。」
+--
+-- 「实际伤害」是战果不是卡面值：护盾、克制、暴击都会让两者差很远，
+-- 照卡面的 6 去算一半是错的。ctx.damage_dealt 是数据层那条 Damage 真打掉的 HP。
+--
+-- 「你自己或1名队友」——卡面的单体目标已经被敌人占掉了（这是张攻击牌），
+-- 没有第二个指定目标，所以回在施放者自己身上。
+behaviour("dark_word_vitality_drain", {
+  on_resolved = function(ctx)
+    local dealt = ctx.damage_dealt
+    if dealt <= 0 then return end
+
+    local amount = math.ceil(dealt / 2)
+    heal(ctx.caster, amount)
+    log(string.format("活力汲取：实际造成 %d 点，回复 %d HP。", dealt, amount))
+  end,
+})
+
+-- ───────────────────────── 深渊虹吸·活力汲取贰式 ─────────────────────────
+-- 「对单个目标造成9点暗属性魔法伤害【双色暴击】。你立即回复6 HP；
+--   若你生命值已满，**溢出的治疗量**自动转化为你或相邻队友的魔法护盾。
+--   若触发【暴击】，额外回复5 MP。」
+--
+-- heal 返回的是**实际**回复量，满血时回 0——6 减去它就是溢出量。
+behaviour("abyssal_siphon", {
+  on_resolved = function(ctx)
+    local healed = heal(ctx.caster, 6)
+    local overflow = 6 - healed
+
+    if overflow > 0 then
+      shield(ctx.caster, overflow, "magical")
+      log(string.format("深渊虹吸：生命已满，%d 点治疗转为魔法护盾。", overflow))
+    end
+
+    if ctx.crit then
+      restore_mp(ctx.caster, 5)
+      log("深渊虹吸暴击：额外回复 5 MP。")
+    end
+  end,
+})
+
+-- ───────────────────────── 弱点解析 ─────────────────────────
+-- 「造成4点魔法伤害【暴击】（纯蓝，投洞察骰），揭示目标1项属性弱点并抽1张牌。」
+--
+-- 「揭示」是本局持续的信息，不按轮过期，所以持续时间写 -1。
+-- 「秘法冲击」要读这个标记来判断加不加伤。
+behaviour("weakness_analysis", {
+  on_resolved = function(ctx)
+    local t = ctx.target
+    if t then
+      apply_status(t, "weakness_revealed", -1)
+
+      local weakness = weakness_of(t)
+      log(t.name .. (weakness and ("的属性弱点是：" .. weakness) or " 没有属性弱点。"))
+    end
+
+    draw(ctx.caster, 1)
+  end,
+})
+
+-- ───────────────────────── 秘法冲击 ─────────────────────────
+-- 「造成6点魔法伤害【暴击】；若目标已被揭示属性弱点或处于负面状态，额外造成+3点魔法伤害。」
+behaviour("arcane_bolt", {
+  on_attack = function(atk, me)
+    local t = atk.target
+    if not t then return end
+
+    if has_status(t, "weakness_revealed") or t.has_negative_status then
+      atk.flat_bonus = atk.flat_bonus + 3
+    end
+  end,
+})
+
+-- ───────────────────────── 痛觉铭刻 ─────────────────────────
+-- 「立即对自身造成2点**无视护盾**的刺痛伤害；若【魔力激发卷轴】处于关闭状态，
+--   则同时将其免费切换为【激活】状态。回复10 MP并抽1张牌。」
+--
+-- 自伤走 pierce 而不是数据层的 Damage：卡面写明无视护盾，
+-- 而数据层那条 Damage 会被自动双盾整个吃掉，等于这张牌对自己毫发无伤——
+-- 连带「灵智回流」（每当你受到伤害时回 5 MP）也跟着哑火，而这正是这张牌的用法。
+--
+-- 来源传 nil：刺痛是自伤，算进自己的输出统计会污染「本轮造成的伤害」。
+--
+-- TODO: 【魔力激发卷轴】这张秘宝还不在卡池里，所以中间那半句暂时无处落脚（见 known_issues）。
+behaviour("pain_inscription", {
+  on_resolved = function(ctx)
+    pierce(nil, ctx.caster, 2, "dark")
+    restore_mp(ctx.caster, 10)
+    draw(ctx.caster, 1)
   end,
 })
 
@@ -255,8 +353,10 @@ behaviour("entropy_roulette", {
 -- 消耗 2 个充能时两项同时生效，不再看 mode。
 -- 元素存在状态层数里（见 statuses.lua 的 status_oil）。
 behaviour("universal_elixir", {
+  -- 看的是「这次**打算**消耗几个」而不是「充能区里有几个」：
+  -- 充能区满着但玩家选了 0 个，这张牌照样不该打得出去。
   can_play = function(ctx)
-    if ctx.caster.charges < 1 then
+    if ctx.charge_spent < 1 then
       return false, "调合·万能灵药至少要消耗 1 个充能"
     end
     return true

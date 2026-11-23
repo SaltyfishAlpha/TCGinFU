@@ -9,7 +9,7 @@ namespace TCGinFU.Core.Tests
     public class CoverTests
     {
         private static CardDefinition CoverCard(string id = "cover") =>
-            new(id, "挺身而出", CardCategory.Armor, CardKind.Timing)
+            new(id, "挺身而出", CardCategory.Armor, CardPlay.Timing)
             {
                 ApCost = 0,
                 Effects = new[] { EffectData.Cover() },
@@ -83,11 +83,221 @@ namespace TCGinFU.Core.Tests
         }
     }
 
+    /// <summary>因果抹杀令的「由相邻队友分摊」（B-14）。援护是整份转移，分摊是对半拆。</summary>
+    public class DamageShareTests
+    {
+        private static EnemyIntent ShareableAttack(int damage = 24)
+            => new("因果抹杀令", IntentTargeting.DefaultSingle)
+            {
+                Damage = damage,
+                Element = DamageElement.Physical,
+                Shareable = true,
+            };
+
+        private static (BattleEngine engine, PlayerCharacter front, PlayerCharacter back)
+            Setup(EnemyIntent intent, int backSlot = 0)
+        {
+            PlayerCharacter front = TestFactory.Player("front", TestFactory.Sheet("前排"));
+            PlayerCharacter back = TestFactory.Player("back", TestFactory.Sheet("后排"));
+            Enemy enemy = TestFactory.Enemy(intents: new[] { intent });
+
+            TestFactory.FillDeck(front, 20);
+            TestFactory.FillDeck(back, 20);
+
+            BattleState state = BattleSetup.Create(
+                new XorShift32Rng(3),
+                new[] { (front, Row.Front), (back, Row.Back) },
+                new[] { (enemy, Row.Front) });
+
+            state.PlayerField.Remove(back);
+            state.PlayerField.PlaceAt(back, Row.Back, backSlot);
+
+            var engine = new BattleEngine(state);
+            engine.Start();
+            engine.Submit(new DeclareReadyAction(front.Id));
+            engine.Submit(new DeclareReadyAction(back.Id));
+
+            Assert.AreEqual(DecisionKind.EnemyResponse, engine.Pending.Kind);
+            return (engine, front, back);
+        }
+
+        [Test]
+        public void 相邻队友分摊后两人各承一半且分别抵扣护盾()
+        {
+            (BattleEngine engine, PlayerCharacter front, PlayerCharacter back) = Setup(ShareableAttack());
+
+            int frontHp = front.Hp;
+            int backHp = back.Hp;
+            int frontShield = front.Shields.Physical;
+            int backShield = back.Shields.Physical;
+
+            Assert.IsTrue(engine.Submit(new ShareDamageAction(back.Id, front.Id)).Ok);
+            engine.Submit(new PassResponseAction(front.Id));
+            engine.Submit(new PassResponseAction(back.Id));
+
+            // 24 拆成 12 / 12，两份各自过一遍护盾——合起来挡掉的比整份落在一个人身上时更多
+            Assert.AreEqual(System.Math.Max(0, 12 - frontShield), frontHp - front.Hp, "原目标承一半");
+            Assert.AreEqual(System.Math.Max(0, 12 - backShield), backHp - back.Hp, "分摊者承另一半");
+        }
+
+        [Test]
+        public void 分不匀时原目标多承担一点()
+        {
+            (BattleEngine engine, PlayerCharacter front, PlayerCharacter back) = Setup(ShareableAttack(25));
+
+            int frontHp = front.Hp;
+            int backHp = back.Hp;
+            int frontShield = front.Shields.Physical;
+            int backShield = back.Shields.Physical;
+
+            Assert.IsTrue(engine.Submit(new ShareDamageAction(back.Id, front.Id)).Ok);
+            engine.Submit(new PassResponseAction(front.Id));
+            engine.Submit(new PassResponseAction(back.Id));
+
+            Assert.AreEqual(System.Math.Max(0, 13 - frontShield), frontHp - front.Hp);
+            Assert.AreEqual(System.Math.Max(0, 12 - backShield), backHp - back.Hp);
+        }
+
+        [Test]
+        public void 非相邻队友不能分摊()
+        {
+            (BattleEngine engine, PlayerCharacter front, PlayerCharacter back) =
+                Setup(ShareableAttack(), backSlot: 2);
+
+            int backHp = back.Hp;
+            ActionResult result = engine.Submit(new ShareDamageAction(back.Id, front.Id));
+
+            Assert.IsFalse(result.Ok);
+            StringAssert.Contains("相邻", result.Reason);
+
+            engine.Submit(new PassResponseAction(front.Id));
+            engine.Submit(new PassResponseAction(back.Id));
+            Assert.AreEqual(backHp, back.Hp, "没分摊成，伤害全落在原目标身上");
+        }
+
+        [Test]
+        public void 没写可分摊的意图不能分摊()
+        {
+            (BattleEngine engine, PlayerCharacter front, PlayerCharacter back) =
+                Setup(TestFactory.Attack(24));
+
+            ActionResult result = engine.Submit(new ShareDamageAction(back.Id, front.Id));
+
+            Assert.IsFalse(result.Ok);
+            StringAssert.Contains("不能分摊", result.Reason);
+        }
+
+        [Test]
+        public void 已登记分摊就不能再整份援护()
+        {
+            (BattleEngine engine, PlayerCharacter front, PlayerCharacter back) = Setup(ShareableAttack());
+
+            Assert.IsTrue(engine.Submit(new ShareDamageAction(back.Id, front.Id)).Ok);
+            engine.RegisterCover(back, front);
+
+            int frontHp = front.Hp;
+            engine.Submit(new PassResponseAction(front.Id));
+            engine.Submit(new PassResponseAction(back.Id));
+
+            Assert.Less(front.Hp, frontHp, "分摊仍然成立：原目标那一半没有被援护接走");
+        }
+
+        [Test]
+        public void 分摊不顺带放弃响应()
+        {
+            (BattleEngine engine, PlayerCharacter front, PlayerCharacter back) = Setup(ShareableAttack());
+
+            Assert.IsTrue(engine.Submit(new ShareDamageAction(back.Id, front.Id)).Ok);
+            CollectionAssert.Contains(engine.Pending.WaitingOn, back.Id, "分摊完还能接着打时机牌");
+        }
+
+        // ── 界面拿来点亮按钮的候选名单。队伍人数不定，所以这几条刻意用三人队 ──
+
+        [Test]
+        public void 三人队里只有相邻的那个列得出候选()
+        {
+            (BattleEngine engine, List<PlayerCharacter> party) = Trio(ShareableAttack());
+
+            // 全在前排，槽位 0 / 1 / 2；单体意图默认打前排最靠前的那个
+            PlayerCharacter target = party[0];
+            Assert.AreSame(target, engine.CurrentIntentTargets.Single());
+
+            CollectionAssert.AreEqual(
+                new[] { target }, engine.ShareableTargetsFor(party[1]), "1 号与目标相邻");
+            CollectionAssert.IsEmpty(engine.ShareableTargetsFor(party[2]), "2 号隔了一个人");
+            CollectionAssert.IsEmpty(engine.ShareableTargetsFor(target), "不能自己替自己分摊");
+        }
+
+        [Test]
+        public void 已经有人分摊后候选就空了()
+        {
+            (BattleEngine engine, List<PlayerCharacter> party) = Trio(ShareableAttack());
+
+            Assert.IsTrue(engine.Submit(new ShareDamageAction(party[1].Id, party[0].Id)).Ok);
+
+            CollectionAssert.IsEmpty(engine.ShareableTargetsFor(party[1]), "一次攻击只分摊一回");
+            Assert.AreSame(party[1], engine.SharerFor(party[0]), "界面据此显示「分摊：…」");
+        }
+
+        [Test]
+        public void 意图不可分摊时候选为空()
+        {
+            (BattleEngine engine, List<PlayerCharacter> party) = Trio(TestFactory.Attack(24));
+            CollectionAssert.IsEmpty(engine.ShareableTargetsFor(party[1]));
+        }
+
+        /// <summary>三人同排开局，槽位 0 / 1 / 2。</summary>
+        private static (BattleEngine engine, List<PlayerCharacter> party) Trio(EnemyIntent intent)
+        {
+            var party = new List<PlayerCharacter>
+            {
+                TestFactory.Player("p0", TestFactory.Sheet("零")),
+                TestFactory.Player("p1", TestFactory.Sheet("一")),
+                TestFactory.Player("p2", TestFactory.Sheet("二")),
+            };
+
+            foreach (PlayerCharacter p in party) TestFactory.FillDeck(p, 20);
+
+            BattleState state = BattleSetup.Create(
+                new XorShift32Rng(3),
+                party.Select(p => (p, Row.Front)),
+                new[] { (TestFactory.Enemy(intents: new[] { intent }), Row.Front) });
+
+            var engine = new BattleEngine(state);
+            engine.Start();
+            foreach (PlayerCharacter p in party) engine.Submit(new DeclareReadyAction(p.Id));
+
+            Assert.AreEqual(DecisionKind.EnemyResponse, engine.Pending.Kind);
+            return (engine, party);
+        }
+
+        [Test]
+        public void 玩家阶段不能分摊()
+        {
+            PlayerCharacter front = TestFactory.Player("front", TestFactory.Sheet("前排"));
+            PlayerCharacter back = TestFactory.Player("back", TestFactory.Sheet("后排"));
+            Enemy enemy = TestFactory.Enemy(intents: new[] { ShareableAttack() });
+            TestFactory.FillDeck(front, 20);
+            TestFactory.FillDeck(back, 20);
+
+            BattleState state = BattleSetup.Create(
+                new XorShift32Rng(3),
+                new[] { (front, Row.Front), (back, Row.Back) },
+                new[] { (enemy, Row.Front) });
+
+            var engine = new BattleEngine(state);
+            engine.Start();
+
+            ActionResult result = engine.Submit(new ShareDamageAction(back.Id, front.Id));
+            Assert.IsFalse(result.Ok);
+        }
+    }
+
     /// <summary>§3.2 主卡组构筑校验。</summary>
     public class DeckValidatorTests
     {
-        private static CardDefinition Card(string id, CardCategory category, CardKind kind = CardKind.Skill)
-            => new(id, id, category, kind);
+        private static CardDefinition Card(string id, CardCategory category, CardPlay play = CardPlay.Skill)
+            => new(id, id, category, play);
 
         /// <summary>造一份合法的 30 张卡表：14 职业 + 6 武器 + 6 防具 + 4 秘宝。</summary>
         private static DeckList ValidDeck()

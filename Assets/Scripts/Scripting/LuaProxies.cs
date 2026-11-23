@@ -232,6 +232,8 @@ namespace TCGinFU.Scripting
                     "resist_delta" => DynValue.NewNumber(r.ResistDelta),
                     "crit_resist" => DynValue.NewNumber(r.CritResist),
                     "dual_color" => DynValue.NewBoolean(r.DualColor),
+                    "charge_spent" => DynValue.NewNumber(r.ChargeSpent),
+                    "force_crit" => DynValue.NewBoolean(r.ForceCrit),
                     "card" => DynValue.NewString(r.Card?.Id ?? ""),
                     "card_ranged" => DynValue.NewBoolean(r.Card?.IsRanged ?? false),
                     "target" => Combatant(r.Target),
@@ -242,19 +244,27 @@ namespace TCGinFU.Scripting
             meta["__newindex"] = DynValue.NewCallback((_, args) =>
             {
                 DynValue key = args[1];
-                int value = (int)args[2].CastToNumber().GetValueOrDefault();
 
                 if (key.Type == DataType.Number)
                 {
                     int i = (int)key.Number - 1;
-                    if (i >= 0 && i < r.Rolls.Count) r.Rolls[i] = value;
+                    if (i >= 0 && i < r.Rolls.Count)
+                    {
+                        r.Rolls[i] = (int)args[2].CastToNumber().GetValueOrDefault();
+                    }
+
                     return DynValue.Nil;
                 }
 
                 switch (key.CastToString())
                 {
-                    case "bonus": r.RollBonus = value; break;
-                    case "resist_delta": r.ResistDelta = value; break;
+                    case "bonus": r.RollBonus = (int)args[2].CastToNumber().GetValueOrDefault(); break;
+                    case "resist_delta": r.ResistDelta = (int)args[2].CastToNumber().GetValueOrDefault(); break;
+
+                    // 「本次攻击必定暴击」。只能抬成暴击，抬不成超暴击——
+                    // 超暴击是两颗骰的关系判出来的，见 CritRollContext.ForceCrit
+                    case "force_crit": r.ForceCrit = args[2].CastToBool(); break;
+
                     default: throw new ScriptRuntimeException($"掷骰结算单上没有可写字段 {key.CastToString()}");
                 }
 
@@ -280,7 +290,9 @@ namespace TCGinFU.Scripting
                 "charge" => DynValue.NewNumber(c.Charge),
                 "round" => DynValue.NewNumber(c.Round),
                 "card" => DynValue.NewString(c.Card?.Id ?? ""),
-                "card_kind" => DynValue.NewString(c.Card?.Kind.ToString().ToLowerInvariant() ?? ""),
+                // 打法与标记是两个维度，各给一个键；升变牌与敌人意图没有打法，card_play 为空串
+                "card_play" => DynValue.NewString(c.Card?.Play?.ToString().ToLowerInvariant() ?? ""),
+                "card_role" => DynValue.NewString(c.Card?.Role.ToString().ToLowerInvariant() ?? ""),
                 "card_category" => DynValue.NewString(c.Card?.Category.ToString().ToLowerInvariant() ?? ""),
                 "base_ap" => DynValue.NewNumber(c.Card?.ApCost ?? 0),
                 "base_mp" => DynValue.NewNumber(c.Card?.MpCost ?? 0),
@@ -355,13 +367,25 @@ namespace TCGinFU.Scripting
                 "crit" => DynValue.NewBoolean(ctx.Crit.IsCrit),
                 "super_crit" => DynValue.NewBoolean(ctx.Crit.IsSuperCrit),
                 "charge_spent" => DynValue.NewNumber(ctx.ChargeSpent),
+
+                // 数据层那几条 Damage 到此为止打掉的实际 HP。
+                // 「回复等同于本次实际伤害一半的HP」读它，而不是卡面基础值
+                "damage_dealt" => DynValue.NewNumber(ctx.DamageDealt),
+
+                // 本次打出**之前**本轮已经打过几张牌（「若本轮已打出过其他牌」）
+                "cards_played_before" => DynValue.NewNumber(ctx.CardsPlayedBefore),
+
                 "round" => DynValue.NewNumber(ctx.State.Round),
                 "incoming_attack" => Attack(ctx.CurrentAttack),
 
                 // 玩家在界面上做的额外选择。界面还没做出来时是空的，
-                // 所以脚本一律要写成 `ctx.choice("x", 默认值)`
+                // 所以脚本一律要写成 `ctx.choice("x", 默认值)`。
+                //
+                // 下标从 0 起：这是**被返回的那个函数**自己的参数表，
+                // 和外层 __index 的 (table, key) 不是一回事。以前照着外层写成 args[1]/args[2]，
+                // 于是键名永远是默认值那个数字、默认值永远是 0——所有二选一静默退回第一项
                 "choice" => DynValue.NewCallback((_, args) =>
-                    DynValue.NewNumber(ctx.Choice(args[1].CastToString(), (int)args[2].CastToNumber().GetValueOrDefault()))),
+                    DynValue.NewNumber(ctx.Choice(args[0].CastToString(), (int)args[1].CastToNumber().GetValueOrDefault()))),
 
                 _ => DynValue.Nil,
             });
@@ -399,6 +423,14 @@ namespace TCGinFU.Scripting
                 "source" => DynValue.NewString(t.Source.ToString().ToLowerInvariant()),
                 "card" => DynValue.NewString(t.Card?.Definition.Id ?? ""),
                 "was_crit" => DynValue.NewBoolean(t.Damage?.IsCrit ?? false),
+
+                // 「若**完全抵消**本次攻击伤害」（风墙反制）要分得清
+                // 「这一下本来就是 0 点」和「打过来了但被盾全吃下」
+                "hp_lost" => DynValue.NewNumber(t.Damage?.HpLost ?? 0),
+                "absorbed" => DynValue.NewNumber(t.Damage?.AbsorbedByShield ?? 0),
+                "fully_absorbed" => DynValue.NewBoolean(
+                    t.Damage != null && t.Damage.HpLost == 0 && t.Damage.AbsorbedByShield > 0),
+
                 _ => DynValue.Nil,
             });
 
@@ -409,6 +441,7 @@ namespace TCGinFU.Scripting
         internal static string TriggerName(BattleTrigger trigger) => trigger switch
         {
             BattleTrigger.DamageTaken => "damage_taken",
+            BattleTrigger.AttackResolved => "attack_resolved",
             BattleTrigger.DamageDealt => "damage_dealt",
             BattleTrigger.CritDealt => "crit_dealt",
             BattleTrigger.CardPlayed => "card_played",

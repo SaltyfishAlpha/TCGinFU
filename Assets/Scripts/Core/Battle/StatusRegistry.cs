@@ -43,6 +43,9 @@ namespace TCGinFU.Core
 
         public int IncomingMultiplierDenominator { get; init; }
 
+        /// <summary>挂着期间宿主对该属性易损（最终伤害 ×2）。null 表示不改克制。</summary>
+        public DamageElement? VulnerableElement { get; init; }
+
         public StatusEffect Create(int duration, int stacks) => new(Id, duration, stacks)
         {
             DamagePerRound = DamagePerRound,
@@ -56,6 +59,7 @@ namespace TCGinFU.Core
             CritResistDelta = CritResistDelta,
             IncomingMultiplierNumerator = IncomingMultiplierNumerator,
             IncomingMultiplierDenominator = IncomingMultiplierDenominator,
+            VulnerableElement = VulnerableElement,
         };
     }
 

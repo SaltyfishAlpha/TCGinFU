@@ -18,7 +18,7 @@ namespace TCGinFU.Core
         public Dictionary<string, List<CardDefinition>> FormDecks { get; } = new();
 
         public IEnumerable<CardDefinition> TransformCards
-            => MainDeck.Where(c => c.Kind == CardKind.Transform);
+            => MainDeck.Where(c => c.Role == CardRole.Transform);
 
         public int CountOf(CardCategory category) => MainDeck.Count(c => c.Category == category);
 

@@ -471,7 +471,7 @@ namespace TCGinFU.View
         {
             var parts = new List<string>
             {
-                $"{CardView.Short(def.Category)} · {CardView.Short(def.Kind)}",
+                CardView.TypeLine(def),
                 // 和手牌上显示的保持一致：详情面板印 5MP、手里那张印绿色 0MP 会让人以为看错了
                 BattleSession.CostText(def, Engine, viewer),
             };
@@ -496,7 +496,7 @@ namespace TCGinFU.View
                 builder.AppendLine();
             }
 
-            if (def.Kind == CardKind.Transform && !string.IsNullOrWhiteSpace(def.TransformConditionText))
+            if (def.Role == CardRole.Transform && !string.IsNullOrWhiteSpace(def.TransformConditionText))
             {
                 builder.AppendLine($"<b>升变前置条件</b>\n{def.TransformConditionText.Trim()}");
                 builder.AppendLine();

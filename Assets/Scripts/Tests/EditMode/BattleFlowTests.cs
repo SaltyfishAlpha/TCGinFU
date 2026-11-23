@@ -90,12 +90,12 @@ namespace TCGinFU.Core.Tests
         }
 
         [Test]
-        public void MP不足时可用充能抵扣五点()
+        public void 充能转MP后才打得出原本MP不足的牌()
         {
             (BattleEngine engine, PlayerCharacter player, Enemy enemy) = Setup();
             engine.Start();
 
-            CardDefinition spell = new("spell", "法术", CardCategory.Class, CardKind.Skill)
+            CardDefinition spell = new("spell", "法术", CardCategory.Class, CardPlay.Skill)
             {
                 ApCost = 1,
                 MpCost = 5,
@@ -108,14 +108,67 @@ namespace TCGinFU.Core.Tests
             engine.PlaceCharge(player, new CardInstance(TestFactory.FillerCard("fuel"), player.Id));
 
             ActionResult withoutCharge = engine.Submit(new PlayCardAction(player.Id, card.Uid, enemy.Id));
-            Assert.IsFalse(withoutCharge.Ok, "没花充能时 MP 不够应被拒绝");
+            Assert.IsFalse(withoutCharge.Ok, "MP 不够应被拒绝");
 
-            ActionResult withCharge = engine.Submit(
-                new PlayCardAction(player.Id, card.Uid, enemy.Id, chargeForMp: 1));
+            // 充能不再在出牌时抵扣（旧裁定 R-09 已作废），得先单独转成 MP
+            Assert.IsTrue(engine.Submit(new SpendChargeForMpAction(player.Id)).Ok);
+            Assert.AreEqual(5, player.Mp);
 
-            Assert.IsTrue(withCharge.Ok, withCharge.Reason);
+            ActionResult afterConvert = engine.Submit(new PlayCardAction(player.Id, card.Uid, enemy.Id));
+
+            Assert.IsTrue(afterConvert.Ok, afterConvert.Reason);
             Assert.AreEqual(90, enemy.Hp);
             Assert.AreEqual(0, player.Zones.Charges.Count);
+            Assert.AreEqual(0, player.Mp);
+        }
+
+        [Test]
+        public void 充能转MP回到上限为止且满蓝时照样消耗()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            // 只差 2 点就满：转换回 2 点而不是 5 点，多出来的不找零
+            player.SpendMp(2);
+            engine.PlaceCharge(player, new CardInstance(TestFactory.FillerCard("fuel"), player.Id));
+            Assert.IsTrue(engine.Submit(new SpendChargeForMpAction(player.Id)).Ok);
+            Assert.AreEqual(player.MaxMp, player.Mp);
+
+            // 满蓝时不拒绝：玩家可能就是想清掉充能区（界面负责提示会浪费）
+            engine.PlaceCharge(player, new CardInstance(TestFactory.FillerCard("fuel2"), player.Id));
+            Assert.IsTrue(engine.Submit(new SpendChargeForMpAction(player.Id)).Ok);
+            Assert.AreEqual(player.MaxMp, player.Mp);
+            Assert.AreEqual(0, player.Zones.Charges.Count);
+        }
+
+        [Test]
+        public void 充能转MP计入回复统计()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            player.SpendMp(player.Mp);
+            engine.PlaceCharge(player, new CardInstance(TestFactory.FillerCard("fuel"), player.Id));
+            Assert.IsTrue(engine.Submit(new SpendChargeForMpAction(player.Id)).Ok);
+
+            // 走的是和卡牌 restore_mp 同一条路径，所以「全队累计回复过 15 MP」
+            // 这类升变前置（星穹坍缩）认这 5 点
+            Assert.AreEqual(BattleEngine.MpPerCharge, engine.State.Stats.Team(BattleStatKeys.MpRestored));
+            Assert.AreEqual(
+                BattleEngine.MpPerCharge, engine.State.Stats.For(player.Id, BattleStatKeys.MpRestored));
+        }
+
+        [Test]
+        public void 没有充能时不能转MP()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            player.SpendMp(player.Mp);
+            ActionResult result = engine.Submit(new SpendChargeForMpAction(player.Id));
+
+            Assert.IsFalse(result.Ok);
+            Assert.AreEqual(0, player.Mp, "被拒绝的动作不该回任何 MP");
         }
 
         [Test]
@@ -174,6 +227,28 @@ namespace TCGinFU.Core.Tests
             Assert.AreEqual(RoundPhase.EnemyPhase, engine.State.Phase);
             Assert.AreEqual(DecisionKind.EnemyResponse, engine.Pending.Kind);
             Assert.AreSame(player, engine.CurrentIntentTargets.Single());
+        }
+
+        [Test]
+        public void 响应窗口里能转MP但不能换AP()
+        {
+            // 响应牌也要花 MP（看破闪避 5 MP），所以转 MP 在响应窗口里必须可用；
+            // 换 AP 不行——那 1 点 AP 轮末就清零了（裁定 R-10）
+            (BattleEngine engine, PlayerCharacter player, _) = Setup(intents: TestFactory.Attack(6));
+            engine.Start();
+
+            engine.PlaceCharge(player, new CardInstance(TestFactory.FillerCard("fuel"), player.Id));
+            engine.PlaceCharge(player, new CardInstance(TestFactory.FillerCard("fuel2"), player.Id));
+            player.SpendMp(player.Mp);
+
+            engine.Submit(new DeclareReadyAction(player.Id));
+            Assert.AreEqual(DecisionKind.EnemyResponse, engine.Pending.Kind);
+
+            Assert.IsFalse(engine.Submit(new SpendChargeForApAction(player.Id)).Ok, "响应窗口里不能换 AP");
+
+            ActionResult mp = engine.Submit(new SpendChargeForMpAction(player.Id));
+            Assert.IsTrue(mp.Ok, mp.Reason);
+            Assert.AreEqual(BattleEngine.MpPerCharge, player.Mp);
         }
 
         /// <summary>
@@ -272,7 +347,7 @@ namespace TCGinFU.Core.Tests
             (BattleEngine engine, PlayerCharacter player, _) = Setup(intents: TestFactory.Attack(10));
             engine.Start();
 
-            CardDefinition guard = new("guard", "格挡", CardCategory.Armor, CardKind.Timing)
+            CardDefinition guard = new("guard", "格挡", CardCategory.Armor, CardPlay.Timing)
             {
                 ApCost = 0,
                 Effects = new[] { EffectData.Shield(ValueExpr.Flat(8), ShieldKind.Physical, TargetScope.Self) },

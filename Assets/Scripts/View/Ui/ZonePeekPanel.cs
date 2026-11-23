@@ -101,7 +101,7 @@ namespace TCGinFU.View
 
             _nameText.text = def.Name;
             _costText.text = Presentation.BattleSession.CostText(def);
-            _typeText.text = $"{CardView.Short(def.Category)}·{CardView.Short(def.Kind)}";
+            _typeText.text = CardView.TypeLine(def);
         }
     }
 

@@ -39,7 +39,7 @@ namespace TCGinFU.Core
             return result;
 
             bool IsUsableTransformCard(CardInstance card)
-                => card.Definition.Kind == CardKind.Transform
+                => card.Definition.Role == CardRole.Transform
                    && player.Zones.HasFormDeck(card.Definition.Id);
         }
 
@@ -100,7 +100,7 @@ namespace TCGinFU.Core
 
             CardInstance card = actor.Zones.Hand.Find(action.CardUid);
             if (card == null) return ActionResult.Fail("该牌不在手牌中");
-            if (card.Definition.Kind != CardKind.Transform) return ActionResult.Fail("只有升变牌可以这样洗回");
+            if (card.Definition.Role != CardRole.Transform) return ActionResult.Fail("只有升变牌可以这样洗回");
 
             actor.Zones.Hand.Remove(card);
             actor.Zones.Deck.AddBottom(card);

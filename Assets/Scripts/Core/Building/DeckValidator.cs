@@ -61,7 +61,7 @@ namespace TCGinFU.Core
                 {
                     result.Errors.Add(
                         $"「{def.Name}」最多编入 {def.CopyLimit} 张，当前 {group.Count()} 张"
-                        + (def.Kind == CardKind.Transform ? "（同名升变牌限 1 张）" : ""));
+                        + (def.Role == CardRole.Transform ? "（同名升变牌限 1 张）" : ""));
                 }
             }
 
@@ -75,7 +75,7 @@ namespace TCGinFU.Core
         {
             IEnumerable<CardDefinition> allCards = deck.MainDeck.Concat(deck.FormDecks.Values.SelectMany(f => f));
 
-            foreach (CardDefinition hero in allCards.Where(c => c.Kind == CardKind.Hero).Distinct())
+            foreach (CardDefinition hero in allCards.Where(c => c.IsHeroSkill).Distinct())
             {
                 if (hero.ClassId == null)
                 {
@@ -123,10 +123,24 @@ namespace TCGinFU.Core
                         $"「{transform.Name}」的形态额外卡组须为 {DeckList.FormDeckSize} 张，当前 {form.Count} 张");
                 }
 
-                CardDefinition stray = form.FirstOrDefault(c => c.Kind != CardKind.Form && c.Kind != CardKind.Hero);
+                // 英雄技能牌是职业牌上的一个标记，可以编进形态组，不算混入
+                CardDefinition stray = form.FirstOrDefault(c => c.Role != CardRole.Form && !c.IsHeroSkill);
                 if (stray != null)
                 {
                     result.Errors.Add($"「{transform.Name}」的形态组里混入了非形态牌「{stray.Name}」");
+                }
+
+                // 一组形态牌只能出自同一个形态。没标 formId 的（测试构造卡、英雄技能牌）跳过
+                string[] formIds = form
+                    .Where(c => c.Role == CardRole.Form && !string.IsNullOrEmpty(c.FormId))
+                    .Select(c => c.FormId)
+                    .Distinct()
+                    .ToArray();
+
+                if (formIds.Length > 1)
+                {
+                    result.Errors.Add(
+                        $"「{transform.Name}」的形态组混了 {formIds.Length} 个形态的牌：{string.Join(" / ", formIds)}");
                 }
             }
 

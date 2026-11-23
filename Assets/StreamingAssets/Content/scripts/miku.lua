@@ -238,6 +238,70 @@ behaviour("read_dodge", {
   end,
 })
 
+-- ───────────────────────── 交叉火力网 ─────────────────────────
+-- 「对单个目标造成8点物理伤害【暴击】；若本轮已有其他队友对该目标造成过伤害，
+--   此牌消耗减少1 AP（变为0 AP）且伤害提升至12点。」
+--
+-- 两半句的条件**口径不同**，这是被钩子的时点逼出来的：
+-- 费用要在校验期算出来给 UI 显示，而那时玩家还没选目标（ResolveCost 只拿得到施放者与卡），
+-- 所以减免只能问「本轮有没有队友打过人」；伤害那半句在攻击结算时才跑，
+-- 那时目标已经定了，才能精确到「**这个**目标」。
+-- 结果是：有队友出过手但打的是别人时，这张牌会便宜 1 AP 却不加伤。已记在 known_issues。
+behaviour("crossfire_network", {
+  on_cost = function(cost, me)
+    for _, p in ipairs(allies()) do
+      if p.id ~= me.id and p.damage_dealt_this_round > 0 then
+        cost.ap = cost.ap - 1
+        return
+      end
+    end
+  end,
+
+  on_attack = function(atk, me)
+    local t = atk.target
+    if not t then return end
+
+    for _, p in ipairs(allies()) do
+      if p.id ~= me.id and damaged_this_round_by(t, p) then
+        atk.flat_bonus = atk.flat_bonus + 4   -- 8 → 12
+        return
+      end
+    end
+  end,
+})
+
+-- ───────────────────────── 连珠箭雨 ─────────────────────────
+-- 「对单个目标造成7点物理伤害【暴击】；若触发【暴击】，对敌方**另一排**的1名随机目标
+--   追加4点物理伤害。若全场仅1名敌人，则主目标额外受到+2点伤害。」
+--
+-- 随机走引擎的 roll()，不能自带随机源，否则同一个种子复盘不出同一局。
+behaviour("rapid_arrow_rain", {
+  on_attack = function(atk, me)
+    if #enemies() == 1 then
+      atk.flat_bonus = atk.flat_bonus + 2
+    end
+  end,
+
+  on_resolved = function(ctx)
+    if not ctx.crit then return end
+
+    local t = ctx.target
+    if not t then return end
+
+    -- 「另一排」：和主目标不同排的敌人
+    local others = {}
+    for _, e in ipairs(enemies()) do
+      if e.row ~= t.row then others[#others + 1] = e end
+    end
+
+    if #others == 0 then return end
+
+    local pick = others[roll(#others)]
+    damage(ctx.caster, pick, 4, "physical")
+    log("连珠箭雨暴击：追加打击另一排的 " .. pick.name .. "，4 点物理伤害。")
+  end,
+})
+
 -- ───────────────────────── 幻影夜行（条件型升变牌） ─────────────────────────
 -- 「前置条件：本局累计触发2次暴击，或全队累计消耗2个充能指示物。
 --   ……升变期间你的暴击伤害倍率提升至×1.75；每当你的攻击触发暴击时，回复5 MP。」

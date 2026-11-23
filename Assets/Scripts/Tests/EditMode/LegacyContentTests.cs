@@ -118,32 +118,48 @@ namespace TCGinFU.Tests
         }
 
         /// <summary>
-        /// 结算形态的覆盖情况。敌人的牌不在 <c>_db.Cards</c> 里（它们挂在意图上，见 I01），
-        /// 所以要并进来一起数。
-        ///
-        /// <para><b>Hero（英雄技能牌）目前整个内容包一张都没有</b>——「命刻之战」的两名角色都没到
-        /// 10 级精通，按 §3.3 本来就带不了。这是**内容待补**，不是代码缺陷，所以这里如实排除；
-        /// 等内容包补上英雄技能牌，把它从排除列表里删掉即可。
-        /// §3.3 的精通校验规则本身由 <c>DeckValidatorTests</c> 用构造卡守着。</para>
+        /// 三种打法都要有卡覆盖到（§7.1）。敌人的牌不在 <c>_db.Cards</c> 里
+        /// （它们挂在意图上，见 I01），但意图不按打法结算，所以这条只数玩家卡牌。
         /// </summary>
         [Test]
-        public void T04_内容包覆盖除英雄技能牌外的全部结算形态()
+        public void T04_内容包覆盖全部三种打法()
         {
-            var kinds = _db.Cards.Values.Select(c => c.Kind)
+            CollectionAssert.AreEquivalent(
+                System.Enum.GetValues(typeof(CardPlay)).Cast<CardPlay>().ToList(),
+                _db.Cards.Values.Where(c => c.Play.HasValue).Select(c => c.Play.Value).Distinct().ToList());
+        }
+
+        /// <summary>
+        /// 打法之外的标记也要有卡覆盖到：普通牌、升变牌、形态牌、敌人意图。
+        /// 少掉一种意味着那条代码路径在整个内容包里一次都没被走到。
+        /// </summary>
+        [Test]
+        public void T04_内容包覆盖全部卡牌标记()
+        {
+            var roles = _db.Cards.Values.Select(c => c.Role)
                 .Concat(_db.Enemies.Values
                     .SelectMany(e => e.Intents.Values)
                     .Where(i => i.Card != null)
-                    .Select(i => i.Card.Kind))
+                    .Select(i => i.Card.Role))
                 .Distinct()
                 .ToList();
 
-            var expected = System.Enum.GetValues(typeof(CardKind)).Cast<CardKind>()
-                .Where(k => k != CardKind.Hero)
-                .ToList();
+            CollectionAssert.AreEquivalent(
+                System.Enum.GetValues(typeof(CardRole)).Cast<CardRole>().ToList(), roles);
+        }
 
-            CollectionAssert.AreEquivalent(expected, kinds);
-            CollectionAssert.DoesNotContain(kinds, CardKind.Hero,
-                "内容包补上英雄技能牌了——请把这条测试并回 T04_内容包覆盖全部四种卡牌来源 的完整断言");
+        /// <summary>
+        /// <b>英雄技能牌目前整个内容包一张都没有</b>——「命刻之战」的两名角色都没到
+        /// 10 级精通，按 §3.3 本来就带不了。这是**内容待补**，不是代码缺陷，所以如实记在这里；
+        /// 等内容包补上英雄技能牌，把这条测试删掉即可。
+        /// §3.3 的精通校验规则本身由 <c>DeckValidatorTests</c> 用构造卡守着。
+        /// </summary>
+        [Test]
+        public void T04_内容包还没有英雄技能牌()
+        {
+            CollectionAssert.IsEmpty(
+                _db.Cards.Values.Where(c => c.IsHeroSkill).Select(c => c.Id).ToList(),
+                "内容包补上英雄技能牌了——请删掉这条测试，并确认 DeckValidator 的 10 级精通校验真的作用到了它身上");
         }
 
         [Test]

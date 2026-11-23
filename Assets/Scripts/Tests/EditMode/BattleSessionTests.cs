@@ -259,7 +259,7 @@ namespace TCGinFU.Core.Tests
         [Test]
         public void 费用摘要带暴击标识()
         {
-            var def = new CardDefinition("shot", "穿心射", CardCategory.Class, CardKind.Skill)
+            var def = new CardDefinition("shot", "穿心射", CardCategory.Class, CardPlay.Skill)
             {
                 ApCost = 2,
                 MpCost = 5,

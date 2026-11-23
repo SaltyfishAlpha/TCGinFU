@@ -16,15 +16,20 @@ namespace TCGinFU.View
     /// <para>卡面来自 <see cref="CardPreviewStage"/>——和详情面板左侧是同一套机制，
     /// 但**各用一座棚子**：共用的话，打牌时正好开着详情面板就会互相抢那张 RenderTexture。</para>
     ///
+    /// <para><b>两种时长。</b>玩家自己打出的牌只需要闪一下（<see cref="Enqueue"/>）——
+    /// 他知道自己打的是什么。首领宣告的意图要**钉住**（<see cref="Hold"/>）直到响应窗口关闭：
+    /// 那张牌正是玩家此刻要据以决定打不打时机牌的东西，定时淡出意味着
+    /// 想得久一点就得回去翻战报。</para>
+    ///
     /// <para>特效还没有。这里只负责「亮出来、停一下、收回去」，
     /// 等特效系统到位时在 <see cref="Play"/> 里挂上就行。</para>
     /// </summary>
     public sealed class CardShowcase : MonoBehaviour
     {
         private const float CardHeight = 400f;
-        private const float FadeIn = 0.12f;
-        private const float Hold = 1.05f;
-        private const float FadeOut = 0.25f;
+        private const float FadeInSeconds = 0.12f;
+        private const float HoldSeconds = 1.05f;
+        private const float FadeOutSeconds = 0.25f;
 
         /// <summary>
         /// 队列上限。一次敌人阶段可能连续结算好几条意图，
@@ -40,6 +45,7 @@ namespace TCGinFU.View
         private Text _caption;
         private float _elapsed;
         private bool _playing;
+        private bool _held;
 
         public static CardShowcase Create(Transform parent, CardPreviewStage stage)
         {
@@ -103,6 +109,31 @@ namespace TCGinFU.View
             gameObject.SetActive(true);
         }
 
+        /// <summary>
+        /// 亮出一张牌并**钉住**，直到 <see cref="Release"/>。首领宣告意图时用：
+        /// 响应窗口会一直开着等玩家，定时淡出等于逼他回去翻战报。
+        /// </summary>
+        public void Hold(CardDefinition card, string actorName)
+        {
+            if (card == null) return;
+
+            // 宣告压过还没播完的队列：此刻最要紧的事是「首领要干什么」
+            _queue.Clear();
+            gameObject.SetActive(true);
+            _held = true;
+            Play(card, actorName);
+        }
+
+        /// <summary>响应窗口关了，让钉住的那张牌接着淡出。</summary>
+        public void Release()
+        {
+            if (!_held) return;
+
+            _held = false;
+            // 从停住的那一刻直接接上淡出，不重播一遍
+            _elapsed = Mathf.Max(_elapsed, FadeInSeconds + HoldSeconds);
+        }
+
         private void Update()
         {
             if (!_playing)
@@ -115,9 +146,12 @@ namespace TCGinFU.View
             }
 
             _elapsed += Time.deltaTime;
+            // 钉住时把计时卡在「完全不透明」那一刻，后面的队列也跟着等
+            if (_held) _elapsed = Mathf.Min(_elapsed, FadeInSeconds + HoldSeconds);
+
             _group.alpha = AlphaAt(_elapsed);
 
-            if (_elapsed >= FadeIn + Hold + FadeOut) _playing = false;
+            if (!_held && _elapsed >= FadeInSeconds + HoldSeconds + FadeOutSeconds) _playing = false;
         }
 
         private void Play(CardDefinition card, string actorName)
@@ -132,9 +166,9 @@ namespace TCGinFU.View
 
         private static float AlphaAt(float t)
         {
-            if (t < FadeIn) return t / FadeIn;
-            if (t < FadeIn + Hold) return 1f;
-            return Mathf.Clamp01(1f - (t - FadeIn - Hold) / FadeOut);
+            if (t < FadeInSeconds) return t / FadeInSeconds;
+            if (t < FadeInSeconds + HoldSeconds) return 1f;
+            return Mathf.Clamp01(1f - (t - FadeInSeconds - HoldSeconds) / FadeOutSeconds);
         }
 
         /// <summary>播完了就收摊，顺带关掉摄影棚，预览相机不再空转。</summary>
@@ -150,6 +184,7 @@ namespace TCGinFU.View
         {
             _queue.Clear();
             _playing = false;
+            _held = false;
             Stop();
         }
     }

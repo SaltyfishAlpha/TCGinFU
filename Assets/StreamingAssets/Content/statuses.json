@@ -52,6 +52,69 @@
       "behaviourId": "status_oil"
     },
     {
+      "id": "weakness_revealed",
+      "name": "弱点已揭示",
+      "rulesText": "该目标的属性弱点已被揭示（本局持续）。"
+    },
+    {
+      "id": "suppressed",
+      "name": "烟幕压制",
+      "rulesText": "本轮后续造成的伤害降低3点。",
+      "outgoingDamageBonus": -3,
+      "negative": true
+    },
+    {
+      "id": "dash_refunded",
+      "name": "瞬影突袭（本轮已返还）",
+      "rulesText": "记录本轮已经返还过1点AP。"
+    },
+    {
+      "id": "wind_wall",
+      "name": "风墙反制（待判）",
+      "rulesText": "本次攻击若被完全抵消，则对攻击者反击。",
+      "behaviourId": "status_wind_wall"
+    },
+    {
+      "id": "bomb_element",
+      "name": "元素增殖炸弹（选定属性）",
+      "rulesText": "记录本次打出选定的元素属性（层数即属性序号）。"
+    },
+    {
+      "id": "vulnerable_fire",
+      "name": "易损·火",
+      "rulesText": "受到火属性伤害×2。",
+      "vulnerableElement": "Fire",
+      "negative": true
+    },
+    {
+      "id": "vulnerable_ice",
+      "name": "易损·冰",
+      "rulesText": "受到冰属性伤害×2。",
+      "vulnerableElement": "Ice",
+      "negative": true
+    },
+    {
+      "id": "vulnerable_lightning",
+      "name": "易损·雷",
+      "rulesText": "受到雷属性伤害×2。",
+      "vulnerableElement": "Lightning",
+      "negative": true
+    },
+    {
+      "id": "vulnerable_wind",
+      "name": "易损·风",
+      "rulesText": "受到风属性伤害×2。",
+      "vulnerableElement": "Wind",
+      "negative": true
+    },
+    {
+      "id": "vulnerable_poison",
+      "name": "易损·毒",
+      "rulesText": "受到毒属性伤害×2。",
+      "vulnerableElement": "Poison",
+      "negative": true
+    },
+    {
       "id": "reflux_used",
       "name": "灵智回流（本轮已触发）",
       "rulesText": "记录本轮「灵智回流」已触发的次数。"

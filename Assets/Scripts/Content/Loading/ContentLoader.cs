@@ -130,22 +130,40 @@ namespace TCGinFU.Content.Loading
 
             if (colors.Count > 2) errors.Add($"{where}：颜色最多 2 项，当前 {colors.Count} 项");
 
+            // 「可选消耗几个充能」。声明在卡上，界面据此自动生成提问（见 CardDefinition.ChargeOptions）
+            var chargeOptions = new List<int>();
+            foreach (JsonValue option in node["chargeOptions"].Items)
+            {
+                int count = option.AsInt(-1);
+                if (count < 0) { errors.Add($"{where} 的 chargeOptions：{option.AsString("(非数字)")} 不是非负整数"); continue; }
+                if (!chargeOptions.Contains(count)) chargeOptions.Add(count);
+            }
+
+            chargeOptions.Sort();
+
+            CardRole role = ReadRole(node, where, errors);
+
             return new CardDefinition(
                 id,
                 node["name"].AsString(id),
                 node["category"].AsEnum(CardCategory.Class, $"{where} 的 category", errors),
-                node["kind"].AsEnum(CardKind.Skill, $"{where} 的 kind", errors))
+                ReadPlay(node, role, where, errors))
             {
+                Role = role,
+                FormId = ReadFormId(node, role, where, errors),
+                IsHeroSkill = node["hero"].AsBool(),
                 Colors = colors,
                 ApCost = node["ap"].AsInt(),
                 MpCost = node["mp"].AsInt(),
                 ChargeCost = node["charge"].AsInt(),
+                ChargeOptions = chargeOptions,
                 HasCrit = node["hasCrit"].AsBool(),
                 // 迁移时 ranged 落在 unmapped 里，现在它是正式字段了；两处都认，老包不用改
                 IsRanged = node["ranged"].Exists ? node["ranged"].AsBool() : node["unmapped"]["ranged"].AsBool(),
                 RequiresBackRow = node["requiresBackRow"].Exists
                     ? node["requiresBackRow"].AsBool()
                     : node["unmapped"]["requires_back_row"].AsBool(),
+                Targeting = node["targeting"].AsEnum(CardTargeting.Auto, $"{where} 的 targeting", errors),
                 ClassId = Blank(node["classId"].AsString()),
                 RulesText = node["rulesText"].AsString(),
                 ArtId = Blank(node["art"].AsString()),
@@ -166,6 +184,67 @@ namespace TCGinFU.Content.Loading
         }
 
         /// <summary>
+        /// 读 <c>role</c>：打法之外的标记（§7.1）。缺省是普通牌。
+        /// <para><c>EnemyIntent</c> 不接受手写——敌人意图只能来自 <c>enemies/*.json</c>，
+        /// 让卡牌文件里出现一张「敌人牌」只会让它既进不了卡组也没人宣告。</para>
+        /// </summary>
+        private static CardRole ReadRole(JsonValue node, string where, List<string> errors)
+        {
+            if (!node["role"].Exists) return CardRole.Normal;
+
+            CardRole role = node["role"].AsEnum(CardRole.Normal, $"{where} 的 role", errors);
+            if (role == CardRole.EnemyIntent)
+            {
+                errors.Add($"{where}：role 不能手写成 EnemyIntent，敌人意图只能定义在 enemies/*.json 里");
+                return CardRole.Normal;
+            }
+
+            return role;
+        }
+
+        /// <summary>
+        /// 读 <c>play</c>：打法（§7.1）。升变牌不按打法结算，所以它既不该有也不需要；
+        /// 其余的牌**必须**写明——缺省成「技能」会让一张写着「受击时打出」的牌在响应窗口被拒收。
+        /// </summary>
+        private static CardPlay? ReadPlay(JsonValue node, CardRole role, string where, List<string> errors)
+        {
+            if (role == CardRole.Transform)
+            {
+                if (node["play"].Exists) errors.Add($"{where}：升变牌不按打法结算，不要写 play");
+                return null;
+            }
+
+            if (!node["play"].Exists)
+            {
+                // 2026-11-23 之前这里写的是 kind，一个字段同时管打法和标记。
+                // 老包落到这条错误上，所以顺带把改法说清楚
+                errors.Add(
+                    $"{where}：缺少 play（Skill / Timing / Continuous）"
+                    + "。老包的 kind 已拆成 play 与 role（Transform / Form）");
+                return CardPlay.Skill;
+            }
+
+            return node["play"].AsEnum(CardPlay.Skill, $"{where} 的 play", errors);
+        }
+
+        /// <summary>读 <c>formId</c>：形态牌所属的形态卡组。两个方向都要对得上。</summary>
+        private static string ReadFormId(JsonValue node, CardRole role, string where, List<string> errors)
+        {
+            string formId = Blank(node["formId"].AsString());
+
+            if (role == CardRole.Form && formId == null)
+            {
+                errors.Add($"{where}：形态牌缺少 formId，无法确认它属于哪一组形态");
+            }
+            else if (role != CardRole.Form && formId != null)
+            {
+                errors.Add($"{where}：只有 role 为 Form 的牌才能写 formId");
+            }
+
+            return formId;
+        }
+
+        /// <summary>
         /// 把一条意图读成一张**敌人的牌**。
         ///
         /// <para>敌人的意图不是另一套机制，所以它的效果也该是 <see cref="EffectData"/>、
@@ -180,8 +259,10 @@ namespace TCGinFU.Content.Loading
                 intentId,
                 node["name"].AsString(intentId),
                 CardCategory.Class,
-                CardKind.Enemy)
+                // 意图由敌人按阶段宣告，不走玩家的打法体系
+                play: null)
             {
+                Role = CardRole.EnemyIntent,
                 MpCost = node["mp"].Exists ? node["mp"].AsInt() : node["unmapped"]["mp"].AsInt(),
                 RulesText = node["text"].AsString(),
                 BehaviourId = Blank(node["behaviourId"].AsString()),
@@ -221,6 +302,13 @@ namespace TCGinFU.Content.Loading
                     CritResistDelta = node["critResistDelta"].AsInt(),
                     IncomingMultiplierNumerator = node["incomingMultiplier"][0].AsInt(),
                     IncomingMultiplierDenominator = node["incomingMultiplier"][1].AsInt(),
+
+                    // 不写就是「不改克制」。不能给个默认属性顶上——
+                    // 那会让每个状态都顺手把宿主变成物理易损
+                    VulnerableElement = Blank(node["vulnerableElement"].AsString()) == null
+                        ? null
+                        : node["vulnerableElement"].AsEnum(
+                            DamageElement.Physical, $"{where} 的 vulnerableElement", report.Errors),
                 }, report, file);
             }
         }
@@ -254,6 +342,8 @@ namespace TCGinFU.Content.Loading
                 RowTarget = node["rowTarget"].Exists
                     ? node["rowTarget"].AsEnum(Row.Back, $"{where} 的 rowTarget", errors)
                     : (Row?)null,
+                // 去哪一排由卡面定死，排内站哪让玩家挑（裁定 R-17c）
+                PlayerChoosesSlot = node["playerChoosesSlot"].AsBool(),
             };
         }
 
@@ -405,6 +495,9 @@ namespace TCGinFU.Content.Loading
                         DamageElement.Physical, $"{where} 的意图 {intentId} 的 element", errors),
                     DesignatedRow = node2["designatedRow"].AsEnum(
                         Row.Front, $"{where} 的意图 {intentId} 的 designatedRow", errors),
+                    // 「可在响应时由相邻队友分摊」——响应窗口里多给玩家一个选项（B-14）
+                    Shareable = node2["shareable"].AsBool(),
+
                     // 不写就按 targeting 推导（单体锁定 / 范围结算时定，裁定 R-24）
                     LocksTargetOverride = node2["locksTarget"].Exists
                         ? node2["locksTarget"].AsBool()

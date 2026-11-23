@@ -24,6 +24,7 @@ namespace TCGinFU.Core
             registry.Register(new RestoreMpEffectHandler());
             registry.Register(new GainApEffectHandler());
             registry.Register(new DrawEffectHandler());
+            registry.Register(new DiscardEffectHandler());
             registry.Register(new GainChargeEffectHandler());
             registry.Register(new ApplyStatusEffectHandler());
             registry.Register(new MoveRowEffectHandler());

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using TCGinFU.Core;
 using TCGinFU.Presentation;
@@ -352,6 +353,12 @@ namespace TCGinFU.Sandbox
                     session.Submit(new SpendChargeForApAction(player.Id), "充能换成了 1 点 AP。");
                 }
 
+                if (GUILayout.Button($"消耗充能 +{BattleEngine.MpPerCharge}MP", GUILayout.Width(120)))
+                {
+                    session.Submit(
+                        new SpendChargeForMpAction(player.Id), $"充能换成了 {BattleEngine.MpPerCharge} 点 MP。");
+                }
+
                 if (GUILayout.Button("走位（1AP）", GUILayout.Width(100)))
                 {
                     session.Submit(new MoveRowAction(player.Id), $"{player.Name} 换了排位。");
@@ -383,6 +390,25 @@ namespace TCGinFU.Sandbox
 
                 GUILayout.FlexibleSpace();
                 GUI.enabled = session.IsWaitingOn(player.Id);
+
+                // 「可在响应时由相邻队友分摊」（B-14）：候选由引擎给，
+                // 队伍几个人、范围意图打中几个都不用这里操心
+                foreach (Combatant target in session.Engine.ShareableTargetsFor(player))
+                {
+                    if (!GUILayout.Button($"替 {target.Name} 分摊", GUILayout.Width(110))) continue;
+
+                    session.Submit(
+                        new ShareDamageAction(player.Id, target.Id),
+                        $"{player.Name} 替 {target.Name} 分摊，两人各承一半。");
+                }
+
+                // 响应牌也要花 MP（看破闪避 5 MP），所以转 MP 在这里也得有入口
+                if (GUILayout.Button($"消耗充能 +{BattleEngine.MpPerCharge}MP", GUILayout.Width(120)))
+                {
+                    session.Submit(
+                        new SpendChargeForMpAction(player.Id), $"充能换成了 {BattleEngine.MpPerCharge} 点 MP。");
+                }
+
                 if (GUILayout.Button("放弃响应", GUILayout.Width(90)))
                 {
                     session.Submit(new PassResponseAction(player.Id), $"{player.Name} 放弃响应。");
@@ -391,6 +417,12 @@ namespace TCGinFU.Sandbox
                 GUI.enabled = true;
             }
             GUILayout.EndHorizontal();
+
+            foreach (Combatant t in session.Engine.CurrentIntentTargets)
+            {
+                PlayerCharacter sharer = session.Engine.SharerFor(t);
+                if (sharer != null) GUILayout.Label($"　已登记分摊：{sharer.Name} 与 {t.Name} 各承一半。");
+            }
 
             GUILayout.Label("只有时机牌与防具牌能在这里打出：");
             DrawHand(session, player, playable: true);
@@ -442,12 +474,30 @@ namespace TCGinFU.Sandbox
                 {
                     GUILayout.Label(def.Name);
                     GUILayout.Label(BattleSession.CostText(def));
-                    GUILayout.Label($"{CategoryName(def.Category)}·{KindName(def.Kind)}");
+                    GUILayout.Label(TypeLine(def));
 
                     GUI.enabled = playable && session.IsWaitingOn(player.Id);
 
                     GUILayout.BeginHorizontal();
-                    if (GUILayout.Button("打出"))
+
+                    // 卡面声明了可选消耗（暗夜剔骨 0/1、万能灵药 1/2）就一个选项一个按钮，
+                    // 省得在沙盒里再做一层弹窗
+                    if (def.ChargeOptions.Count > 0)
+                    {
+                        foreach (int charges in def.ChargeOptions)
+                        {
+                            if (!GUILayout.Button($"打出·耗{charges}")) continue;
+
+                            string chargeTarget = BattleSession.NeedsAllyTarget(def)
+                                ? player.Id
+                                : session.SelectedEnemyId;
+
+                            session.Submit(
+                                new PlayCardAction(player.Id, card.Uid, chargeTarget, charges),
+                                $"打出「{def.Name}」，额外消耗 {charges} 个充能。");
+                        }
+                    }
+                    else if (GUILayout.Button("打出"))
                     {
                         string target = BattleSession.NeedsAllyTarget(def) ? player.Id : session.SelectedEnemyId;
                         session.Submit(
@@ -510,15 +560,33 @@ namespace TCGinFU.Sandbox
             _ => category.ToString(),
         };
 
-        private static string KindName(CardKind kind) => kind switch
+        private static string PlayName(CardPlay play) => play switch
         {
-            CardKind.Skill => "技能",
-            CardKind.Timing => "时机",
-            CardKind.Continuous => "持续",
-            CardKind.Transform => "升变",
-            CardKind.Form => "形态",
-            CardKind.Hero => "英雄",
-            _ => kind.ToString(),
+            CardPlay.Skill => "技能",
+            CardPlay.Timing => "时机",
+            CardPlay.Continuous => "持续",
+            _ => play.ToString(),
         };
+
+        private static string RoleName(CardRole role) => role switch
+        {
+            CardRole.Transform => "升变",
+            CardRole.Form => "形态",
+            CardRole.EnemyIntent => "意图",
+            _ => null,
+        };
+
+        /// <summary>类别 · 标记 · 打法（§7.1）。升变牌与敌人意图没有打法。</summary>
+        private static string TypeLine(CardDefinition def)
+        {
+            var parts = new List<string> { CategoryName(def.Category) };
+
+            string role = RoleName(def.Role);
+            if (role != null) parts.Add(role);
+            if (def.IsHeroSkill) parts.Add("英雄");
+            if (def.Play.HasValue) parts.Add(PlayName(def.Play.Value));
+
+            return string.Join("·", parts);
+        }
     }
 }

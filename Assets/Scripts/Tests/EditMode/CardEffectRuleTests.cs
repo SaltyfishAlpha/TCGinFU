@@ -45,12 +45,12 @@ namespace TCGinFU.Core.Tests
         [Test]
         public void 装备档案由武器牌与防具牌派生()
         {
-            var bow = new CardDefinition("bow", "短弓", CardCategory.Weapon, CardKind.Skill)
+            var bow = new CardDefinition("bow", "短弓", CardCategory.Weapon, CardPlay.Skill)
             {
                 WeaponBaseDamage = 7,
                 TwoHanded = true,
             };
-            var armor = new CardDefinition("armor", "皮甲", CardCategory.Armor, CardKind.Skill)
+            var armor = new CardDefinition("armor", "皮甲", CardCategory.Armor, CardPlay.Skill)
             {
                 ArmorBaseShield = 6,
             };
@@ -67,7 +67,7 @@ namespace TCGinFU.Core.Tests
         [Test]
         public void 武器牌伤害跟当前装备槽走()
         {
-            var shot = new CardDefinition("shot", "速射", CardCategory.Weapon, CardKind.Skill)
+            var shot = new CardDefinition("shot", "速射", CardCategory.Weapon, CardPlay.Skill)
             {
                 ApCost = 1,
                 Colors = new[] { AttributeColor.Dexterity },
@@ -109,7 +109,7 @@ namespace TCGinFU.Core.Tests
 
         /// <summary>第一段无条件 6 点，第二段带条件 7 点。</summary>
         private static CardDefinition Conditional(EffectCondition condition)
-            => new("conditional", "条件牌", CardCategory.Class, CardKind.Skill)
+            => new("conditional", "条件牌", CardCategory.Class, CardPlay.Skill)
             {
                 ApCost = 1,
                 Colors = new[] { AttributeColor.Might },
@@ -130,7 +130,7 @@ namespace TCGinFU.Core.Tests
 
         /// <summary>卡面 ChargeCost 1 → ChargeSpent = 1 → 1×5 + 4 = 9 点雷伤。</summary>
         private static CardDefinition Overcharge()
-            => new("overcharge", "超载", CardCategory.Class, CardKind.Skill)
+            => new("overcharge", "超载", CardCategory.Class, CardPlay.Skill)
             {
                 ApCost = 1,
                 ChargeCost = 1,
@@ -177,7 +177,7 @@ namespace TCGinFU.Core.Tests
             // 进错区的后果是「这张牌的常驻效果再也不生效」，而界面上看起来一切正常
             (BattleEngine engine, PlayerCharacter player, Enemy _) = Duel();
 
-            var mark = new CardDefinition("mark", "猎人印记", CardCategory.Class, CardKind.Continuous)
+            var mark = new CardDefinition("mark", "猎人印记", CardCategory.Class, CardPlay.Continuous)
             {
                 ApCost = 1,
                 Colors = new[] { AttributeColor.Insight },
@@ -210,7 +210,7 @@ namespace TCGinFU.Core.Tests
             var engine = new BattleEngine(state, EffectRegistry.CreateDefault(), null, statuses);
             engine.Start();
 
-            var mark = new CardDefinition("mark", "猎人印记", CardCategory.Class, CardKind.Continuous)
+            var mark = new CardDefinition("mark", "猎人印记", CardCategory.Class, CardPlay.Continuous)
             {
                 ApCost = 1,
                 Colors = new[] { AttributeColor.Insight },
@@ -243,7 +243,7 @@ namespace TCGinFU.Core.Tests
         {
             (BattleEngine engine, PlayerCharacter player, Enemy enemy) = Duel();
 
-            var cut = new CardDefinition("cut", "割裂", CardCategory.Class, CardKind.Skill)
+            var cut = new CardDefinition("cut", "割裂", CardCategory.Class, CardPlay.Skill)
             {
                 ApCost = 1,
                 Colors = new[] { AttributeColor.Dexterity },
@@ -292,7 +292,7 @@ namespace TCGinFU.Core.Tests
             var engine = new BattleEngine(state);
             engine.Start();
 
-            var bolt = new CardDefinition("bolt", "奥术飞弹", CardCategory.Class, CardKind.Skill)
+            var bolt = new CardDefinition("bolt", "奥术飞弹", CardCategory.Class, CardPlay.Skill)
             {
                 ApCost = 1,
                 HasCrit = true,

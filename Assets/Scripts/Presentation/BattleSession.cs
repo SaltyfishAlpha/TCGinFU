@@ -205,9 +205,13 @@ namespace TCGinFU.Presentation
             return false;
         }
 
-        /// <summary>这张牌是指向队友还是指向敌人。</summary>
+        /// <summary>
+        /// 这张牌是指向队友还是指向敌人。以卡面声明的 <see cref="CardDefinition.Targeting"/> 为准——
+        /// 从 Effects 反推会把「贴入全队任意角色充能区」这类卡判成「不指向队友」，
+        /// 于是界面把**敌人** Id 当目标发过去，玩家点的队友根本传不到引擎。
+        /// </summary>
         public static bool NeedsAllyTarget(CardDefinition def)
-            => def.Effects.Any(e => e.Target.Scope == TargetScope.SingleAlly);
+            => def.ResolvedTargeting == CardTargeting.Ally;
 
         /// <summary>
         /// 自动打完整局：每个决策点先自动出牌，再推进。

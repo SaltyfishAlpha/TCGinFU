@@ -70,8 +70,15 @@ namespace TCGinFU.Core
                 : crit.Multiplier;
             int afterCrit = afterModifiers * num / den;
 
-            // ④ 属性克制
+            // ④ 属性克制。角色自带的克制表是建角色时定死的，
+            // 「临时获得该元素的【易损】状态」（元素增殖炸弹）要靠状态层临时补一条。
+            // 只补 Normal：卡牌不该把既有的抗性/免疫/吸收反向改成弱点
             Affinity affinity = target.Affinities[element];
+            if (affinity == Affinity.Normal && target.Statuses.IsVulnerableTo(element))
+            {
+                affinity = Affinity.Vulnerable;
+            }
+
             if (affinity == Affinity.Absorb)
             {
                 // 裁定 R-05：按暴击后、克制前的数值转为治疗，不再乘 2。

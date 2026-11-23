@@ -57,10 +57,14 @@ namespace TCGinFU.Core
         Magical,
     }
 
-    /// <summary>卡牌四大来源（规则书 §7.1）。</summary>
+    /// <summary>
+    /// 卡牌的**类别**（规则书 §7.1）：这张牌从哪来、谁能编入。
+    /// 与 <see cref="CardPlay"/> 是两个互不相干的维度。
+    /// <para>§2.3 的「角色专属牌」还没实现，见 known_issues。</para>
+    /// </summary>
     public enum CardCategory
     {
-        /// <summary>职业牌（含升变牌）</summary>
+        /// <summary>职业牌。升变牌与英雄技能牌都归在这一类下，它们是标记不是类别。</summary>
         Class,
         Weapon,
         Armor,
@@ -68,28 +72,64 @@ namespace TCGinFU.Core
         Treasure,
     }
 
-    /// <summary>卡牌在结算上的细分形态（规则书 §7.1 / §3.3 / §6）。</summary>
-    public enum CardKind
+    /// <summary>
+    /// 卡牌的**打法**（规则书 §7.1）：这张牌什么时候打、打出后去哪。只有三种。
+    ///
+    /// <para>和 <see cref="CardRole"/> 是两个互不相干的维度——升变牌、形态牌、敌人意图
+    /// 不是第四、第五种打法，形态牌仍然有自己的打法（烟幕替身是「形态牌 · 时机」）。</para>
+    /// </summary>
+    public enum CardPlay
     {
-        /// <summary>技能牌：耗 AP 与 MP 直接结算</summary>
+        /// <summary>技能牌：玩家阶段主动打出，耗 AP / MP，当场结算后进入弃牌堆</summary>
         Skill,
-        /// <summary>时机牌：留在手中，在敌人阶段或队友行动时响应打出</summary>
+        /// <summary>时机牌：留在手中，在敌人阶段或队友行动时作为响应打出</summary>
         Timing,
-        /// <summary>持续牌：置入持续区提供常驻增益</summary>
+        /// <summary>持续牌：置入持续区，常驻生效（§4.1）</summary>
         Continuous,
-        /// <summary>升变牌</summary>
-        Transform,
-        /// <summary>形态额外卡组中的牌</summary>
-        Form,
-        /// <summary>英雄技能牌（10 级精通）</summary>
-        Hero,
+    }
+
+    /// <summary>
+    /// 打法之外的标记（规则书 §7.1「不属于打法的标记」）。和 <see cref="CardPlay"/>、
+    /// <see cref="CardCategory"/> 都是独立维度。
+    /// </summary>
+    public enum CardRole
+    {
+        /// <summary>普通牌：按自己的打法结算</summary>
+        Normal,
 
         /// <summary>
-        /// 敌人的牌。敌人的「意图」就是它手里一套玩家看不到的牌，
-        /// 按阶段从备选池里挑一张宣告出来，结算走和玩家出牌完全相同的管线。
-        /// <para>单列一个 kind 是为了让构筑校验与手牌界面能把它排除在外。</para>
+        /// 升变牌（§6）。本身不按打法结算，而是走升变宣告，
+        /// 所以它的 <see cref="CardDefinition.Play"/> 是 null。
         /// </summary>
+        Transform,
+
+        /// <summary>
+        /// 形态牌：属于某张升变牌的形态额外卡组，只在升变期间抽到（§6.2）。
+        /// <b>仍然有自己的打法</b>——「在哪个牌堆」和「什么时候打」是两件事。
+        /// </summary>
+        Form,
+
+        /// <summary>
+        /// 敌人意图（§8 ④）。敌人的意图就是它手里一套玩家看不到的牌，
+        /// 按阶段从备选池里挑一张宣告出来，结算沿用同一套卡牌效果体系。
+        /// <para>不是玩家卡牌：不能编入卡组，不进手牌，也不按打法结算
+        /// （<see cref="CardDefinition.Play"/> 同样是 null）。</para>
+        /// </summary>
+        EnemyIntent,
+    }
+
+    /// <summary>
+    /// 一张牌要玩家指定什么目标。与 <see cref="TargetScope"/> 不是一回事：
+    /// 那个说的是「某条效果作用到谁」，这个说的是「出牌时界面该让玩家点谁」。
+    /// </summary>
+    public enum CardTargeting
+    {
+        /// <summary>按卡面 effects 推导（有 SingleEnemy 就指敌人，有 SingleAlly 就指队友）</summary>
+        Auto,
+        /// <summary>不需要指定</summary>
+        None,
         Enemy,
+        Ally,
     }
 
     /// <summary>升变牌的触发方式（规则书 §6.1）。</summary>

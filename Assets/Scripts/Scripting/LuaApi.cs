@@ -76,6 +76,14 @@ namespace TCGinFU.Scripting
                 return DynValue.Nil;
             });
 
+            // 直接削减护盾（「并削减所有敌人3点物理护盾」）。不是伤害，不走伤害管线。
+            // 返回实际削掉的点数——盾不够时会少于要求的数量
+            g["strip_shield"] = DynValue.NewCallback((_, a) => DynValue.NewNumber(
+                Engine?.ReduceShield(
+                    Who(a[0]),
+                    ParseShield(a.Count > 2 ? a[2].CastToString() : "physical"),
+                    Int(a, 1)) ?? 0));
+
             // ── 资源 ──
             g["restore_mp"] = DynValue.NewCallback((_, a) =>
             {
@@ -93,6 +101,12 @@ namespace TCGinFU.Scripting
             {
                 var drawn = Engine?.DrawCards(Player(a[0]), Int(a, 1));
                 return DynValue.NewNumber(drawn?.Count ?? 0);
+            });
+
+            g["discard"] = DynValue.NewCallback((_, a) =>
+            {
+                var tossed = Engine?.DiscardFromHand(Player(a[0]), Int(a, 1));
+                return DynValue.NewNumber(tossed?.Count ?? 0);
             });
 
             // ── 状态 ──
@@ -120,6 +134,19 @@ namespace TCGinFU.Scripting
                 return DynValue.Nil;
             });
 
+            // 「移除……身上的1个负面状态」。哪些算负面由引擎统一判（见 RemoveNegativeStatuses），
+            // 让每张卡自己列一串 id 的话，新加一个负面状态就要回头改所有净化牌
+            g["remove_negative_status"] = DynValue.NewCallback((_, a) =>
+            {
+                var removed = Engine?.RemoveNegativeStatuses(Who(a[0]), a.Count > 1 ? Int(a, 1) : 1);
+                return DynValue.NewNumber(removed?.Count ?? 0);
+            });
+
+            // 分摊一次攻击：share_damage(站出来的队友, 原目标) → 成功与否（B-14）。
+            // 只在响应窗口、且意图写了 shareable 时成立；拆法与护盾抵扣见 BattleEngine.ApplyCoversAndShares
+            g["share_damage"] = DynValue.NewCallback((_, a) =>
+                DynValue.NewBoolean(Engine?.RegisterDamageShare(Player(a[0]), Who(a[1])) ?? false));
+
             // ── 走位 ──
             // move_row 是「在前后排之间切换」，move_to 是「移动到指定排」。
             // 两者不能混用：「击退至后排」对已经在后排的人应当无事发生，
@@ -133,7 +160,24 @@ namespace TCGinFU.Scripting
                 return DynValue.NewBoolean(Engine?.MoveRow(Who(a[0]), row, free: true) ?? false);
             });
 
-            // 「**可**免费移动1次」——不立刻移动，存成额度等玩家自己兑现
+            // move_slot 是「移动到指定排的指定槽位」，同排内换位也走它。
+            // 目标槽有队友时会挤开，所以满员的排照样调得动站位。
+            g["move_slot"] = DynValue.NewCallback((_, a) =>
+            {
+                Row row = ParseRow(a[1].CastToString());
+                return DynValue.NewBoolean(Engine?.MoveRow(Who(a[0]), row, Int(a, 2), free: true) ?? false);
+            });
+
+            // 「移动到X排」但排内站哪由玩家挑（先声夺人）。移动是强制的，
+            // 只有相对位置可选；窗口开在整张牌结算完之后（裁定 R-17c）
+            g["choose_slot_in"] = DynValue.NewCallback((_, a) =>
+            {
+                Engine?.RequestSlotChoice(Who(a[0]), ParseRow(a[1].CastToString()));
+                return DynValue.Nil;
+            });
+
+            // 「**可**免费移动1次」——不立刻移动，存成额度等玩家自己兑现。
+            // 兑现时落点是任意排任意槽位，不限于对排
             g["grant_free_move"] = DynValue.NewCallback((_, a) =>
             {
                 Engine?.GrantFreeMove(Player(a[0]), a.Count > 1 ? Int(a, 1) : 1);
@@ -231,6 +275,34 @@ namespace TCGinFU.Scripting
             });
 
             g["round"] = DynValue.NewCallback((_, _) => DynValue.NewNumber(State?.Round ?? 0));
+
+            // 某人的属性弱点（第一个【易损】属性），没有弱点返回 nil。
+            // 「揭示目标1项属性弱点」「自动适应并触发每名敌人的易损弱点属性」要读它
+            g["weakness_of"] = DynValue.NewCallback((_, a) =>
+            {
+                Combatant c = Who(a[0]);
+                if (c == null) return DynValue.Nil;
+
+                foreach (DamageElement element in (DamageElement[])Enum.GetValues(typeof(DamageElement)))
+                {
+                    if (c.Affinities[element] == Affinity.Vulnerable || c.Statuses.IsVulnerableTo(element))
+                    {
+                        return DynValue.NewString(element.ToString().ToLowerInvariant());
+                    }
+                }
+
+                return DynValue.Nil;
+            });
+
+            // 「若本轮已有**其他队友**对该目标造成过伤害」——按来源区分，
+            // damage_taken_this_round 只有总量，答不了「是谁打的」
+            g["damaged_this_round_by"] = DynValue.NewCallback((_, a) =>
+            {
+                Combatant target = Who(a[0]);
+                Combatant who = Who(a[1]);
+                return DynValue.NewBoolean(
+                    target != null && who != null && target.DamagersThisRound.Contains(who.Id));
+            });
 
             // 全队充能区合计——「真理炼金矩阵」的前置条件要读它
             g["team_charges"] = DynValue.NewCallback((_, _) =>

@@ -25,7 +25,7 @@ namespace TCGinFU.Core
         public string OwnerId { get; }
 
         /// <summary>是否属于形态额外卡组（退出升变时要整体移出本局）。</summary>
-        public bool IsFormCard => Definition.Kind == CardKind.Form;
+        public bool IsFormCard => Definition.Role == CardRole.Form;
 
         public string Name => Definition.Name;
 

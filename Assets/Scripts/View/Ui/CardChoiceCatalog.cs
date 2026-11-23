@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using TCGinFU.Core;
 
 namespace TCGinFU.View
@@ -95,15 +96,9 @@ namespace TCGinFU.View
 
             // 「打出时需消耗1个充能指示物，从以下两项炼金效果中二选一；
             //   若消耗2个充能指示物则两项同时生效。」
+            // 「消耗几个充能」那一问不在这里——它由卡面的 chargeOptions 自动生成（见 For）
             ["universal_elixir"] = new[]
             {
-                new ChoicePrompt
-                {
-                    Key = "charge",
-                    Title = "调合·万能灵药：消耗几个充能？",
-                    Options = new[] { ("1 个 —— 两项里二选一", 1), ("2 个 —— 两项同时生效", 2) },
-                    OptionAvailable = (player, count) => player.Zones.Charges.Count >= count,
-                },
                 new ChoicePrompt
                 {
                     Key = "mode",
@@ -152,8 +147,44 @@ namespace TCGinFU.View
 
         private static readonly ChoicePrompt[] None = Array.Empty<ChoicePrompt>();
 
-        public static IReadOnlyList<ChoicePrompt> For(string cardId)
-            => cardId != null && Table.TryGetValue(cardId, out ChoicePrompt[] prompts) ? prompts : None;
+        /// <summary>
+        /// 这张牌打出前要问的全部问题。「消耗几个充能？」排在最前面——
+        /// 后面的问题可能依赖它（万能灵药消耗 2 个时就不该再问「二选一选哪项」）。
+        ///
+        /// <para>充能那一问不写在 <see cref="Table"/> 里，而是照卡面的
+        /// <see cref="CardDefinition.ChargeOptions"/> 现生成：带这种词条的牌会越来越多
+        /// （design_backlog O-10 的角色专属牌以充能为轴），每张都在表现层写死一份
+        /// 迟早会漏掉一张——漏掉的表现是「卡面写着可以消耗，界面却没有入口」，正是 B-15。</para>
+        /// </summary>
+        public static IReadOnlyList<ChoicePrompt> For(CardDefinition definition)
+        {
+            if (definition == null) return None;
+
+            ChoicePrompt[] table = Table.TryGetValue(definition.Id, out ChoicePrompt[] found) ? found : None;
+            ChoicePrompt charge = ChargePromptFor(definition);
+            if (charge == null) return table;
+
+            var prompts = new List<ChoicePrompt>(table.Length + 1) { charge };
+            prompts.AddRange(table);
+            return prompts;
+        }
+
+        /// <summary>卡面声明了可选消耗就生成一问，没声明就没有这一问。</summary>
+        private static ChoicePrompt ChargePromptFor(CardDefinition definition)
+        {
+            IReadOnlyList<int> options = definition.ChargeOptions;
+            if (options == null || options.Count == 0) return null;
+
+            return new ChoicePrompt
+            {
+                Key = "charge",
+                Title = $"{definition.Name}：额外消耗几个充能？",
+                Options = options.Select(n => (n == 0 ? "不消耗" : $"{n} 个充能", n)).ToArray(),
+                // 卡面硬费用那几个充能也要从同一个充能区出，所以可选的那部分只能用剩下的
+                OptionAvailable = (player, count) =>
+                    player.Zones.Charges.Count >= count + definition.ChargeCost,
+            };
+        }
 
         private static int Answer(IReadOnlyDictionary<string, int> answers, string key, int fallback)
             => answers.TryGetValue(key, out int value) ? value : fallback;

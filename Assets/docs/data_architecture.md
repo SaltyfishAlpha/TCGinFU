@@ -100,7 +100,7 @@ pack.json ──▶ ContentLoader.LoadPack(db, readFile, report)
                 └─ 按固定顺序：statuses → cards → characters → enemies → decks
                      LoadStatuses / LoadCards→ReadCard→ReadEffect
                      LoadCharacters→ReadCharacter（EquipFrom / ArmorFrom 查已加载的卡）
-                     LoadEnemies→ReadEnemy（意图经 ReadEnemyCard 变成一张 CardKind.Enemy 的牌）
+                     LoadEnemies→ReadEnemy（意图经 ReadEnemyCard 变成一张 CardRole.EnemyIntent 的牌）
                      LoadDecks
               ▶ ContentDatabase（按 id 索引）
 ContentScenario.CreateEngine
@@ -208,15 +208,22 @@ Content/
 沙箱、钩子表、动词、超时看门狗见 [behaviour_layer_handoff.md](behaviour_layer_handoff.md)，这里不重复。
 
 `LuaScriptHost.BuildRegistry` 拿 `db.DeclaredBehaviourIds`（卡 + 状态 + 意图声明的全部 `behaviourId`）对账，写进 `ScriptLoadReport.Warnings`：
-声明了却没有脚本、脚本注册了却没人引用、行为一个钩子都没挂。当前内容包**常驻 24 条警告**：
+声明了却没有脚本、脚本注册了却没人引用、行为一个钩子都没挂。当前内容包**常驻 2 条警告**：
 
 | 类 | 条数 | 明细 |
 | ----- | ----- | ----- |
-| 纯数据卡也声明了 `behaviourId` | 21 | 效果全靠 `effects` 就能结算，`behaviourId` 是迁移时 `card.effect` 原样带过来的 |
 | 哑火卡 | 2 | `lucky_reversal`（幸运改命，缺「掷骰后」响应窗口）、`mana_overload_ritual`（魔力过载仪式，缺魔力激发卷轴） |
-| 空行为 | 1 | `behaviour("causal_erasure", {})`（`scripts/enemies.lua:143`），因果抹杀令的「相邻分摊」未做 |
 
-核对口径：声明的不重复 id 66 个，注册 43 个，差 23 = 21 + 2；无「注册了没人引用」。
+核对口径：声明的不重复 id 64 个，注册 62 个，差 2；无「注册了没人引用」、无「空行为」。
+
+> **这张表曾经有 24 条，其中 21 条被归类成「纯数据卡也声明了 `behaviourId`，是迁移时原样带过来的」。
+> 那个判断是错的。** 那 21 张里绝大多数**并不是**纯数据卡，而是只兑现了卡面前半句：
+> 伤害照常结算，回血、抽牌、削盾、净化、必定暴击这些后半句静默失效
+> （未注册的 `behaviourId` 在 `BehaviourRegistry.Resolve` 里返回 null，那张卡**退化**为纯数据卡——
+> 退化是设计上有意的，但它意味着漏写不会报错）。
+>
+> 教训：对账警告一旦被当成噪音整类放过，它就不再是对账了。
+> 加新内容时请**逐条看完**，不要按类消音。
 注意 `ContentScenario.CreateEngine` 只把脚本的 **Errors** 并进 `LoadReport`，**Warnings 不会出现在游戏里**，只有直接看 `ScriptLoadReport` 才能看到。
 未注册的 `behaviourId` 在 `BehaviourRegistry.Resolve` 里返回 null，那张卡退化为纯数据卡。
 
@@ -261,7 +268,7 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 ```json
 {
   "id": "suppressing_volley", "name": "压制连射", "owner": "miku",
-  "category": "Weapon", "kind": "Skill", "classId": "浪客", "colors": ["Dexterity"],
+  "category": "Weapon", "play": "Skill", "classId": "浪客", "colors": ["Dexterity"],
   "ap": 1, "mp": 10, "charge": 0, "hasCrit": true,
   "rulesText": "对单个敌人连续射击2次，每次造成5点物理伤害【暴击】；两次射击分别独立投掷敏捷骰判定暴击。",
   "behaviourId": "suppressing_volley",
@@ -279,14 +286,19 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 | ----- | ----- | ----- |
 | `id` | 字符串，**必填** | |
 | `name` | 默认 = id | |
-| `category` | `CardCategory`，默认 `Class` | |
-| `kind` | `CardKind`，默认 `Skill` | |
+| `category` | `CardCategory`，默认 `Class` | **类别**：这张牌从哪来（§7.1）。和 `play` 是两个互不相干的维度 |
+| `play` | `CardPlay`，**必填** | **打法**：什么时候打、打出后去哪。只有 `Skill` / `Timing` / `Continuous` 三种。唯一能省的是升变牌（`role: Transform`），它不按打法结算；其余的牌漏写就报错——默认成 `Skill` 会让一张写着「受击时打出」的牌在响应窗口被拒收 |
+| `role` | `CardRole`，默认 `Normal` | 打法之外的**标记**：`Transform`（升变牌）/ `Form`（形态牌）。不是第四、第五种打法——形态牌仍然有自己的 `play`。`EnemyIntent` 不能手写，敌人意图只能定义在 `enemies/*.json` 里 |
+| `formId` | 字符串 | 形态牌属于哪一组形态。`role: Form` 必填，其余的牌写了报错。构筑校验据此确认没把别组的形态牌混进同一个形态卡组 |
+| `hero` | 布尔，默认 false | 英雄技能牌（职业 10 级精通所得，§3.3）。这是**标记**不是类别也不是打法：它属于职业牌，可以是任意打法 |
 | `classId` | 字符串 | 职业名，如「浪客」 |
 | `colors` | `AttributeColor[]`，最多 2 项 | 超过 2 项报错；空数组 = 无色（不投暴击骰） |
-| `ap` / `mp` / `charge` | 整数，默认 0 | |
+| `ap` / `mp` / `charge` | 整数，默认 0 | `charge` 是卡面**硬费用**（「消耗 X 个充能」里的 X），不够就打不出 |
+| `chargeOptions` | 整数数组，默认空 | 玩家可以**额外选择**消耗几个充能（见下） |
 | `hasCrit` | 布尔，默认 false | |
 | `ranged` | 布尔 | 缺省时读 `unmapped.ranged`（现有数据都写在 `unmapped` 里） |
 | `requiresBackRow` | 布尔 | 缺省时读 `unmapped.requires_back_row` |
+| `targeting` | `CardTargeting`，默认 `Auto` | 出牌时界面该让玩家点谁。`Auto` 按 `effects` 推导（有 `SingleEnemy` 就指敌人，有 `SingleAlly` 就指队友）。目标**只给行为层用**的卡（「贴入全队任意角色的充能区」）推导不出来，必须显式写 `Ally`，否则玩家点的队友会被整个丢掉、永远落在自己身上 |
 | `rulesText` | 字符串 | 卡面文字，不参与结算 |
 | `art` / `backArt` | art id | `backArt` 缺省用包的 `defaultCardBack` |
 | `behaviourId` | 字符串 | Lua 行为的挂载点 |
@@ -301,6 +313,25 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 
 加载器**不读**：`owner`、`formId`（`to_content.js` 用来分文件）、`unmapped` 下除 `ranged` / `requires_back_row` 以外的一切
 （`hits`、`damage_formula`、`legacyDamageAtLevel5`、`conditionalDamageAtLevel5`、`damageType` 等——迁移留痕与测试对账用）。
+
+#### `chargeOptions`：卡面允许玩家额外消耗几个充能
+
+卡面写「**若**消耗 1 个充能指示物，本次攻击必定暴击」这类词条时，消耗多少是玩家当场决定的，
+所以要在卡上声明可选的档位：
+
+```json
+"chargeOptions": [0, 1]     // 暗夜剔骨：可以不消耗，也可以消耗 1 个
+"chargeOptions": [1, 2]     // 调合·万能灵药：至少 1 个，消耗 2 个则两项都生效
+```
+
+- 非负整数数组，加载时升序去重；**含 0** 表示「可以不消耗」，**不含 0** 表示至少要选一个。
+- 缺省（空数组）= 这张牌没有可选消耗，`PlayCardAction.ChargeForEffect` 只能是 0，否则引擎拒绝。
+- 和 `charge` 是两回事：`charge` 是扣定了的硬费用，两者**相加**后一起从充能区出，
+  全部记为 `ChargeUse.PayCardCost`，脚本里读 `ctx.charge_spent` 拿到的是总数。
+- **用充能换 MP 不走这里**：那是一个独立动作（`SpendChargeForMpAction`，§5.2 的「三选一」），
+  转掉的充能不计入 `ctx.charge_spent`。
+- 声明在卡上而不是写在界面里：界面据此**自动生成**「额外消耗几个充能？」的提问
+  （`CardChoiceCatalog`），不用每补一张这种牌就改一次表现层，玩家自定义的卡也能用上同一个入口。
 
 ### 4.3 效果（卡牌与意图共用）
 
@@ -406,7 +437,7 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 | `phaseTwoHpThreshold` | 整数，默认 `hp / 2`（整除） | `phaseTwo` 非空且 HP ≤ 此值时从二阶段池抽 |
 | `intentsPerRound` | 整数，默认 3 | 每轮从当前池**不放回**随机抽几条（用引擎的 `IRng`，同种子可复现）；池不够就抽完为止 |
 
-意图字段（每条意图被读成一张 `CardKind.Enemy` 的牌，挂在 `EnemyIntent.Card` 上，和玩家卡共用效果与行为体系）：
+意图字段（每条意图被读成一张 `CardRole.EnemyIntent` 的牌，挂在 `EnemyIntent.Card` 上，和玩家卡共用效果与行为体系）：
 
 | 字段 | 类型 / 默认 | 说明 |
 | ----- | ----- | ----- |
@@ -417,6 +448,7 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 | `targeting` | `IntentTargeting`，默认 `DefaultSingle` | |
 | `designatedRow` | `Row`，默认 `Front` | `DesignatedRowSingle` 等用 |
 | `locksTarget` | 布尔，可省 | 省略时按 `targeting` 推导（R-24） |
+| `shareable` | 布尔，默认 false | 允许相邻队友在响应窗口里**分摊**：伤害对半拆，两人各自抵扣护盾（`ShareDamageAction`）。目前只有因果抹杀令开了这个口子，由 `CardEffectFixTests.F21` 钉住 |
 | `mp` | 整数 | 费用；缺省时读 `unmapped.mp` |
 | `text` | 字符串 | 读进牌的 `RulesText` |
 | `behaviourId` | 字符串 | 后续效果（吞噬充能、换排、命刻 +1 等）由 Lua 实现 |
@@ -443,7 +475,8 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 | 枚举 | 值 |
 | ----- | ----- |
 | `CardCategory` | Class Weapon Armor Treasure |
-| `CardKind` | Skill Timing Continuous Transform Form Hero Enemy |
+| `CardPlay` | Skill Timing Continuous |
+| `CardRole` | Normal Transform Form EnemyIntent（后者不能手写） |
 | `AttributeColor` | Might Insight Dexterity Willpower |
 | `DamageElement` | Physical Wind Lightning Dark Earth Fire Ice Light Poison |
 | `ShieldKind` | Physical Magical |
@@ -469,12 +502,13 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 | 老字段 | 老值 | 新值 |
 | ----- | ----- | ----- |
 | `colors` | `green` / `blue` / `purple` / `neutral` | `Dexterity` / `Insight` / `Willpower` / **空数组** |
-| `kind` | `skill` | `Skill` |
-| | `reaction` | `Timing` |
-| | `ongoing` | `Continuous` |
-| | `ascension` | `Transform` |
-| | `treasure` | `Skill` + `category: Treasure` |
-| | `form_attack` / `form_skill` / `form_reaction` | `Form` |
+| `kind` | `skill` | `play: Skill` |
+| | `reaction` | `play: Timing` |
+| | `ongoing` | `play: Continuous` |
+| | `ascension` | `role: Transform`（不按打法结算，没有 `play`） |
+| | `treasure` | `play: Skill` + `category: Treasure` |
+| | `form_attack` / `form_skill` | `role: Form` + `play: Skill` |
+| | `form_reaction` | `role: Form` + `play: Timing` |
 | `target` | `enemy` / `all_enemies` / `self` / `ally` / `none` | `SingleEnemy` / `AllEnemies` / `Self` / `SingleAlly` / `Self` |
 | `damage_type` | `physical/wind/dark/lightning/fire/ice/earth/light/poison` | 同名 `DamageElement` |
 | | `arcane` | `Light`，并在 `unmapped.damageType` 留痕（裁定 R-21） |
@@ -544,16 +578,14 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 ## 6. 现状与缺口
 
 已实现（相对初版文档）：Lua 行为层（47/49 张卡可用）、命刻计数（目前只计数，不触发后果）、首领两阶段意图池、
-过热（`overheat` 状态 + `incomingMultiplier`）、`RequiresBackRow`、`RollsOwnCrit` 字段、敌人 MP、状态模板、卡图 / 立绘 / 卡背标识。
+过热（`overheat` 状态 + `incomingMultiplier`）、`RequiresBackRow`、`RollsOwnCrit` 字段、敌人 MP、状态模板、卡图 / 立绘 / 卡背标识、
+状态驱动的元素易损（`vulnerableElement`）。
 
 数据层相关的缺口：
 
 | # | 缺口 | 位置 |
 | ----- | ----- | ----- |
-| B-1 | 压制连射两条 `Damage` 都没写 `rollsOwnCrit`，仍共用一次暴击骰（R-23 在内容里未启用） | `cards/miku.json` |
-| B-3 | 归零坍缩 `zero_collapse` 定义了、脚本也有，但不在 `phaseOne` / `phaseTwo` 池里，永远不会出现 | `enemies/chronos_iv.json` |
-| B-4 | 因果抹杀令是空行为 | `scripts/enemies.lua:143` |
-| B-5 | 对账常驻 24 条警告（§3.4），且警告不进游戏内报告 | `LuaScriptHost.BuildRegistry` / `ContentScenario.CreateEngine` |
+| B-5 | 对账只剩 2 条警告（§3.4），但**警告仍然不进游戏内报告**——只有直接看 `ScriptLoadReport` 才看得到 | `LuaScriptHost.BuildRegistry` / `ContentScenario.CreateEngine` |
 | B-6 | 构建产物入口和玩家包入口未实现；只加载一个包，无跨包覆盖 | `FileContentSource.cs`（`ContentPaths`） |
 | B-8 | 维汀「魔法盾 +1」只在 `legacy.autoMagicShieldBonus`，加载器不读，未生效 | `characters/heroes.json` |
 | — | 卡图走 `Resources/Art/`，内容包无法自带图片 | `CardArtLibrary` |
@@ -561,7 +593,7 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 | — | 类型错误静默取默认值，不报错（§3） | `JsonValue.AsInt/AsBool/AsString` |
 
 仍未见实现的场景机制：部位破坏（镇压重盾臂被击破后的首领变化）、倒地 / 复苏 / 淘汰、魔力激发卷轴开关、
-「掷骰后」响应窗口（幸运改命）、因果抹杀令的相邻分摊。行为层待办见 [behaviour_layer_handoff.md](behaviour_layer_handoff.md) §7。
+「掷骰后」响应窗口（幸运改命）。行为层待办见 [behaviour_layer_handoff.md](behaviour_layer_handoff.md) §7。
 
 ---
 
@@ -573,7 +605,7 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 | ----- | ----- | ----- |
 | R-21 ⚠ | 老数据 `arcane` 属性暂映射为 `Light` | §5.1 |
 | R-22 | 卡面文字优先于老版本代码 | §1 |
-| R-23 | 多段攻击各自独立投暴击骰（原本文「`hits: N` 展开」已并入此条） | §5.2、§6 B-1 |
+| R-23 | 多段攻击各自独立投暴击骰（原本文「`hits: N` 展开」已并入此条）。内容里由每条 `Damage` 的 `rollsOwnCrit` 启用 | §5.2 |
 | R-25 | 老卡牌的来源归类（原本文的「R-22」，已改号） | §5.3 |
 
 ---

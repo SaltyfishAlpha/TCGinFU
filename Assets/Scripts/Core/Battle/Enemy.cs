@@ -44,6 +44,16 @@ namespace TCGinFU.Core
         public StatusEffect InflictedStatus { get; init; }
 
         /// <summary>
+        /// 允许相邻队友在响应窗口里**分摊**这次攻击：伤害对半拆，两人各自抵扣护盾
+        /// （因果抹杀令「可在响应时由相邻队友分摊」）。见 <see cref="ShareDamageAction"/>。
+        ///
+        /// <para>做成意图上的一个数据开关而不是行为钩子：卡面那半句没有任何额外效果，
+        /// 它只是在响应窗口里**多给玩家一个选项**，而响应窗口开在行为钩子之前，
+        /// 挂钩子的话等脚本被问到时窗口已经关了。</para>
+        /// </summary>
+        public bool Shareable { get; init; }
+
+        /// <summary>
         /// 这条意图要打出的那张**敌人的牌**。
         ///
         /// <para>敌人的意图不是另一套机制——它就是敌人手里一套玩家看不到的牌，

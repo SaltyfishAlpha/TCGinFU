@@ -4,8 +4,8 @@
 > 裁定表 [rulings_v0_5.md](rulings_v0_5.md) · 数据层 [data_architecture.md](data_architecture.md) ·
 > 表现层 [view_architecture.md](view_architecture.md)
 >
-> **你的任务**：49 张卡只剩 2 张哑火；11 条敌人意图都已是敌人的牌，但有 2 条在游戏里实际不生效（见 §1）。
-> **先修 §7 待办最前面的 4 个真实缺陷（B-1 ~ B-4）**，再做场景机制的剩余部分
+> **你的任务**：49 张卡只剩 2 张哑火；11 条敌人意图都已是敌人的牌（见 §1）。
+> **先修 B-2（玩家挑的牌被忽略）**，再做场景机制的剩余部分
 > （命刻时钟的后果 / 部位破坏 / 倒地复苏）。
 >
 > 最后核对：2026-11-22（对照当前工作区）
@@ -33,7 +33,7 @@ C# behaviour 要重新编译、要随版本分发 dll，玩家做不到。所以
 
 所以意图**不是**另一套机制。我一度给它加过 `on_intent_declared` / `on_intent_resolved` /
 `on_intent_attack` 三个平行钩子，那是错的抽象，已经删掉。现在意图挂一张
-`CardDefinition`（`CardKind.Enemy`），结算走**和玩家出牌完全相同**的那条管线：
+`CardDefinition`（`CardRole.EnemyIntent`），结算走**和玩家出牌完全相同**的那条管线：
 同样的 `EffectData`、同样的 `ICardBehaviour` 钩子、同样的伤害管线。
 
 分成两套的代价很具体：数据驱动效果、状态、触发器全都要实现两遍，
@@ -48,10 +48,10 @@ C# behaviour 要重新编译、要随版本分发 dll，玩家做不到。所以
 | 数据层 | ✅ 49 张卡 / 2 角色 / 2 敌人 / 2 卡组 |
 | 脚本宿主 | ✅ MoonSharp + 沙箱 + 异常隔离 + 加载期对账 |
 | 引擎钩子面 | ✅ 可变攻击管线 / 触发器 / 掷骰改写 / 响应窗口改写 / 费用改写 / 充能留存 |
-| 敌人意图 | ⚠ **11 / 11 条都是敌人的牌**，写在 `scripts/enemies.lua`（意图**可以**用 Lua 写）。10 条注册了行为（重锤震地是纯伤害，不需要），**有效的 9 条**：因果抹杀令注册的是空行为 `behaviour("causal_erasure", {})`（B-4）；挂了钩子的 9 条里，归零坍缩**不在**首领的 `phaseOne` / `phaseTwo` 意图池里，永远不会出场（B-3）。所以实战中真正起作用的意图行为是 8 条 |
-| 卡牌行为 | ✅ **47 / 49**（脚本 26 + 纯数据 21） |
+| 敌人意图 | ✅ **11 / 11 条都是敌人的牌**，写在 `scripts/enemies.lua`（意图**可以**用 Lua 写）。9 条挂了行为，重锤震地与因果抹杀令是纯数据（后者的「相邻队友分摊」是意图上的开关 `shareable`，不是行为）。归零坍缩已放进二阶段意图池 |
+| 卡牌行为 | ✅ **47 / 49**（脚本 `miku.lua` / `weiting.lua` / `forms.lua` + 少量纯数据卡） |
 | 场景机制 | 🟡 部分实现：命刻时钟会计数（`State.SceneClock`，`advance_clock` / 轮末推进），但**到点没有任何后果**；首领两阶段按 HP 切意图池（`phaseTwoHpThreshold`，缺省为最大 HP 的一半，见 `ContentDatabase` 里的选池逻辑）。部位破坏、倒地 / 复苏 / 淘汰未做 |
-| 加载期对账 | ⚠ 每次加载常驻约 **24 条警告**（`LuaScriptHost`）：21 张纯数据卡也声明了 `behaviourId` 却没有脚本，加上哑火的 2 张和 B-4 的空行为。噪音太多会把真正拼错的 id 淹掉（B-5，见 §7） |
+| 加载期对账 | 🟡 还剩 **2 条警告**（`LuaScriptHost`）：哑火的那 2 张声明了 `behaviourId` 却没有脚本。曾经有 24 条——其中 21 条被当成「纯数据卡多余声明」放过了，实际上那些卡**只兑现了卡面前半句**（回血、抽牌、削盾、净化全部静默失效）。警告噪音淹掉真问题，这就是代价 |
 
 **仍然哑火的只剩 2 张**，都卡在同一个缺口上：
 
@@ -70,8 +70,13 @@ C# behaviour 要重新编译、要随版本分发 dll，玩家做不到。所以
   但 `charge_from` → `BattleEngine.ChargeFromZone` 仍然取弃牌堆顶 / 手牌末位，脚本也没读这些键。
   **挑了也白挑**——这是牌效这边的活，接口约定见 [ui_todo_handoff.md](ui_todo_handoff.md) §1。
 
-验收测试在 `Assets/Scripts/Tests/EditMode/LuaBehaviourTests.cs`，**断言的是 HP / 护盾 / 状态真的变了**，
-不是「能跑完一局」。
+验收测试在 `Assets/Scripts/Tests/EditMode/`，**断言的是 HP / 护盾 / 状态真的变了**，
+不是「能跑完一局」：
+
+- `LuaBehaviourTests.cs`——脚本宿主、沙箱、时限，以及各张卡的主要词条。
+- `CardEffectFixTests.cs`——专盯「只兑现了卡面前半句」那一类：回血、抽牌、削盾、净化、
+  必定暴击、完全抵消才反击。这类 bug 不会让战斗崩，所以**必须直接断言后半句**，
+  否则一张只打伤害的卡照样全绿。
 
 ---
 
@@ -114,6 +119,7 @@ behaviour("<卡的 behaviourId>", {
 | `on_crit_roll(roll, me)` | 骰已投、暴击未判 | 掷骰 +1、把某颗骰视为 7 |
 | `on_cost(cost, me)` | 校验费用**之前** | 「免除5MP」「下一张熵系魔法-5MP」 |
 | `on_damage_taken` / `on_damage_dealt` / `on_crit_dealt` | | 「每当……时」 |
+| `on_attack_resolved(ctx)` | 一次攻击结算完毕，**掉 0 血也广播** | 「若完全抵消本次攻击伤害则反击」。`on_damage_taken` 掉 0 血不广播，等不到这个时点。读 `ctx.hp_lost` / `ctx.absorbed` / `ctx.fully_absorbed` |
 | `on_card_played` / `on_charge_spent` | | |
 | `on_charge_spend(spend, me)` | 充能离开充能区、未进弃牌堆 | 「消耗后不进弃牌堆」（**全队广播**）|
 | `on_round_start` / `on_round_end` | | 敌人身上的状态也收得到 |
@@ -131,16 +137,36 @@ behaviour("<卡的 behaviourId>", {
 
 动词表（全局函数）：
 
-- 伤害与恢复：`damage` `heal` `shield` `restore_mp` `gain_ap` `draw`
+- 伤害与恢复：`damage` `heal`（返回**实际**回复量，满血时为 0）`shield`
+  `strip_shield`（直接削减护盾，不是伤害）`restore_mp` `gain_ap` `draw` `discard`
 - 状态：`apply_status` `has_status` `status_stacks` `remove_status`
+  `remove_negative_status(who, n)`（「移除1个负面状态」，哪些算负面由引擎统一判）
 - 走位：`move_row`（切换）`move_to`（定向）`grant_free_move` `swap_rows`
 - 充能：`charge_from`（弃牌堆/牌库/手牌 → 充能区）`charge_this`（把正在打出的这张牌变成充能）
   `grant_charge_placement` `adjust_charge_cap`
-- 查询：`stat` `team_charges` `round`；**阵营相对**的 `opponents(me)` / `same_side(me)`
+- 查询：`stat` `team_charges` `round` `weakness_of(who)`（第一个【易损】属性，没有则 nil）
+  `damaged_this_round_by(target, who)`（本轮谁打过他）；**阵营相对**的 `opponents(me)` / `same_side(me)`
   （`enemies()` / `allies()` 是玩家视角的简写，敌人脚本不要用）
 - 敌人专用：`devour_charges`（吞噬≠消耗，不计入 ChargesSpent）`advance_clock` `pierce`（无视护盾）
 - 掷骰：`roll` `roll_attribute`
 - 其它：`add_stat`（记自己的累计量）`log`
+
+出牌上下文 `ctx` 上几个容易漏掉的字段：
+
+- `ctx.damage_dealt`：数据层那几条 `Damage` 到此为止**实打实**打掉的 HP。
+  「回复等同于本次实际伤害一半的HP」读它，别拿卡面基础值去算——护盾与克制会让两者差很远。
+- `ctx.cards_played_before`：本次打出**之前**本轮已经打过几张牌。
+  「若本轮已打出过**其他**牌」要用它；读角色身上的计数会把这张牌自己算进去。
+- `ctx.charge_spent`：本次打出**付给卡面词条**的充能数（卡面硬费用 + 玩家额外选的那几个）。
+  玩家能选几个由卡面的 `chargeOptions` 声明（见 [data_architecture.md](data_architecture.md) §4.2）。
+  拿充能换 MP / 换 AP 是独立动作，**不**计入这里（§5.2 三选一）——所以 `can_play` 要问的是
+  「这次打算付几个」（`ctx.charge_spent`），不是「充能区里有几个」（`ctx.caster.charges`）。
+- `ctx.choice(key, 默认值)`：玩家在界面上做的额外选择。键名由卡自己定，和 `CardChoiceCatalog`
+  约好即可；**对不上不报错，只会静默退回默认值**，所以一律要写默认值。
+
+掷骰结算单 `roll` 上：`roll.charge_spent` 可读，`roll.force_crit = true` 可写
+（「必定暴击」）。它只能把结果**抬成暴击、抬不成超暴击**——超暴击是双色两颗骰的关系判出来的，
+凭一个布尔开关造出来会把 §7.3 绕过去。
 
 ### 三条硬规矩
 
@@ -314,33 +340,31 @@ behaviour("<卡的 behaviourId>", {
 
 **最高优先：文档说好了、游戏里不对的真实缺陷**（编号同 [known_issues.md](known_issues.md)，都是小改动）
 
-- **B-1 压制连射仍共用一次暴击骰**：`cards/miku.json` 的 `suppressing_volley` 两条 `Damage` 都没设
-  `rollsOwnCrit`。补上 `"rollsOwnCrit": true`，并让测试 E07 改用内容包里的定义、去掉 `WithOwnCrit`
-  （否则测试永远替数据兜底）。见裁定 R-23。
 - **B-2 玩家选的牌被忽略**：View 已经把选中的 uid 写进 `Choices`（`card0`…、`card_count`），
   但 `BattleEngine.ChargeFromZone` 只认 `Discard` 取顶 / `HandBottom` 取末位，Lua 也没读。
   要给 `charge_from` 加一个「按 uid 取」的入口（或在 `ChargeFromZone` 里优先读选择），
   再改 `miku.lua`（盗贼戏法）、`weiting.lua`（以太重组坩埚、应急催化剂）。接口见 [ui_todo_handoff.md](ui_todo_handoff.md) §1。
-- **B-3 归零坍缩永远不出场**：意图定义和脚本都有，但没放进 `enemies/chronos_iv.json` 的 `intentPools`
-  （`phaseOne` / `phaseTwo` 都没有 `zero_collapse`）。按老版设计放进 `phaseTwo`。
-- **B-4 因果抹杀令是空行为**：`scripts/enemies.lua` 里是 `behaviour("causal_erasure", {})`，
-  加载对账会报「一个钩子都没挂」。要么补上「分摊」（下面第 3 条），要么先删掉这行注册、让意图走纯数据。
+- **B-13 交叉火力网两半句口径不同**：`ResolveCost(actor, card)` 拿不到目标（校验期玩家还没选，
+  而且 UI 要靠它显示费用），所以 AP 减免只能问「本轮有没有队友打过人」，
+  而 +4 伤害在 `on_attack` 里才精确到「**这个**目标」。队友打了别人时会便宜 1 AP 却不加伤。
+  要修得让费用钩子看得见目标——注意 `ModifyCost` 必须保持无副作用，它会被反复调用。
 
 **之后**
 
 1. **补「掷骰后」响应窗口**，解锁「幸运改命」；顺带让「命运锚点·七」也能作用于非暴击骰。
-2. **理清「为卡面词条付充能」的入口**：调合·万能灵药现在借 `PlayCardAction.ChargeForMp` 传消耗数，
-   那个字段的本意是「拿充能抵 MP」（见 [ui_todo_handoff.md](ui_todo_handoff.md) §2）。
-   二选一 / 选元素本身已经接通，不再是待办。
-3. **因果抹杀令的「分摊」**：卡面说「可在响应时由相邻队友分摊，两人各12点」，
-   需要一个新的响应动作（玩家在响应窗口里选择分摊）+ UI。**这张卡目前只有前半句**（B-4）。
-4. **场景机制的剩余部分**：命刻时钟**已计数**（轮末 +1，`advance_clock` 可推进）但到点没有后果；
+2. ~~**理清「为卡面词条付充能」的入口**~~ —— **已做（2026-11-23）**：卡面用 `chargeOptions` 声明可选档位，
+   动作字段改成 `PlayCardAction.ChargeForEffect`，抵 MP 拆成独立的 `SpendChargeForMpAction`。
+   顺带修掉 `ctx.choice` 读错参数下标、所有二选一静默退回默认值的 bug。
+   仍开放的是 `CardChoiceCatalog` 还缺两张形态牌的条目（B-17）。
+3. **场景机制的剩余部分**：命刻时钟**已计数**（轮末 +1，`advance_clock` 可推进）但到点没有后果；
    首领两阶段**已按 HP 切意图池**；部位破坏、倒地 / 复苏 / 淘汰未做。
-5. **清理加载期警告（B-5）**：约 24 条常驻警告，主要是 21 张纯数据卡也写了 `behaviourId`。
-   要么从这些卡上删掉 `behaviourId`，要么让对账对「纯数据卡」不报。
-6. **R-21 要规则设计者拍板**：老数据的 `arcane`（奥术）伤害属性，规则书 §7.4 只有九大属性。
+4. **加载期警告（B-5）已降到 2 条**，就是上面那 2 张哑火卡，等各自的前置做完即可。
+   ~~从纯数据卡上删掉 `behaviourId`~~ / ~~让对账对「纯数据卡」不报~~ —— **这两个方向都别走**：
+   当初正是把这 21 条当成「纯数据卡的多余声明」整类放过，才让它们半实现的状态藏了这么久
+   （详见 [data_architecture.md](data_architecture.md) 对账表下面那段）。
+5. **R-21 要规则设计者拍板**：老数据的 `arcane`（奥术）伤害属性，规则书 §7.4 只有九大属性。
    当前暂时映射成 `Light`（对本场 Boss 行为等价，但语义是错的）。正解可能是新增 `DamageElement.Arcane`。
-7. 小出入：`Enemy.IntentFullyVisible` 只区分「小怪 / 其他」，于是首领显示成「半公开」；
+6. 小出入：`Enemy.IntentFullyVisible` 只区分「小怪 / 其他」，于是首领显示成「半公开」；
    规则书 §7.3 写的是首领「按阶段与机制公开」，和精英的「半公开」不是一回事。
 
 > 自定义敌人：意图行为已经能用 Lua 写（`scripts/enemies.lua`，和玩家卡同一张钩子表，见 §3），
@@ -389,10 +413,8 @@ bash Tools/check-asmdefs.sh
 
 ### 8.2 当前测试基线
 
-**Unity EditMode 205 个**（`Assets/Scripts/Tests/EditMode` 下 177 个 `[Test]` + 28 个 `[TestCase]`，
-2026-11-22 移除遗留内容后计数；此前为 227，行为层迁移开始前是 175）。
-跑法：Unity MCP 的 `run_tests`（EditMode）。**当前 1 个红**：`L02`，即已知缺陷 B-4。
-注意 E07 目前替内容数据兜了底（B-1），全绿不代表压制连射在游戏里是对的。
+测试数量与最近一次运行结果统一记在 [README](../../README.md)（行为层迁移开始前是 175 个）。
+跑法：Unity MCP 的 `run_tests`（EditMode）。
 表现层改动也要跑——`BattleSessionTests` 里有依赖费用文案的断言。
 
 ### 8.3 Unity 不在线时怎么跑测试

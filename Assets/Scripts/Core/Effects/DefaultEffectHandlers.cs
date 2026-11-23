@@ -27,7 +27,11 @@ namespace TCGinFU.Core
         protected override void ApplyTo(EffectContext ctx, EffectData data, Combatant target)
         {
             CritResult crit = data.RollsOwnCrit ? ctx.RollCritFor(target) : ctx.Crit;
-            ctx.Engine.DealDamage(ctx.Caster, target, ctx.Resolve(data.Amount), data.Element, crit, ctx.Card);
+            DamageResult result = ctx.Engine.DealDamage(
+                ctx.Caster, target, ctx.Resolve(data.Amount), data.Element, crit, ctx.Card);
+
+            // 行为层要能读到本次出牌的实际战果（「回复等同于本次实际伤害一半的HP」）
+            if (result != null) ctx.DamageDealt += result.HpLost;
         }
     }
 
@@ -80,6 +84,24 @@ namespace TCGinFU.Core
         }
     }
 
+    /// <summary>
+    /// 从手牌弃置 N 张。
+    ///
+    /// <para>卡面写的是「由玩家选」，但逐张选牌的界面还没有，所以取手牌末尾——
+    /// 和 <see cref="ChargeSource.HandBottom"/> 同一个口径，至少是确定且可复盘的。
+    /// 以前这个 Kind 在枚举里有、执行器没注册，任何一张用到它的卡都会当场抛异常。</para>
+    /// </summary>
+    public sealed class DiscardEffectHandler : EffectHandlerBase
+    {
+        public override EffectKind Kind => EffectKind.Discard;
+
+        protected override void ApplyTo(EffectContext ctx, EffectData data, Combatant target)
+        {
+            if (target is not PlayerCharacter pc) return;
+            ctx.Engine.DiscardFromHand(pc, ctx.Resolve(data.Amount));
+        }
+    }
+
     public sealed class GainChargeEffectHandler : EffectHandlerBase
     {
         public override EffectKind Kind => EffectKind.GainCharge;
@@ -122,9 +144,19 @@ namespace TCGinFU.Core
 
         protected override void ApplyTo(EffectContext ctx, EffectData data, Combatant target)
         {
+            // 去哪一排由卡面定死，排内站哪让玩家挑：登记一笔，
+            // 等整张牌结算完再开选位窗口（裁定 R-17c）
+            if (data.PlayerChoosesSlot)
+            {
+                ctx.Engine.RequestSlotChoice(target, data.RowTarget ?? Opposite(target.Row));
+                return;
+            }
+
             if (data.RowTarget.HasValue) ctx.Engine.MoveRow(target, data.RowTarget.Value, free: true);
             else ctx.Engine.SwitchRow(target, free: true);
         }
+
+        private static Row Opposite(Row row) => row == Row.Front ? Row.Back : Row.Front;
     }
 
     /// <summary>

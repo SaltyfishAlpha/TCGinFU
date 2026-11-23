@@ -16,6 +16,9 @@ namespace TCGinFU.Core
         /// <summary>本次攻击的援护登记：原目标 Id → 代为承伤者（裁定 R-12）。</summary>
         private readonly Dictionary<string, PlayerCharacter> _covers = new();
 
+        /// <summary>本次攻击的分摊登记：原目标 Id → 与他对半分的那位（B-14）。</summary>
+        private readonly Dictionary<string, PlayerCharacter> _shares = new();
+
         private readonly Queue<(Enemy Enemy, EnemyIntent Intent)> _intentQueue = new();
         private (Enemy Enemy, EnemyIntent Intent)? _currentIntent;
         private List<Combatant> _currentIntentTargets = new();
@@ -51,6 +54,10 @@ namespace TCGinFU.Core
         /// 响应窗口之外为空。
         /// </summary>
         public IReadOnlyList<AttackContext> PendingAttacks => _pendingAttacks;
+
+        /// <summary>已经替某人登记了分摊的那位队友，没有则为 null。界面用它显示「已分摊」。</summary>
+        public PlayerCharacter SharerFor(Combatant target)
+            => target != null && _shares.TryGetValue(target.Id, out PlayerCharacter sharer) ? sharer : null;
 
         /// <summary>取针对某个目标的那次待结算攻击。时机牌「使目标……」用它定位。</summary>
         public AttackContext PendingAttackOn(Combatant target)
@@ -178,6 +185,7 @@ namespace TCGinFU.Core
         private void OpenNextIntentWindow()
         {
             _covers.Clear();
+            _shares.Clear();
             _currentIntent = null;
             _currentIntentTargets = new List<Combatant>();
             _pendingAttacks = new List<AttackContext>();
@@ -204,6 +212,17 @@ namespace TCGinFU.Core
                     Intent = intent,
                 })
                 .ToList();
+
+            // 宣告要在开窗**之前**发：玩家是靠这条事件看到首领打的是哪张牌的，
+            // 而他得在响应窗口里据此决定打不打时机牌
+            Emit(new BattleEvent(BattleEventType.IntentDeclared, enemy.Id, _pendingAttacks.FirstOrDefault()?.Target?.Id)
+            {
+                CardId = intent.Card?.Id,
+                Card = intent.Card,
+                Text = intent.Label,
+                Amount = intent.Damage,
+                Round = State.Round,
+            });
 
             // 裁定 R-11：每条意图结算前开一个响应窗口，全体 Pass 后才结算
             Pending = new PendingDecision(DecisionKind.EnemyResponse, State.LivingPlayers.Select(p => p.Id))
@@ -242,16 +261,8 @@ namespace TCGinFU.Core
                 // 所以响应窗口里的走位能真的躲开，也能真的撞上去
                 if (!intent.LocksTarget) RebuildPendingAttacksForCurrentRow(enemy, intent);
 
-                foreach (AttackContext attack in _pendingAttacks)
+                foreach (AttackContext attack in ApplyCoversAndShares())
                 {
-                    Combatant original = attack.Target;
-
-                    // 援护：把承伤目标整体改写为援护者
-                    if (_covers.TryGetValue(original.Id, out PlayerCharacter coverer) && !coverer.IsDown)
-                    {
-                        attack.Target = coverer;
-                    }
-
                     if (attack.Target.IsDown) continue;
 
                     // 时机牌可能已经把这次攻击改没了（看破闪避的完全闪避）
@@ -268,7 +279,8 @@ namespace TCGinFU.Core
 
                     if (attack.BaseAmount > 0) ResolveAttack(attack);
 
-                    if (intent.InflictedStatus != null && !attack.Target.IsDown)
+                    // 分摊出来的那半份只分伤害，不分状态（见 AttackContext.SharedFrom）
+                    if (intent.InflictedStatus != null && !attack.IsSharedHalf && !attack.Target.IsDown)
                     {
                         ApplyStatus(attack.Target, CloneStatus(intent.InflictedStatus));
                     }
@@ -288,6 +300,50 @@ namespace TCGinFU.Core
             }
 
             OpenNextIntentWindow();
+        }
+
+        /// <summary>
+        /// 把响应窗口里登记的援护与分摊落到待结算的攻击上，产出真正要结算的那一串。
+        ///
+        /// <para>援护改写目标，分摊则把一次攻击**拆成两次**——拆出来的半份是一个独立的
+        /// <see cref="AttackContext"/>，自己走一遍 <see cref="ResolveAttack"/>，
+        /// 于是「分别抵扣护盾」「各自的减伤钩子」都是顺带成立的，不必在伤害管线里特判。</para>
+        ///
+        /// <para>只拆 <see cref="AttackContext.BaseAmount"/>：响应窗口里为原目标打出的减伤
+        /// 留在原目标那一半上——那张牌保护的是他，不该顺带便宜了分摊者。
+        /// 分不匀时（基础值为奇数）原目标多承担 1 点。</para>
+        /// </summary>
+        private List<AttackContext> ApplyCoversAndShares()
+        {
+            var resolving = new List<AttackContext>(_pendingAttacks.Count);
+
+            foreach (AttackContext attack in _pendingAttacks)
+            {
+                Combatant original = attack.Target;
+                resolving.Add(attack);
+
+                // 援护：把承伤目标整体改写为援护者
+                if (_covers.TryGetValue(original.Id, out PlayerCharacter coverer) && !coverer.IsDown)
+                {
+                    attack.Target = coverer;
+                    continue; // 援护与分摊互斥，登记时已经拦过一道
+                }
+
+                if (!_shares.TryGetValue(original.Id, out PlayerCharacter sharer) || sharer.IsDown) continue;
+                if (attack.BaseAmount <= 0) continue;
+
+                int half = attack.BaseAmount / 2;
+                attack.BaseAmount -= half;
+
+                resolving.Add(new AttackContext(attack.Source, sharer, half, attack.Element, attack.Crit)
+                {
+                    Intent = attack.Intent,
+                    Card = attack.Card,
+                    SharedFrom = original,
+                });
+            }
+
+            return resolving;
         }
 
         /// <summary>
@@ -398,6 +454,9 @@ namespace TCGinFU.Core
 
         private void FinishRound()
         {
+            // 没兑现的选位登记不跨轮：留到下一轮会在莫名其妙的时点弹出来
+            ClearSlotChoices();
+
             foreach (PlayerCharacter player in State.Players)
             {
                 player.Transform.TickRoundEnd();
