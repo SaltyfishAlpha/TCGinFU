@@ -30,7 +30,8 @@
       "legacy": {
         "hp": 40,
         "mp": 35
-      }
+      },
+      "portrait": "portraits/miku"
     },
     {
       "id": "weiting",
@@ -63,7 +64,8 @@
         "hp": 35,
         "mp": 50,
         "autoMagicShieldBonus": 1
-      }
+      },
+      "portrait": "portraits/weiting"
     }
   ]
 }

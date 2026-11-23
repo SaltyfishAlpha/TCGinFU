@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace TCGinFU.Content.Loading
@@ -19,7 +20,7 @@ namespace TCGinFU.Content.Loading
 
         public string Root { get; }
 
-        public bool Exists => File.Exists(Path.Combine(Root, "pack.json"));
+        public bool Exists => File.Exists(Path.Combine(Root, ContentPaths.PackManifest));
 
         /// <summary>读不到返回 null —— <see cref="ContentLoader"/> 会把它记成一条「文件不存在」。</summary>
         public string Read(string relativePath)
@@ -37,15 +38,67 @@ namespace TCGinFU.Content.Loading
         /// <summary>仓库内的内容包相对路径。</summary>
         public const string RepoRelative = "Assets/StreamingAssets/Content";
 
+        /// <summary>内容包的清单文件。一个目录有没有它，决定它是不是一个**完整的包**。</summary>
+        public const string PackManifest = "pack.json";
+
         /// <summary>可用它覆盖查找结果（CI、或把内容包放在别处时用）。</summary>
         public const string EnvironmentVariable = "TCGINFU_CONTENT_DIR";
 
         /// <summary>
-        /// 按「显式参数 → 环境变量 → 从工作目录和程序集目录逐级向上找」的顺序定位。
+        /// 平台相关的候选目录，优先级从高到低。
         ///
-        /// 之所以要向上找而不是写死：Unity 里跑 EditMode 测试、Unity 外跑 dotnet test、
-        /// 以及构建产物里跑，三者的工作目录完全不同。找 <c>Assets/StreamingAssets/Content</c>
-        /// 这个锚点比让每个调用方各自拼路径可靠。
+        /// <para>本程序集是 <c>noEngineReferences</c> 的，拿不到
+        /// <c>Application.persistentDataPath</c> / <c>streamingAssetsPath</c>，
+        /// 所以由表现层在启动时把它们装进来（见 <c>UnityContentRoots</c>）。
+        /// 不装也能跑——Unity 外的 <c>dotnet test</c> 靠下面的逐级向上找。</para>
+        /// </summary>
+        public static Func<IEnumerable<string>> PlatformRoots { get; set; }
+
+        /// <summary>
+        /// 按优先级列出所有**存在的**候选目录，高优先级在前。
+        ///
+        /// <para>和 <see cref="Resolve"/> 的区别：这里不要求目录是个完整的包。
+        /// 玩家自制包可以只放几张图、不带 <c>pack.json</c>，
+        /// 美术素材的查找链需要看到它（见 <c>CardArtLibrary</c>）。</para>
+        /// </summary>
+        public static IReadOnlyList<string> ResolveAll(string explicitRoot = null)
+        {
+            var roots = new List<string>();
+
+            void Add(string path)
+            {
+                if (string.IsNullOrEmpty(path)) return;
+                if (!Directory.Exists(path)) return;
+                if (!roots.Contains(path)) roots.Add(path);
+            }
+
+            Add(explicitRoot);
+            Add(Environment.GetEnvironmentVariable(EnvironmentVariable));
+
+            if (PlatformRoots != null)
+            {
+                foreach (string path in PlatformRoots()) Add(path);
+            }
+
+            foreach (string start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+            {
+                Add(SearchUpwards(start));
+            }
+
+            return roots;
+        }
+
+        /// <summary>
+        /// 定位**一个完整内容包**的根目录（JSON 加载用）。
+        /// 顺序：显式参数 → 环境变量 → 平台目录 → 从工作目录和程序集目录逐级向上找。
+        ///
+        /// <para>显式参数与环境变量是**独占**的：指到哪就是哪，不带 <c>pack.json</c> 也原样返回。
+        /// 否则 CI 把变量指错目录时，会被悄悄地换成仓库里的包，错误要到很久以后才暴露出来。</para>
+        ///
+        /// <para>之所以还要逐级向上找：Unity 里跑 EditMode 测试、Unity 外跑 dotnet test、
+        /// 以及构建产物里跑，三者的工作目录完全不同。构建产物靠的是平台目录那一环
+        /// （<c>streamingAssetsPath</c>），向上找 <c>Assets/StreamingAssets/Content</c>
+        /// 在构建产物里是找不到的。</para>
         /// </summary>
         public static string Resolve(string explicitRoot = null)
         {
@@ -54,10 +107,9 @@ namespace TCGinFU.Content.Loading
             string fromEnv = Environment.GetEnvironmentVariable(EnvironmentVariable);
             if (!string.IsNullOrEmpty(fromEnv)) return fromEnv;
 
-            foreach (string start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+            foreach (string root in ResolveAll())
             {
-                string found = SearchUpwards(start);
-                if (found != null) return found;
+                if (File.Exists(Path.Combine(root, PackManifest))) return root;
             }
 
             return null;
@@ -72,7 +124,7 @@ namespace TCGinFU.Content.Loading
             {
                 string candidate = Path.Combine(
                     dir.FullName, RepoRelative.Replace('/', Path.DirectorySeparatorChar));
-                if (File.Exists(Path.Combine(candidate, "pack.json"))) return candidate;
+                if (File.Exists(Path.Combine(candidate, PackManifest))) return candidate;
                 dir = dir.Parent;
             }
 

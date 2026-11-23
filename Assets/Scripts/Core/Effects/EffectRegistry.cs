@@ -27,6 +27,8 @@ namespace TCGinFU.Core
             registry.Register(new GainChargeEffectHandler());
             registry.Register(new ApplyStatusEffectHandler());
             registry.Register(new MoveRowEffectHandler());
+            registry.Register(new GrantFreeMoveEffectHandler());
+            registry.Register(new SwapRowsEffectHandler());
             registry.Register(new CoverEffectHandler());
             return registry;
         }

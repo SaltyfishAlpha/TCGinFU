@@ -229,6 +229,75 @@ namespace TCGinFU.Core.Tests
             StringAssert.Contains("没有对应的升变牌", result.ToString());
         }
 
+        // ── §3.3 与角色相关的校验（只在传入 CharacterSheet 时生效） ──
+
+        [Test]
+        public void 英雄技能牌要求所属职业满十级精通()
+        {
+            DeckList deck = ValidDeck();
+            deck.MainDeck[0] = TestFactory.HeroCard("thousand_cuts", "浪客");
+
+            // 浪客才 3 级：带不了
+            var novice = new CharacterSheet(
+                "新手", new[] { new ClassLevel("浪客", 3), new ClassLevel("神射手", 2) },
+                AttributeDice.AllD6);
+
+            DeckValidationResult result = DeckValidator.Validate(deck, novice);
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("thousand_cuts", result.ToString());
+            StringAssert.Contains("10 级精通", result.ToString());
+
+            // 满 10 级后合法
+            var master = new CharacterSheet(
+                "精通", new[] { new ClassLevel("浪客", ClassLevel.MaxPerClass) }, AttributeDice.AllD6);
+
+            DeckValidationResult mastered = DeckValidator.Validate(deck, master);
+            Assert.IsTrue(mastered.IsValid, mastered.ToString());
+        }
+
+        [Test]
+        public void 没有对应职业时英雄技能牌被拒绝()
+        {
+            DeckList deck = ValidDeck();
+            deck.MainDeck[0] = TestFactory.HeroCard("thousand_cuts", "浪客");
+
+            var outsider = new CharacterSheet(
+                "法师", new[] { new ClassLevel("元素使", ClassLevel.MaxPerClass) }, AttributeDice.AllD6);
+
+            DeckValidationResult result = DeckValidator.Validate(deck, outsider);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("角色没有该职业", result.ToString());
+        }
+
+        [Test]
+        public void 没有对应职业时升变牌被拒绝()
+        {
+            DeckList deck = ValidDeck();
+            deck.MainDeck[0] = TestFactory.TransformCard("awaken", "浪客");
+            deck.FormDecks["awaken"] = FormDeck();
+
+            var outsider = new CharacterSheet(
+                "法师", new[] { new ClassLevel("元素使", 5) }, AttributeDice.AllD6);
+
+            DeckValidationResult result = DeckValidator.Validate(deck, outsider);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("awaken", result.ToString());
+            StringAssert.Contains("角色没有该职业", result.ToString());
+        }
+
+        /// <summary>不传 sheet 时只做卡表层面的校验，§3.3 那几条一律不查。</summary>
+        [Test]
+        public void 不传角色时不校验职业要求()
+        {
+            DeckList deck = ValidDeck();
+            deck.MainDeck[0] = TestFactory.HeroCard("thousand_cuts", "浪客");
+
+            DeckValidationResult result = DeckValidator.Validate(deck);
+            Assert.IsTrue(result.IsValid, result.ToString());
+        }
+
         private static List<CardDefinition> FormDeck()
             => Enumerable.Range(0, DeckList.FormDeckSize)
                 .Select(i => TestFactory.FormStrike($"form{i}"))

@@ -4,6 +4,15 @@
   "version": "1.0.0",
   "schemaVersion": 1,
   "source": "《最终物语·命刻之战》Windows v1.0.0（Godot 4.4.1）反编译迁移",
+  "statuses": [
+    "statuses.json"
+  ],
+  "scripts": [
+    "scripts/statuses.lua",
+    "scripts/miku.lua",
+    "scripts/weiting.lua",
+    "scripts/enemies.lua"
+  ],
   "cards": [
     "cards/miku.json",
     "cards/weiting.json",
@@ -18,5 +27,14 @@
   "decks": [
     "decks/miku_starter.json",
     "decks/weiting_starter.json"
-  ]
+  ],
+  "defaultCardBack": "card bg beta",
+  "artFallback": {
+    "back": "card bg beta",
+    "transform": "card levelup beta",
+    "guard": "card guard beta",
+    "attack": "card attack beta",
+    "spell": "card spell beta",
+    "character": "card character beta"
+  }
 }

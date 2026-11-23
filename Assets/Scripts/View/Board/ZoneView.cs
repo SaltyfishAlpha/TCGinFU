@@ -146,35 +146,48 @@ namespace TCGinFU.View
             _items.Add(item);
         }
 
+        /// <summary>
+        /// 真卡**只按实际张数**排布，所以手牌永远是居中的，间距随张数动态收放。
+        ///
+        /// <para>以前这里按 <c>max(张数, reservedSlots)</c> 算卡位，手牌的
+        /// <c>reservedSlots = 5</c> 就把 5 个槽固定钉死了：手里只有 2 张时，
+        /// 两张牌贴在最左边两格上，右边空着三格——这不是卡牌游戏的样子。</para>
+        /// </summary>
         public void Arrange()
         {
-            int slotCount = Mathf.Max(_items.Count, Layout.reservedSlots);
-            if (slotCount == 0)
+            if (_items.Count > 0)
             {
-                SyncGhosts(0, null);
-                return;
+                List<SlotPose> poses = ComputePoses(_items.Count);
+
+                for (int i = 0; i < _items.Count; i++)
+                {
+                    Apply(_items[i], poses[i], animate: Layout.IsCombatantZone);
+                    _items[i].gameObject.SetActive(true);
+                }
             }
 
-            List<SlotPose> poses = ComputePoses(slotCount);
-
-            for (int i = 0; i < _items.Count && i < poses.Count; i++)
-            {
-                Apply(_items[i], poses[i]);
-                _items[i].gameObject.SetActive(true);
-            }
-
-            SyncGhosts(slotCount, poses);
+            SyncGhosts();
         }
 
-        private static void Apply(Transform item, SlotPose pose)
-        {
-            item.localPosition = pose.Position;
-            item.localRotation = Quaternion.Euler(0f, 0f, pose.Roll);
-            item.localScale = Vector3.one;
-        }
+        /// <summary>
+        /// 只给角色卡做滑行动画：走位是「某个人从前排挪到了后排」，不滑过去玩家看不出自己动过。
+        /// 手牌每次 Refresh 都整体重排，补间只会让扇形抖个不停，所以卡牌仍然直接落位。
+        /// </summary>
+        private static void Apply(Transform item, SlotPose pose, bool animate)
+            => SlideTween.Apply(item, pose.Position, Quaternion.Euler(0f, 0f, pose.Roll), animate);
 
-        private void SyncGhosts(int slotCount, List<SlotPose> poses)
+        /// <summary>
+        /// 空卡位**只在区域一张牌都没有时**出现，用来说明「这儿是放牌的地方」。
+        /// 一旦有牌，真卡自己就标出了区域的位置和大小，占位的轮廓反而是噪音。
+        ///
+        /// <para>区域本身不会因此塌陷：底板（<c>_plate</c>）的尺寸来自布局的锚点，
+        /// 跟区域里有几张牌没有关系。</para>
+        /// </summary>
+        private void SyncGhosts()
         {
+            int slotCount = _items.Count == 0 ? Layout.reservedSlots : 0;
+            List<SlotPose> poses = slotCount > 0 ? ComputePoses(slotCount) : null;
+
             while (_ghosts.Count < slotCount)
             {
                 Transform ghost = CardMeshFactory.CreateMeshObject(
@@ -186,7 +199,7 @@ namespace TCGinFU.View
 
             for (int i = 0; i < _ghosts.Count; i++)
             {
-                bool show = poses != null && i < slotCount && i >= _items.Count;
+                bool show = i < slotCount;
                 _ghosts[i].gameObject.SetActive(show);
                 if (!show) continue;
 

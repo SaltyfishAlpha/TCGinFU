@@ -48,6 +48,35 @@ namespace TCGinFU.Core
 
         /// <summary>额外消耗几个充能来抵扣 MP（每个抵 5 点，不找零，裁定 R-09）。</summary>
         public int ChargeForMp { get; }
+
+        /// <summary>
+        /// 卡面要玩家做的**额外选择**，按名字取。界面收集，行为层通过 <c>ctx.choice("…")</c> 读。
+        ///
+        /// <para>为什么是个开放的字典而不是固定字段：这些选择完全由卡面决定——
+        /// 「从弃牌堆选哪张」是 uid、「二选一」是选项序号、「附加什么元素」是属性名。
+        /// 给每种都加一个字段会让 <see cref="PlayCardAction"/> 变成所有卡面的并集，
+        /// 而且玩家自定义卡牌还会引入我们没预料到的选择类型。</para>
+        ///
+        /// <para><b>约定</b>：键名由卡的脚本自己定，和界面约好即可；
+        /// 引擎不认识任何一个键，只负责原样传过去。</para>
+        /// </summary>
+        public Dictionary<string, int> Choices { get; } = new();
+
+        /// <summary>链式写法，方便界面一行把选择填进去。</summary>
+        public PlayCardAction With(string key, int value)
+        {
+            if (!string.IsNullOrEmpty(key)) Choices[key] = value;
+            return this;
+        }
+
+        /// <summary>一次填多个（「选 2 张牌」这种），键名自动加下标：<c>card0</c> <c>card1</c>…</summary>
+        public PlayCardAction WithMany(string key, IEnumerable<int> values)
+        {
+            int index = 0;
+            foreach (int value in values) Choices[$"{key}{index++}"] = value;
+            Choices[$"{key}_count"] = index;
+            return this;
+        }
     }
 
     /// <summary>贴充能：0 AP，每角色每轮 1 次，可贴给自己或任意队友（§5.2）。</summary>

@@ -32,7 +32,8 @@
         "ranged": false,
         "damage_formula": "B_atk",
         "legacyDamageAtLevel5": 8
-      }
+      },
+      "art": "cards/shadow_dash_assault"
     },
     {
       "id": "night_eviscerate",
@@ -67,7 +68,8 @@
         "ranged": false,
         "damage_formula": "B_atk + 4",
         "legacyDamageAtLevel5": 12
-      }
+      },
+      "art": "cards/night_eviscerate"
     },
     {
       "id": "thieves_trick",
@@ -90,7 +92,8 @@
       "unmapped": {
         "ranged": false,
         "can_target_self": true
-      }
+      },
+      "art": "cards/thieves_trick"
     },
     {
       "id": "smoke_decoy",
@@ -124,7 +127,8 @@
         "ranged": false,
         "can_target_self": true,
         "shield_formula": "B_def + 2"
-      }
+      },
+      "art": "cards/smoke_decoy"
     },
     {
       "id": "wind_chasing_arrows",
@@ -158,7 +162,8 @@
         "ranged": true,
         "damage_formula": "B_atk + 2",
         "legacyDamageAtLevel5": 10
-      }
+      },
+      "art": "cards/wind_chasing_arrows"
     },
     {
       "id": "death_sentence",
@@ -194,7 +199,8 @@
         "ranged": true,
         "damage_formula": "B_atk * 2",
         "legacyDamageAtLevel5": 16
-      }
+      },
+      "art": "cards/death_sentence"
     },
     {
       "id": "arrow_storm_coverage",
@@ -229,7 +235,8 @@
         "ranged": true,
         "damage_formula": "B_atk",
         "legacyDamageAtLevel5": 8
-      }
+      },
+      "art": "cards/arrow_storm_coverage"
     },
     {
       "id": "wind_wall_counter",
@@ -274,7 +281,8 @@
         "damage_formula": "B_atk（仅完全抵消时反击）",
         "shield_formula": "B_def physical + B_def magic",
         "conditionalDamageAtLevel5": 8
-      }
+      },
+      "art": "cards/wind_wall_counter"
     },
     {
       "id": "event_horizon_singularity",
@@ -309,7 +317,8 @@
         "ranged": true,
         "damage_formula": "B_atk + 4",
         "legacyDamageAtLevel5": 11
-      }
+      },
+      "art": "cards/event_horizon_singularity"
     },
     {
       "id": "grand_chaos_roulette",
@@ -344,7 +353,8 @@
         "ranged": true,
         "damage_formula": "B_atk + 2",
         "legacyDamageAtLevel5": 9
-      }
+      },
+      "art": "cards/grand_chaos_roulette"
     },
     {
       "id": "soul_devouring_feast",
@@ -378,7 +388,8 @@
         "ranged": true,
         "damage_formula": "B_atk",
         "legacyDamageAtLevel5": 7
-      }
+      },
+      "art": "cards/soul_devouring_feast"
     },
     {
       "id": "time_paradox",
@@ -421,7 +432,8 @@
         "ranged": false,
         "can_target_self": true,
         "shield_formula": "(B_def + 2) physical + (B_def + 2) magic"
-      }
+      },
+      "art": "cards/time_paradox"
     },
     {
       "id": "elemental_proliferation_bomb",
@@ -455,7 +467,8 @@
         "ranged": true,
         "damage_formula": "B_atk + 3",
         "legacyDamageAtLevel5": 10
-      }
+      },
+      "art": "cards/elemental_proliferation_bomb"
     },
     {
       "id": "philosophers_stone_release",
@@ -479,7 +492,8 @@
       "unmapped": {
         "ranged": false,
         "can_target_self": true
-      }
+      },
+      "art": "cards/philosophers_stone_release"
     },
     {
       "id": "aether_reassembly_crucible",
@@ -501,7 +515,8 @@
       "formId": "alchemy",
       "unmapped": {
         "ranged": false
-      }
+      },
+      "art": "cards/aether_reassembly_crucible"
     },
     {
       "id": "alchemical_protection_field",
@@ -544,7 +559,8 @@
         "ranged": false,
         "target_group": "front_row_or_back_row",
         "shield_formula": "B_def"
-      }
+      },
+      "art": "cards/alchemical_protection_field"
     }
   ]
 }

@@ -54,6 +54,13 @@ namespace TCGinFU.View
             rect.anchorMax = anchorMax;
             rect.offsetMin = new Vector2(4f, 2f);
             rect.offsetMax = new Vector2(-4f, -2f);
+
+            // 描边：卡面贴上插画之后，底色不再可控——浅色卡图上的白字会直接糊掉。
+            // 比「在文字后面铺一层暗色条」好的地方是它不挡画面，而且深浅两种卡图都管用。
+            var outline = text.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(0f, 0f, 0f, 0.85f);
+            outline.effectDistance = new Vector2(1.4f, -1.4f);
+
             return text;
         }
 

@@ -51,6 +51,19 @@ namespace TCGinFU.Core
             return drawn;
         }
 
+        /// <summary>
+        /// 抽最后一张。老卡「追风连矢」「应急催化剂」写的是「将手牌中的 1 张贴入充能区」，
+        /// 在「让玩家选一张」那步 UI 做出来之前，取末位是个确定、可复盘的选法。
+        /// </summary>
+        public CardInstance DrawBottom()
+        {
+            if (_cards.Count == 0) return null;
+
+            CardInstance card = _cards[_cards.Count - 1];
+            _cards.RemoveAt(_cards.Count - 1);
+            return card;
+        }
+
         public bool Remove(CardInstance card) => _cards.Remove(card);
 
         public CardInstance Find(int uid) => _cards.Find(c => c.Uid == uid);

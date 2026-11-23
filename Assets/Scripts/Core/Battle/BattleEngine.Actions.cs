@@ -40,7 +40,9 @@ namespace TCGinFU.Core
         private ActionResult HandlePlayCard(PlayerCharacter actor, PlayCardAction action)
         {
             bool inResponseWindow = Pending.Kind == DecisionKind.EnemyResponse;
-            if (!inResponseWindow && Pending.Kind != DecisionKind.PlayerActions)
+            bool inTransformWindow = Pending.Kind == DecisionKind.TransformDeclaration;
+
+            if (!inResponseWindow && !inTransformWindow && Pending.Kind != DecisionKind.PlayerActions)
             {
                 return ActionResult.Fail("当前不是出牌时机");
             }
@@ -55,10 +57,18 @@ namespace TCGinFU.Core
 
             CardDefinition def = card.Definition;
 
+            // 升变牌「打出」就等于宣告升变——对玩家来说它和别的牌一样是从手里打出去的，
+            // 不该因为内部走的是另一条动作而需要另一套操作。
+            // 真正的升变流程仍然只有 HandleDeclareTransform 一条路径。
             if (def.Kind == CardKind.Transform)
             {
-                return ActionResult.Fail("升变牌须通过宣告升变使用");
+                return inTransformWindow
+                    ? HandleDeclareTransform(actor, new DeclareTransformAction(actor.Id, card.Uid))
+                    : ActionResult.Fail("升变只能在轮始的升变窗口发动");
             }
+
+            // 升变窗口里除了升变牌什么都不能打
+            if (inTransformWindow) return ActionResult.Fail("当前只能发动升变");
 
             // 响应窗口只接受时机牌与防具牌（§4.3 / §8 ④）
             if (inResponseWindow && !def.IsReactive)
@@ -66,22 +76,30 @@ namespace TCGinFU.Core
                 return ActionResult.Fail("响应窗口只能打出时机牌或防具牌");
             }
 
+            // 卡面费用只是基准值，「第1轮免除5MP」这类词条在这里生效
+            CostContext cost = ResolveCost(actor, def);
+
             // 裁定 R-18：响应窗口打牌同样从本轮剩余 AP 里付费
-            if (actor.Ap < def.ApCost)
+            if (actor.Ap < cost.Ap)
             {
-                return ActionResult.Fail($"行动力不足（需 {def.ApCost}，剩 {actor.Ap}）");
+                return ActionResult.Fail($"行动力不足（需 {cost.Ap}，剩 {actor.Ap}）");
+            }
+
+            if (def.RequiresBackRow && actor.Row != Row.Back)
+            {
+                return ActionResult.Fail("这张牌仅限在后排打出");
             }
 
             if (action.ChargeForMp < 0) return ActionResult.Fail("充能抵扣数不能为负");
 
-            int chargesNeeded = action.ChargeForMp + def.ChargeCost;
+            int chargesNeeded = action.ChargeForMp + cost.Charge;
             if (actor.Zones.Charges.Count < chargesNeeded)
             {
                 return ActionResult.Fail($"充能不足（需 {chargesNeeded}，有 {actor.Zones.Charges.Count}）");
             }
 
             // 裁定 R-09：每个充能固定抵 5 点 MP，多余不找零
-            int mpNeeded = Math.Max(0, def.MpCost - action.ChargeForMp * 5);
+            int mpNeeded = Math.Max(0, cost.Mp - action.ChargeForMp * 5);
             if (actor.Mp < mpNeeded)
             {
                 return ActionResult.Fail($"MP 不足（需 {mpNeeded}，有 {actor.Mp}）");
@@ -95,42 +113,52 @@ namespace TCGinFU.Core
                 ChosenTarget = chosenTarget,
                 CurrentTarget = PickCoverTarget(action.TargetId),
                 ChargeSpent = chargesNeeded,
+                Choices = action.Choices,
             };
 
             ICardBehaviour behaviour = Behaviours.Resolve(def);
-            if (behaviour != null && !behaviour.CanPlay(ctx, out string reason))
+            if (behaviour != null)
             {
-                return ActionResult.Fail(reason ?? "不满足卡面前置条件");
+                // CanPlay 抛异常时按「不可打出」处理：mod 卡的前置条件写崩了，
+                // 宁可这张卡打不出，也不能让它绕过校验把状态改到一半
+                bool allowed = true;
+                string reason = null;
+                Invoke(behaviour, nameof(ICardBehaviour.CanPlay), () => allowed = behaviour.CanPlay(ctx, out reason));
+                if (!allowed) return ActionResult.Fail(reason ?? "不满足卡面前置条件");
             }
 
             // ──── 校验结束，开始改状态 ────
 
             actor.Zones.Hand.Remove(card);
-            actor.Ap -= def.ApCost;
+            actor.Ap -= cost.Ap;
 
             for (int i = 0; i < action.ChargeForMp; i++) SpendCharge(actor, ChargeUse.ConvertToMp);
-            for (int i = 0; i < def.ChargeCost; i++) SpendCharge(actor, ChargeUse.PayCardCost);
+            for (int i = 0; i < cost.Charge; i++) SpendCharge(actor, ChargeUse.PayCardCost);
 
             actor.SpendMp(mpNeeded);
 
             if (def.HasCrit)
             {
-                ctx.Crit = CritResolver.Roll(State.Rng, actor.Sheet.Dice, def.Colors, CritResistFor(chosenTarget));
+                ctx.Crit = RollCrit(actor, def, chosenTarget ?? State.LivingEnemies.FirstOrDefault());
             }
 
             State.Stats.Add(BattleStatKeys.CardsPlayed, actor.Id);
             Emit(new BattleEvent(BattleEventType.CardPlayed, actor.Id, chosenTarget?.Id)
             {
                 CardId = def.Id,
+                Card = def,
                 Text = def.Name,
                 Round = State.Round,
             });
 
-            behaviour?.OnPlay(ctx);
+            if (behaviour != null) Invoke(behaviour, nameof(ICardBehaviour.OnPlay), () => behaviour.OnPlay(ctx));
             Effects.ApplyAll(ctx, def.Effects);
-            behaviour?.OnResolved(ctx);
+            if (behaviour != null) Invoke(behaviour, nameof(ICardBehaviour.OnResolved), () => behaviour.OnResolved(ctx));
 
-            SendToRestingPlace(actor, card);
+            // 行为层可能已经把这张牌安置到别处了（「顺风充能」把自己变成充能指示物）
+            if (!ctx.CardRehomed) SendToRestingPlace(actor, card);
+
+            FireTrigger(actor, BattleTrigger.CardPlayed, new TriggerSignal { Card = card });
 
             State.CheckOutcome();
             return ActionResult.Success;
@@ -206,7 +234,11 @@ namespace TCGinFU.Core
         {
             if (Pending.Kind != DecisionKind.PlayerActions) return ActionResult.Fail("贴充能只能在玩家阶段");
             if (!Pending.WaitingOn.Contains(actor.Id)) return ActionResult.Fail("已宣布行动完毕");
-            if (actor.HasPlacedChargeThisRound) return ActionResult.Fail("本轮已贴过充能");
+            // 常规的那一次用完后，才去动卡面额外给的次数
+            if (actor.HasPlacedChargeThisRound && actor.ExtraChargePlacements <= 0)
+            {
+                return ActionResult.Fail("本轮已贴过充能");
+            }
 
             CardInstance card = actor.Zones.Hand.Find(action.CardUid);
             if (card == null) return ActionResult.Fail("该牌不在手牌中");
@@ -216,7 +248,10 @@ namespace TCGinFU.Core
             if (zoneOwner.IsDown) return ActionResult.Fail("不能贴给已倒下的角色");
 
             actor.Zones.Hand.Remove(card);
-            actor.HasPlacedChargeThisRound = true;
+
+            if (actor.HasPlacedChargeThisRound) actor.ExtraChargePlacements--;
+            else actor.HasPlacedChargeThisRound = true;
+
             PlaceCharge(zoneOwner, card);
 
             return ActionResult.Success;
@@ -237,15 +272,31 @@ namespace TCGinFU.Core
 
         private ActionResult HandleMoveRow(PlayerCharacter actor)
         {
-            if (Pending.Kind != DecisionKind.PlayerActions) return ActionResult.Fail("走位只能在玩家阶段");
+            bool hasFreeMove = actor.FreeMoves > 0;
+
+            // 攒着的免费移动在响应窗口里也能兑现——「翻滚披风」给的那次机动，
+            // 本来就是为了在敌人落手之前挪开
+            bool timingOk = Pending.Kind == DecisionKind.PlayerActions
+                            || (hasFreeMove && Pending.Kind == DecisionKind.EnemyResponse);
+
+            if (!timingOk) return ActionResult.Fail("走位只能在玩家阶段");
             if (!Pending.WaitingOn.Contains(actor.Id)) return ActionResult.Fail("已宣布行动完毕");
-            if (actor.HasMovedThisRound) return ActionResult.Fail("本轮已经走过位");
-            if (actor.Ap < 1) return ActionResult.Fail("行动力不足");
+
+            if (!hasFreeMove)
+            {
+                if (actor.HasMovedThisRound) return ActionResult.Fail("本轮已经走过位");
+                if (actor.Ap < 1) return ActionResult.Fail("行动力不足");
+            }
 
             Row from = actor.Row;
-            if (!SwitchRow(actor, free: false)) return ActionResult.Fail($"{(from == Row.Front ? "后" : "前")}排已满");
+            if (!MoveRow(actor, from == Row.Front ? Row.Back : Row.Front, free: hasFreeMove))
+            {
+                return ActionResult.Fail($"{(from == Row.Front ? "后" : "前")}排已满");
+            }
 
-            actor.Ap -= 1;
+            if (hasFreeMove) actor.FreeMoves--;
+            else actor.Ap -= 1;
+
             return ActionResult.Success;
         }
 

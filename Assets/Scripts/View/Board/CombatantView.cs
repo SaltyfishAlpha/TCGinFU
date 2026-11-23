@@ -13,7 +13,9 @@ namespace TCGinFU.View
     /// 版式按实体角色卡排：名条 → 插画位 → HP 条 → 数值栏 → 意图栏。
     /// </summary>
     [RequireComponent(typeof(BoxCollider))]
-    public sealed class CombatantView : MonoBehaviour, IDropTarget, IPointerClickHandler
+    public sealed class CombatantView : MonoBehaviour, IDropTarget, IPointerClickHandler,
+        IBeginDragHandler, IDragHandler, IEndDragHandler,
+        IPointerDownHandler, IPointerUpHandler
     {
         private Transform _body;
         private Transform _faceQuad;
@@ -187,7 +189,11 @@ namespace TCGinFU.View
             Combatant = combatant;
 
             bool crisis = combatant is PlayerCharacter pc && pc.IsInCrisis;
-            CardMeshFactory.SetColor(_faceQuad, UiBuilder.TeamColor(isEnemy, combatant.IsDown, crisis));
+            // 角色立绘。没有专属立绘时退回通用角色图（pack.json 的 artFallback.character），
+            // 队伍色改由描边与选中环表达——立绘铺满之后再给整张卡染色会把画面糊掉
+            Texture2D portrait = CardArtLibrary.ResolveWithFallback(PortraitArtId(combatant), "character");
+            CardMeshFactory.SetTexture(
+                _faceQuad, portrait, UiBuilder.TeamColor(isEnemy, combatant.IsDown, crisis));
 
             CardMeshFactory.SetColor(_selectionRing, new Color(1f, 0.85f, 0.25f, 1f));
             _selectionRing.gameObject.SetActive(selected);
@@ -263,10 +269,86 @@ namespace TCGinFU.View
             _highlight.gameObject.SetActive(color.a > 0.01f);
         }
 
+        /// <summary>
+        /// 角色立绘的标识。玩家角色从内容包的 <c>portrait</c> 字段取，
+        /// 敌人暂时没有这个字段，统一走通用角色图。
+        /// </summary>
+        private static string PortraitArtId(Combatant combatant)
+            => combatant is PlayerCharacter
+                ? TCGinFU.Presentation.ContentScenario.LastLoaded?.Character(combatant.Id)?.PortraitId
+                : null;
+
         public void OnPointerClick(PointerEventData eventData)
         {
+            if (IsDragging) return;
+
+            // 长按已经弹过详情了，这一下抬手不该再当成一次选中
+            if (_longPress.Consumed) return;
+
             if (eventData.button == PointerEventData.InputButton.Right) ContextHandler?.Invoke(this);
             else ClickHandler?.Invoke(this);
+        }
+
+        // ──────────────────────────── 长按看详情 ────────────────────────────
+
+        private readonly LongPress _longPress = new();
+
+        /// <summary>左键长按角色卡 = 看角色详情。和卡牌共用同一套手感（<see cref="LongPress"/>）。</summary>
+        public System.Action<CombatantView> LongPressHandler { get; set; }
+
+        private void Awake() => _longPress.Triggered = _ => LongPressHandler?.Invoke(this);
+
+        private void Update() => _longPress.Tick();
+
+        public void OnPointerDown(PointerEventData eventData) => _longPress.OnPointerDown(eventData);
+
+        public void OnPointerUp(PointerEventData eventData) => _longPress.OnPointerUp();
+
+        // ──────────────────────────── 拖拽走位 ────────────────────────────
+
+        /// <summary>
+        /// 把角色卡拖到对排 = 走位。<see cref="BattleView"/> 负责判定落点与弹确认框。
+        /// <para>玩家角色才拖得动；敌人的站位不归玩家管。</para>
+        /// </summary>
+        public bool Draggable { get; set; }
+
+        public bool IsDragging { get; private set; }
+
+        public System.Func<CombatantView, PointerEventData, Vector3?> BoardPointResolver { get; set; }
+        public System.Action<CombatantView> BeginDragHandler { get; set; }
+        public System.Action<CombatantView, PointerEventData> DragHandler { get; set; }
+        public System.Action<CombatantView, PointerEventData> EndDragHandler { get; set; }
+
+        public void OnBeginDrag(PointerEventData eventData)
+        {
+            if (!Draggable || eventData.button != PointerEventData.InputButton.Left) return;
+
+            // 拖拽优先：手势变成拖，长按就作废
+            _longPress.Cancel();
+            IsDragging = true;
+
+            // 关掉自身碰撞体，否则射线一直打中自己，永远找不到下面的目标排
+            _collider.enabled = false;
+            BeginDragHandler?.Invoke(this);
+        }
+
+        public void OnDrag(PointerEventData eventData)
+        {
+            if (!IsDragging) return;
+
+            Vector3? point = BoardPointResolver?.Invoke(this, eventData);
+            if (point.HasValue) Root.position = point.Value;
+
+            DragHandler?.Invoke(this, eventData);
+        }
+
+        public void OnEndDrag(PointerEventData eventData)
+        {
+            if (!IsDragging) return;
+
+            IsDragging = false;
+            _collider.enabled = true;
+            EndDragHandler?.Invoke(this, eventData);
         }
     }
 }

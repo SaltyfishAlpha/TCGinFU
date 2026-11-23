@@ -28,6 +28,9 @@ namespace TCGinFU.Content.Loading
         public int ChargeCapacity { get; init; } = 2;
         public string DeckId { get; init; }
 
+        /// <summary>角色立绘标识。与卡图同理，Core/Content 只存字符串，由表现层解析。</summary>
+        public string PortraitId { get; init; }
+
         /// <summary>老版本写死的面板值，仅供对账（见 data_architecture.md §5.4）。</summary>
         public int LegacyHp { get; init; }
         public int LegacyMp { get; init; }
@@ -49,6 +52,12 @@ namespace TCGinFU.Content.Loading
         public int Hp { get; init; }
         public EnemyRank Rank { get; init; }
         public int? CritResist { get; init; }
+
+        /// <summary>
+        /// 敌人的 MP 上限。老数据里「以太虹吸」「相位折跃」标着消耗 10 MP，
+        /// 不给敌人 MP 面板的话这两条最强的意图就是无代价的。
+        /// </summary>
+        public int MaxMp { get; init; }
         public Row Row { get; init; }
         public AffinityTable Affinities { get; init; } = new();
 
@@ -67,7 +76,7 @@ namespace TCGinFU.Content.Loading
 
         public Enemy CreateEnemy()
         {
-            var enemy = new Enemy(Id, DisplayName, Hp, Rank, CritResist);
+            var enemy = new Enemy(Id, DisplayName, Hp, Rank, CritResist, MaxMp);
             enemy.WithAffinities(Affinities);
             enemy.IntentPlanner = PlanIntents;
             return enemy;
@@ -105,6 +114,55 @@ namespace TCGinFU.Content.Loading
         private readonly Dictionary<string, CharacterContent> _characters = new(StringComparer.Ordinal);
         private readonly Dictionary<string, EnemyContent> _enemies = new(StringComparer.Ordinal);
         private readonly Dictionary<string, DeckContent> _decks = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, StatusDefinition> _statuses = new(StringComparer.Ordinal);
+
+        private readonly List<string> _scriptPaths = new();
+
+        public IReadOnlyDictionary<string, StatusDefinition> Statuses => _statuses;
+
+        /// <summary>pack.json 里声明的行为脚本（相对内容包根目录）。由脚本宿主负责真正执行。</summary>
+        public IReadOnlyList<string> ScriptPaths => _scriptPaths;
+
+        /// <summary>内容包的默认卡背标识。单卡没写 <c>BackArtId</c> 时用它。</summary>
+        public string DefaultCardBackArtId { get; internal set; }
+
+        private readonly Dictionary<string, string> _artFallbacks = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// 按类型的兜底卡图（pack.json 的 <c>artFallback</c>）。
+        /// 卡图仍以**每张卡自己的 <c>art</c>** 为准，这里只是在它还没画出来时顶上，
+        /// 免得整副牌在美术完工前都是纯色块。
+        /// </summary>
+        public IReadOnlyDictionary<string, string> ArtFallbacks => _artFallbacks;
+
+        internal void AddArtFallback(string key, string artId) => _artFallbacks[key] = artId;
+
+        internal void AddScriptPath(string relativePath) => _scriptPaths.Add(relativePath);
+
+        /// <summary>全部卡面声明过的 behaviourId，用于和脚本注册表对账。</summary>
+        public IEnumerable<string> DeclaredBehaviourIds
+        {
+            get
+            {
+                foreach (CardDefinition card in _cards.Values)
+                {
+                    if (!string.IsNullOrEmpty(card.BehaviourId)) yield return card.BehaviourId;
+                }
+
+                foreach (StatusDefinition status in _statuses.Values)
+                {
+                    if (!string.IsNullOrEmpty(status.BehaviourId)) yield return status.BehaviourId;
+                }
+
+                foreach (EnemyContent enemy in _enemies.Values)
+                {
+                    foreach (EnemyIntent intent in enemy.Intents.Values)
+                    {
+                        if (!string.IsNullOrEmpty(intent.BehaviourId)) yield return intent.BehaviourId;
+                    }
+                }
+            }
+        }
 
         public IReadOnlyDictionary<string, CardDefinition> Cards => _cards;
         public IReadOnlyDictionary<string, CharacterContent> Characters => _characters;
@@ -115,6 +173,26 @@ namespace TCGinFU.Content.Loading
         internal void Put(CharacterContent c) => _characters[c.Id] = c;
         internal void Put(EnemyContent e) => _enemies[e.Id] = e;
         internal void Put(DeckContent d) => _decks[d.Id] = d;
+
+        /// <summary>登记一个状态模板。重名直接报错——两份不同数值的同名状态只会留下难查的 bug。</summary>
+        internal void AddStatus(StatusDefinition status, LoadReport report, string where)
+        {
+            if (_statuses.ContainsKey(status.Id))
+            {
+                report?.Errors.Add($"{where}：状态 {status.Id} 重复定义");
+                return;
+            }
+
+            _statuses[status.Id] = status;
+        }
+
+        /// <summary>把加载到的状态模板装成引擎用的注册表。</summary>
+        public StatusRegistry BuildStatusRegistry()
+        {
+            var registry = new StatusRegistry();
+            foreach (StatusDefinition status in _statuses.Values) registry.Register(status);
+            return registry;
+        }
 
         public CardDefinition Card(string id)
             => _cards.TryGetValue(id, out CardDefinition c) ? c : null;

@@ -20,7 +20,8 @@
       "effects": [],
       "unmapped": {
         "ranged": false
-      }
+      },
+      "art": "cards/phantom_nightwalk"
     },
     {
       "id": "hawkeye_overdrive",
@@ -42,7 +43,8 @@
       "effects": [],
       "unmapped": {
         "ranged": false
-      }
+      },
+      "art": "cards/hawkeye_overdrive"
     },
     {
       "id": "ambush_opening",
@@ -74,7 +76,8 @@
       ],
       "unmapped": {
         "ranged": false
-      }
+      },
+      "art": "cards/ambush_opening"
     },
     {
       "id": "cheap_shot_first_form",
@@ -106,7 +109,8 @@
       ],
       "unmapped": {
         "ranged": false
-      }
+      },
+      "art": "cards/cheap_shot_first_form"
     },
     {
       "id": "read_dodge",
@@ -130,7 +134,8 @@
       "unmapped": {
         "ranged": false,
         "can_target_self": true
-      }
+      },
+      "art": "cards/read_dodge"
     },
     {
       "id": "seize_initiative",
@@ -148,10 +153,24 @@
       "hasCrit": false,
       "rulesText": "在前后排之间移动1次并抽1张牌。若在战斗的第1轮打出此牌，免除5 MP消耗，且本轮额外获得+1 AP。",
       "behaviourId": "seize_initiative",
-      "effects": [],
+      "effects": [
+        {
+          "kind": "MoveRow",
+          "target": "Self"
+        },
+        {
+          "kind": "Draw",
+          "amount": {
+            "source": "Flat",
+            "add": 1
+          },
+          "target": "Self"
+        }
+      ],
       "unmapped": {
         "ranged": false
-      }
+      },
+      "art": "cards/seize_initiative"
     },
     {
       "id": "suppressing_volley",
@@ -194,7 +213,8 @@
       "unmapped": {
         "ranged": true,
         "hits": 2
-      }
+      },
+      "art": "cards/suppressing_volley"
     },
     {
       "id": "crossfire_network",
@@ -226,7 +246,8 @@
       ],
       "unmapped": {
         "ranged": true
-      }
+      },
+      "art": "cards/crossfire_network"
     },
     {
       "id": "hawkeye_lock",
@@ -248,7 +269,8 @@
       "effects": [],
       "unmapped": {
         "ranged": false
-      }
+      },
+      "art": "cards/hawkeye_lock"
     },
     {
       "id": "cloud_piercing_snipe",
@@ -281,7 +303,8 @@
       "unmapped": {
         "ranged": true,
         "requires_back_row": true
-      }
+      },
+      "art": "cards/cloud_piercing_snipe"
     },
     {
       "id": "skirmish_shot",
@@ -313,8 +336,10 @@
       "weaponBaseDamage": 7,
       "twoHanded": true,
       "unmapped": {
-        "ranged": true
-      }
+        "ranged": true,
+        "note": "「可免费移动」由 behaviour 授予移动权，不走 MoveRow 效果"
+      },
+      "art": "cards/skirmish_shot"
     },
     {
       "id": "rapid_arrow_rain",
@@ -347,7 +372,8 @@
       "twoHanded": true,
       "unmapped": {
         "ranged": true
-      }
+      },
+      "art": "cards/rapid_arrow_rain"
     },
     {
       "id": "rolling_cloak",
@@ -369,7 +395,8 @@
       "unmapped": {
         "ranged": false,
         "can_target_self": true
-      }
+      },
+      "art": "cards/rolling_cloak"
     },
     {
       "id": "tactical_concealment",
@@ -390,7 +417,8 @@
       "shieldKind": "Physical",
       "unmapped": {
         "ranged": false
-      }
+      },
+      "art": "cards/tactical_concealment"
     },
     {
       "id": "tailwind_charge",
@@ -410,7 +438,8 @@
       "unmapped": {
         "ranged": false,
         "can_target_self": true
-      }
+      },
+      "art": "cards/tailwind_charge"
     },
     {
       "id": "verdant_wind_arrow",
@@ -431,7 +460,8 @@
       "effects": [],
       "unmapped": {
         "ranged": false
-      }
+      },
+      "art": "cards/verdant_wind_arrow"
     }
   ]
 }

@@ -97,8 +97,8 @@ namespace TCGinFU.View
         [Range(1, 12)]
         public int gridColumns = 4;
 
-        [Tooltip("至少预留几个卡位。没有牌时也会画出空卡位，保证区域不塌、牌位不跳")]
-        [Range(0, 12)]
+        [Tooltip("区域空着时画几个占位卡位。有牌之后一个都不画，占位不会挤占真卡的位置。0 = 空着就什么都不画")]
+        [Range(0, 4)]
         public int reservedSlots = 1;
 
         [Header("交互")]

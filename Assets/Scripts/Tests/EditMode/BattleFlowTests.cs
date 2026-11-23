@@ -176,6 +176,66 @@ namespace TCGinFU.Core.Tests
             Assert.AreSame(player, engine.CurrentIntentTargets.Single());
         }
 
+        /// <summary>
+        /// 多人局才测得到的那一半：只有**全员**表态才推进。
+        /// 单人局里「一个人宣布完毕」和「全员宣布完毕」是同一件事，
+        /// 漏掉等待逻辑也照样绿，所以这两条必须用三人局守。
+        /// </summary>
+        [Test]
+        public void 尚有队友未宣布时不进入敌人阶段()
+        {
+            (BattleEngine engine, PlayerCharacter[] party, _) = Party();
+
+            engine.Submit(new DeclareReadyAction(party[0].Id));
+            Assert.AreEqual(DecisionKind.PlayerActions, engine.Pending.Kind, "还有两人没表态");
+
+            engine.Submit(new DeclareReadyAction(party[1].Id));
+            Assert.AreEqual(DecisionKind.PlayerActions, engine.Pending.Kind, "还有一人没表态");
+
+            engine.Submit(new DeclareReadyAction(party[2].Id));
+            Assert.AreEqual(DecisionKind.EnemyResponse, engine.Pending.Kind, "全员表态后才进敌人阶段");
+        }
+
+        [Test]
+        public void 已宣布完毕的角色不能再出牌()
+        {
+            (BattleEngine engine, PlayerCharacter[] party, Enemy enemy) = Party();
+
+            CardInstance card = TestFactory.AddToHand(party[0], TestFactory.StrikeCard());
+            engine.Submit(new DeclareReadyAction(party[0].Id));
+
+            ActionResult result = engine.Submit(new PlayCardAction(party[0].Id, card.Uid, enemy.Id));
+
+            Assert.IsFalse(result.Ok);
+            StringAssert.Contains("已宣布行动完毕", result.Reason);
+            // 队友还没表态，局面仍停在玩家阶段——被拒绝的动作没把流程推歪
+            Assert.AreEqual(DecisionKind.PlayerActions, engine.Pending.Kind);
+        }
+
+        /// <summary>三人小队 + 一只木桩，已 Start。</summary>
+        private static (BattleEngine engine, PlayerCharacter[] party, Enemy enemy) Party()
+        {
+            PlayerCharacter[] party =
+            {
+                TestFactory.Player("tank", TestFactory.Sheet("护卫")),
+                TestFactory.Player("archer", TestFactory.Sheet("弓手")),
+                TestFactory.Player("mage", TestFactory.Sheet("术士")),
+            };
+
+            foreach (PlayerCharacter member in party) TestFactory.FillDeck(member, 20);
+
+            Enemy enemy = TestFactory.Enemy(hp: 200, intents: new[] { TestFactory.Attack(6) });
+
+            BattleState state = BattleSetup.Create(
+                new XorShift32Rng(99),
+                new[] { (party[0], Row.Front), (party[1], Row.Back), (party[2], Row.Back) },
+                new[] { (enemy, Row.Front) });
+
+            var engine = new BattleEngine(state);
+            engine.Start();
+            return (engine, party, enemy);
+        }
+
         [Test]
         public void 响应窗口全体放弃后意图结算()
         {

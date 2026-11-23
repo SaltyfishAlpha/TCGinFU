@@ -34,6 +34,18 @@ namespace TCGinFU.Core
         /// <summary>卡面是否带【暴击】标识。只有带标识的牌才投暴击骰（§7.3）。</summary>
         public bool HasCrit { get; init; }
 
+        /// <summary>
+        /// 远程攻击牌。老卡「鹰眼锁定」写的是「你的**远程攻击**无视目标2点物理护盾」，
+        /// 没有这个字段就只能退而求其次按伤害属性近似，和卡面不是一回事。
+        /// </summary>
+        public bool IsRanged { get; init; }
+
+        /// <summary>
+        /// 卡面「仅限在后排打出」（老卡「穿云狙击」）。
+        /// 这是个**硬前置条件**，不是减益——站错位就该打不出来，而不是打出来少点伤害。
+        /// </summary>
+        public bool RequiresBackRow { get; init; }
+
         /// <summary>打出时按顺序结算的数据驱动效果。</summary>
         public IReadOnlyList<EffectData> Effects { get; init; } = Array.Empty<EffectData>();
 
@@ -45,6 +57,19 @@ namespace TCGinFU.Core
 
         /// <summary>卡面规则文字，供界面展示。不参与任何结算——结算只看 <see cref="Effects"/> 与 Behaviour。</summary>
         public string RulesText { get; init; }
+
+        /// <summary>
+        /// 卡图标识。Core 只存一个字符串，**不碰任何 Unity 类型**——
+        /// 由表现层把它解析成实际贴图（见 <c>CardArtLibrary</c>），
+        /// 解析不到就退回占位色块，所以美术没到位也能照常开发与测试。
+        /// </summary>
+        public string ArtId { get; init; }
+
+        /// <summary>
+        /// 卡背标识。为空时用内容包的默认卡背（<c>ContentDatabase.DefaultCardBackArtId</c>）。
+        /// 留在单卡上是为了让秘宝、形态牌这类能有自己的背面。
+        /// </summary>
+        public string BackArtId { get; init; }
 
         /// <summary>武器牌的一阶基础伤害（3–10 点）。装备这张牌时由它派生 <see cref="WeaponProfile"/>。</summary>
         public int WeaponBaseDamage { get; init; }

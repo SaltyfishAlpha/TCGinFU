@@ -13,10 +13,8 @@ namespace TCGinFU.Sandbox
         [Tooltip("随机种子。同一个种子会重现完全相同的一局（洗牌与骰点都确定性）")]
         [SerializeField] private int seed = 20251117;
 
-        [Range(1, 4)]
-        [SerializeField] private int partySize = 2;
-
-        [SerializeField] private BattleScenario enemy = BattleScenario.哥布林;
+        [Tooltip("要打的对局。阵容与卡池都来自内容包")]
+        [SerializeField] private BattleScenario scenario = BattleScenario.命刻之战;
 
         [Tooltip("界面整体缩放，4K 屏上可以调大")]
         [Range(0.6f, 2.5f)]
@@ -26,7 +24,7 @@ namespace TCGinFU.Sandbox
 
         private void Start()
         {
-            _session = new BattleSession { Seed = seed, PartySize = partySize, EnemyPreset = enemy };
+            _session = new BattleSession { Seed = seed, EnemyPreset = scenario };
             _session.Restart();
         }
 

@@ -36,6 +36,9 @@ namespace TCGinFU.View
 
         /// <summary>右键卡牌：弹出「打出 / 贴充能」之类的操作菜单。</summary>
         void OnCardContextMenu(CardView card, Vector2 screenPosition);
+
+        /// <summary>左键长按卡牌：看详情。</summary>
+        void OnCardLongPress(CardView card);
     }
 
     /// <summary>
@@ -49,10 +52,12 @@ namespace TCGinFU.View
     [RequireComponent(typeof(BoxCollider))]
     public sealed class CardView : MonoBehaviour,
         IBeginDragHandler, IDragHandler, IEndDragHandler,
+        IPointerDownHandler, IPointerUpHandler,
         IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
     {
         /// <summary>拖起来时离开桌面的高度（设计像素）。</summary>
-        private const float DragLift = 46f;
+        /// <summary>拖拽时离开桌面的高度（设计像素）。角色卡走位时也用同一个高度，看着才是一套动作。</summary>
+        public const float DragLift = 46f;
 
         private Transform _body;
         private Transform _faceQuad;
@@ -110,12 +115,32 @@ namespace TCGinFU.View
             return view;
         }
 
-        public void Bind(CardInstance card, ZoneView zone, bool faceDown, bool draggable, Vector2 sizePx)
+        /// <param name="costText">
+        /// 覆盖费用文字。手牌要传此刻的**真实**费用——「先声夺人」卡面印 5 MP，
+        /// 第 1 轮打出却是 0 MP，只显示卡面值玩家会以为 MP 不够而不敢打。
+        /// </param>
+        public void Bind(
+            CardInstance card, ZoneView zone, bool faceDown, bool draggable, Vector2 sizePx,
+            string costText = null)
         {
             Card = card;
             Zone = zone;
-            FaceDown = faceDown;
             Draggable = draggable;
+
+            BindDefinition(card.Definition, faceDown, sizePx, costText);
+        }
+
+        /// <summary>
+        /// 只按卡面定义摆一张卡，不需要 <see cref="CardInstance"/>，也不进任何区域。
+        /// <para>
+        /// 离屏预览（<see cref="CardPreviewStage"/>）和详情面板用它：手上往往只有一个
+        /// <see cref="CardDefinition"/>，为了画张图去造一个 <c>CardInstance</c> 会白占一个全局 Uid。
+        /// </para>
+        /// </summary>
+        public void BindDefinition(
+            CardDefinition def, bool faceDown, Vector2 sizePx, string costText = null)
+        {
+            FaceDown = faceDown;
 
             if (SizePx != sizePx)
             {
@@ -125,8 +150,14 @@ namespace TCGinFU.View
 
             Color faceColor = faceDown
                 ? new Color(0.19f, 0.23f, 0.37f, 1f)
-                : ColorOf(card.Definition.Category);
-            CardMeshFactory.SetColor(_faceQuad, faceColor);
+                : ColorOf(def.Category);
+
+            // 先找专属卡图，再按类型兜底，都没有才退回占位色块
+            Texture2D art = faceDown
+                ? CardArtLibrary.ResolveWithFallback(BackArtId(def), FallbackBack)
+                : CardArtLibrary.ResolveWithFallback(def.ArtId, FallbackKeyOf(def));
+
+            CardMeshFactory.SetTexture(_faceQuad, art, faceColor);
 
             if (faceDown)
             {
@@ -135,9 +166,8 @@ namespace TCGinFU.View
             else
             {
                 _face.SetVisible(true);
-                CardDefinition def = card.Definition;
                 _nameText.text = def.Name;
-                _costText.text = BattleSession.CostText(def);
+                _costText.text = costText ?? BattleSession.CostText(def);
                 _typeText.text = $"{Short(def.Category)}·{Short(def.Kind)}";
             }
 
@@ -189,6 +219,8 @@ namespace TCGinFU.View
         {
             if (!Draggable || _context == null) return;
 
+            // 拖拽优先：手势变成拖，长按就作废，否则拖久一点会弹出详情挡住视线
+            _longPress.Cancel();
             IsDragging = true;
             _homeParent = Root.parent;
             _homeIndex = Root.GetSiblingIndex();
@@ -269,6 +301,9 @@ namespace TCGinFU.View
         {
             if (IsDragging) return;
 
+            // 长按已经弹过详情了，这一下抬手不该再当成一次点击
+            if (_longPress.Consumed) return;
+
             if (eventData.button == PointerEventData.InputButton.Right)
             {
                 _context?.OnCardContextMenu(this, eventData.position);
@@ -277,6 +312,44 @@ namespace TCGinFU.View
 
             _context?.OnCardClick(this);
         }
+
+        // ──────────────────────────── 长按看详情 ────────────────────────────
+
+        private readonly LongPress _longPress = new();
+
+        public void OnPointerDown(PointerEventData eventData) => _longPress.OnPointerDown(eventData);
+
+        public void OnPointerUp(PointerEventData eventData) => _longPress.OnPointerUp();
+
+        private void Awake()
+            => _longPress.Triggered = _ => _context?.OnCardLongPress(this);
+
+        private void Update() => _longPress.Tick();
+
+        /// <summary>
+        /// 内容包的默认卡背。整局只有一套牌背，所以放成静态的，
+        /// 由 <c>BattleView</c> 在建视图时从 <c>ContentDatabase</c> 填过来。
+        /// </summary>
+        public static string DefaultBackArtId { get; set; }
+
+        private static string BackArtId(CardDefinition def)
+            => string.IsNullOrEmpty(def.BackArtId) ? DefaultBackArtId : def.BackArtId;
+
+        /// <summary>卡背的兜底键。</summary>
+        public const string FallbackBack = "back";
+
+        /// <summary>
+        /// 没有专属卡图时按**卡的类型**兜底。
+        /// <para>分类刻意粗——兜底图的作用只是「让这张牌看起来像张牌」，
+        /// 不是表达卡义。真卡图一到位（<c>art: cards/&lt;卡id&gt;</c>）就会盖过它。</para>
+        /// </summary>
+        public static string FallbackKeyOf(CardDefinition def) => def.Kind switch
+        {
+            CardKind.Transform => "transform",
+            _ when def.Category == CardCategory.Armor => "guard",
+            _ when def.DealsDamage => "attack",
+            _ => "spell",
+        };
 
         // ──────────────────────────── 配色与文案 ────────────────────────────
 

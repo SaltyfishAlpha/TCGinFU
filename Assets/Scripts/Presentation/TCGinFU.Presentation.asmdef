@@ -3,7 +3,8 @@
     "rootNamespace": "TCGinFU.Presentation",
     "references": [
         "TCGinFU.Core",
-        "TCGinFU.Content"
+        "TCGinFU.Content",
+        "TCGinFU.Scripting"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

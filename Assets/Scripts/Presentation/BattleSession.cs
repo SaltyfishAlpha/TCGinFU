@@ -1,18 +1,17 @@
 using System.Collections.Generic;
 using System.Linq;
-using TCGinFU.Content;
 using TCGinFU.Content.Loading;
 using TCGinFU.Core;
 
 namespace TCGinFU.Presentation
 {
+    /// <summary>
+    /// 可开的对局。目前只有内容包里的「命刻之战」一种；
+    /// 以后每新增一个内容包阵容，在这里加一个枚举值并在
+    /// <see cref="BattleSession.Restart"/> 里接上对应的加载入口即可。
+    /// </summary>
     public enum BattleScenario
     {
-        训练木桩,
-        哥布林,
-        石像鬼,
-        深渊领主,
-        哥布林小队,
         /// <summary>内容包里的真实数据：米阔阔 + 维汀 对 克洛诺斯-IV型</summary>
         命刻之战,
     }
@@ -26,11 +25,15 @@ namespace TCGinFU.Presentation
         private readonly HashSet<int> _discardSelection = new();
 
         public int Seed = 20251117;
-        public int PartySize = 2;
-        public BattleScenario EnemyPreset = BattleScenario.哥布林;
+        public BattleScenario EnemyPreset = BattleScenario.命刻之战;
 
+        /// <summary>内容包加载失败时为 null——此时不开局，只显示 <see cref="Message"/> 里的加载报告。</summary>
         public BattleEngine Engine { get; private set; }
-        public BattleState State => Engine.State;
+
+        public BattleState State => Engine?.State;
+
+        /// <summary>内容包是否加载成功。false 时整个棋盘都不该建出来。</summary>
+        public bool IsLoaded => Engine != null;
 
         /// <summary>当前在操作的角色。</summary>
         public string SelectedPlayerId { get; set; }
@@ -48,76 +51,37 @@ namespace TCGinFU.Presentation
 
         public BattleSession() => Restart();
 
-        public void Restart()
-        {
-            if (EnemyPreset == BattleScenario.命刻之战 && RestartFromContent()) return;
-
-            IRng rng = new XorShift32Rng(Seed);
-
-            var party = new List<(PlayerCharacter, Row)>();
-            string[] names = { "护卫", "弓手", "术士", "游侠" };
-            for (int i = 0; i < PartySize; i++)
-            {
-                party.Add((
-                    SampleDeck.CreatePlayer($"p{i}", rng, names[i % names.Length]),
-                    i == 0 ? Row.Front : Row.Back));
-            }
-
-            var enemies = BuildEnemies().Select(e => (e, Row.Front)).ToList();
-
-            BattleState state = BattleSetup.Create(rng, party, enemies);
-            Engine = new BattleEngine(
-                state,
-                EffectRegistry.CreateDefault(),
-                SampleBehaviours.CreateRegistry(),
-                SampleDeck.CreateStatusRegistry());
-
-            Engine.Start();
-
-            SelectedPlayerId = state.Players[0].Id;
-            ChargeTargetId = SelectedPlayerId;
-            SelectedEnemyId = state.Enemies[0].Id;
-            _discardSelection.Clear();
-            Message = $"第 {state.Round} 轮开始。";
-            LastActionFailed = false;
-        }
-
         /// <summary>
         /// 用内容包里的真实数据开局（见 data_architecture.md）。
-        /// 内容包缺失或有错时返回 false，调用方退回样例内容——
-        /// 玩家把 JSON 改坏时应当还能进游戏并看到报错，而不是卡在黑屏。
+        ///
+        /// <para>内容包缺失或有错时**不开局**，只把加载报告写进 <see cref="Message"/>。
+        /// 这里曾经会静默退回一套 C# 样例卡组，那样「内容包坏了」看起来会像「游戏能玩」——
+        /// 玩家改坏自己的 JSON 之后反而更难发现问题出在哪。</para>
         /// </summary>
-        private bool RestartFromContent()
+        public void Restart()
         {
+            Engine = null;
+            _discardSelection.Clear();
+
             BattleEngine engine = ContentScenario.CreateClockworkCollapse(Seed, out LoadReport report);
             if (engine == null)
             {
-                SetMessage("内容包加载失败，已退回样例卡组：\n" + report, isWarning: true);
-                EnemyPreset = BattleScenario.哥布林;
-                return false;
+                SelectedPlayerId = null;
+                SelectedEnemyId = null;
+                ChargeTargetId = null;
+                SetMessage("内容包加载失败，无法开局：\n" + report, isWarning: true);
+                return;
             }
 
             Engine = engine;
             SelectedPlayerId = State.Players[0].Id;
             ChargeTargetId = SelectedPlayerId;
             SelectedEnemyId = State.Enemies[0].Id;
-            _discardSelection.Clear();
-            Message = $"命刻之战 · 第 {State.Round} 轮开始。";
+            Message = $"{EnemyPreset} · 第 {State.Round} 轮开始。";
             LastActionFailed = false;
-            return true;
         }
 
-        private IEnumerable<Enemy> BuildEnemies() => EnemyPreset switch
-        {
-            BattleScenario.训练木桩 => new[] { SampleEnemies.TrainingDummy() },
-            BattleScenario.哥布林 => new[] { SampleEnemies.Goblin(hp: 80) },
-            BattleScenario.石像鬼 => new[] { SampleEnemies.Gargoyle() },
-            BattleScenario.深渊领主 => new[] { SampleEnemies.AbyssLord() },
-            BattleScenario.哥布林小队 => SampleEnemies.GoblinPack(3),
-            _ => new[] { SampleEnemies.TrainingDummy() },
-        };
-
-        public PlayerCharacter SelectedPlayer => State.FindPlayer(SelectedPlayerId);
+        public PlayerCharacter SelectedPlayer => State?.FindPlayer(SelectedPlayerId);
 
         public bool IsWaitingOn(string playerId) => Engine.Pending.WaitingOn.Contains(playerId);
 
@@ -264,8 +228,8 @@ namespace TCGinFU.Presentation
             LastActionFailed = State.Outcome == BattleOutcome.Ongoing;
         }
 
-        /// <summary>完整战报文本。</summary>
-        public string Log => BattleLog.Format(Engine);
+        /// <summary>完整战报文本。没开起局时就是那份加载报告。</summary>
+        public string Log => IsLoaded ? BattleLog.Format(Engine) : Message;
 
         /// <summary>敌人的弱点 / 抗性摘要，显示在面板上。</summary>
         public static string AffinitySummary(Enemy enemy)
@@ -290,15 +254,59 @@ namespace TCGinFU.Presentation
             return parts.Count == 0 ? "无克制" : string.Join(" ", parts);
         }
 
-        /// <summary>卡面费用摘要。</summary>
-        public static string CostText(CardDefinition def)
+        /// <summary>低于卡面基准的费用（已减免）。</summary>
+        public const string DiscountColor = "#7dff7d";
+
+        /// <summary>高于卡面基准的费用（被加价）。</summary>
+        public const string SurchargeColor = "#ff9a9a";
+
+        /// <summary>卡面费用摘要（卡面基准值，不含任何折扣）。</summary>
+        public static string CostText(CardDefinition def) => Compose(def, def.ApCost, def.MpCost, def.ChargeCost, false);
+
+        /// <summary>
+        /// 某个角色此刻打这张牌的**真实**费用摘要，被改过的那一项染色。
+        ///
+        /// <para>必须有这个重载：「先声夺人」卡面印着 5 MP，但第 1 轮打出是 0 MP。
+        /// 界面只显示卡面基准值的话，玩家看到的费用和实际扣的对不上，
+        /// 还会以为 MP 不够而不敢打。</para>
+        /// </summary>
+        public static string CostText(CardDefinition def, BattleEngine engine, PlayerCharacter actor)
+        {
+            if (engine == null || actor == null) return CostText(def);
+
+            CostContext cost = engine.ResolveCost(actor, def);
+            return Compose(def, cost.Ap, cost.Mp, cost.Charge, compareToBase: true);
+        }
+
+        private static string Compose(CardDefinition def, int ap, int mp, int charge, bool compareToBase)
         {
             var parts = new List<string>();
-            if (def.ApCost > 0) parts.Add($"{def.ApCost}AP");
-            if (def.MpCost > 0) parts.Add($"{def.MpCost}MP");
-            if (def.ChargeCost > 0) parts.Add($"{def.ChargeCost}充能");
+
+            Append(parts, ap, compareToBase ? def.ApCost : ap, "AP");
+            Append(parts, mp, compareToBase ? def.MpCost : mp, "MP");
+            Append(parts, charge, compareToBase ? def.ChargeCost : charge, "充能");
+
+            // 一分钱不花的牌印「0」而不是「免费」：和炉石一样，费用位永远是个数字。
+            // 写成「免费」会让它和其它牌的费用没法一眼比较，也容易被看成「这里没加载出来」。
+            if (parts.Count == 0) parts.Add("0");
+
             if (def.HasCrit) parts.Add("【暴击】");
-            return parts.Count == 0 ? "免费" : string.Join(" ", parts);
+            return string.Join(" ", parts);
+        }
+
+        /// <summary>
+        /// 费用为 0 且没被改过时整项省略（省得每张牌都挂一串「0AP 0充能」），
+        /// 但**只要被改过就一定显示**——减免到 0 恰恰是最该让玩家看见的那一次。
+        /// </summary>
+        private static void Append(List<string> parts, int value, int baseValue, string unit)
+        {
+            if (value == 0 && value == baseValue) return;
+
+            string text = $"{value}{unit}";
+
+            if (value < baseValue) parts.Add($"<color={DiscountColor}>{text}</color>");
+            else if (value > baseValue) parts.Add($"<color={SurchargeColor}>{text}</color>");
+            else parts.Add(text);
         }
     }
 }

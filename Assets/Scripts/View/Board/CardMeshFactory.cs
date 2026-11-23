@@ -113,6 +113,43 @@ namespace TCGinFU.View
             }
         }
 
+        // 贴图材质按贴图缓存，和纯色材质一样——每张卡各 new 一个 Material
+        // 会在切场景时漏一堆，而且每次 Refresh 都重建
+        private static readonly Dictionary<Texture, Material> TexturedMaterials = new();
+
+        /// <summary>
+        /// 给网格贴图。<paramref name="texture"/> 为 null 时退回 <paramref name="fallback"/> 纯色——
+        /// 美术没到位是常态，缺图应当安静地显示占位色而不是粉色方块。
+        /// </summary>
+        public static void SetTexture(Transform meshObject, Texture texture, Color fallback)
+        {
+            if (meshObject == null) return;
+            if (!meshObject.TryGetComponent(out MeshRenderer renderer)) return;
+
+            if (texture == null)
+            {
+                renderer.sharedMaterial = ColorMaterial(fallback);
+                return;
+            }
+
+            if (!TexturedMaterials.TryGetValue(texture, out Material material) || material == null)
+            {
+                _shader ??= ResolveShader();
+                material = new Material(_shader) { name = "CardArt_" + texture.name };
+
+                if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", texture);
+                if (material.HasProperty("_MainTex")) material.SetTexture("_MainTex", texture);
+
+                // 贴图要原样显示，所以底色必须是白的，否则等于给图蒙了一层色
+                if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", Color.white);
+                if (material.HasProperty("_Color")) material.SetColor("_Color", Color.white);
+
+                TexturedMaterials[texture] = material;
+            }
+
+            renderer.sharedMaterial = material;
+        }
+
         private static Mesh BuildBox()
         {
             // 直接用 Unity 内置立方体，省得自己摆 24 个顶点

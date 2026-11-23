@@ -18,7 +18,14 @@ namespace TCGinFU.Sandbox
 
         public static void Draw(BattleSession session, float width, float height)
         {
-            if (session?.Engine == null) return;
+            if (session == null) return;
+
+            // 内容包坏了就把加载报告摊开，别留一张空白面板让人以为是沙盒自己崩了
+            if (!session.IsLoaded)
+            {
+                DrawLoadFailure(session, height);
+                return;
+            }
 
             DrawToolbar(session);
             DrawStatusBar(session);
@@ -44,6 +51,26 @@ namespace TCGinFU.Sandbox
             DrawPendingPanel(session);
         }
 
+        private static void DrawLoadFailure(BattleSession session, float height)
+        {
+            GUILayout.Label("内容包加载失败", GUI.skin.box);
+
+            GUILayout.BeginHorizontal();
+            {
+                GUILayout.Label("种子", GUILayout.Width(30));
+                string seedText = GUILayout.TextField(session.Seed.ToString(), GUILayout.Width(80));
+                if (int.TryParse(seedText, out int seed)) session.Seed = seed;
+
+                if (GUILayout.Button("重试", GUILayout.Width(80))) session.Restart();
+                GUILayout.FlexibleSpace();
+            }
+            GUILayout.EndHorizontal();
+
+            _logScroll = GUILayout.BeginScrollView(_logScroll, GUILayout.Height(Mathf.Max(120f, height - 90f)));
+            GUILayout.TextArea(session.Message);
+            GUILayout.EndScrollView();
+        }
+
         // ──────────────────────────── 顶栏 ────────────────────────────
 
         private static void DrawToolbar(BattleSession session)
@@ -54,27 +81,11 @@ namespace TCGinFU.Sandbox
                 string seedText = GUILayout.TextField(session.Seed.ToString(), GUILayout.Width(80));
                 if (int.TryParse(seedText, out int seed)) session.Seed = seed;
 
+                // 阵容由内容包决定（命刻之战固定是米阔阔 + 维汀），所以没有队伍人数可调。
+                // 以后多出第二个对局时，这里按 BattleScenario 摆一排切换按钮即可。
                 GUILayout.Space(8);
-                GUILayout.Label("队伍", GUILayout.Width(30));
-                for (int size = 1; size <= 4; size++)
-                {
-                    bool on = session.PartySize == size;
-                    if (GUILayout.Toggle(on, size.ToString(), "Button", GUILayout.Width(26)) && !on)
-                    {
-                        session.PartySize = size;
-                    }
-                }
-
-                GUILayout.Space(8);
-                GUILayout.Label("敌人", GUILayout.Width(30));
-                foreach (BattleScenario preset in System.Enum.GetValues(typeof(BattleScenario)))
-                {
-                    bool on = session.EnemyPreset == preset;
-                    if (GUILayout.Toggle(on, preset.ToString(), "Button", GUILayout.Width(74)) && !on)
-                    {
-                        session.EnemyPreset = preset;
-                    }
-                }
+                GUILayout.Label("对局", GUILayout.Width(30));
+                GUILayout.Label(session.EnemyPreset.ToString(), GUILayout.Width(80));
 
                 GUILayout.FlexibleSpace();
 

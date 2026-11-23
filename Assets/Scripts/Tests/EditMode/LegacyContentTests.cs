@@ -105,6 +105,47 @@ namespace TCGinFU.Tests
             Assert.That(duplicates, Is.Empty, "behaviourId 必须唯一：\n" + string.Join("\n", duplicates));
         }
 
+        /// <summary>
+        /// 四种来源都要有卡覆盖到：少掉一种意味着那条代码路径在整个内容包里
+        /// 一次都没被走到，引擎测试再绿也说明不了它在真实数据上成立。
+        /// </summary>
+        [Test]
+        public void T04_内容包覆盖全部四种卡牌来源()
+        {
+            CollectionAssert.AreEquivalent(
+                System.Enum.GetValues(typeof(CardCategory)).Cast<CardCategory>().ToList(),
+                _db.Cards.Values.Select(c => c.Category).Distinct().ToList());
+        }
+
+        /// <summary>
+        /// 结算形态的覆盖情况。敌人的牌不在 <c>_db.Cards</c> 里（它们挂在意图上，见 I01），
+        /// 所以要并进来一起数。
+        ///
+        /// <para><b>Hero（英雄技能牌）目前整个内容包一张都没有</b>——「命刻之战」的两名角色都没到
+        /// 10 级精通，按 §3.3 本来就带不了。这是**内容待补**，不是代码缺陷，所以这里如实排除；
+        /// 等内容包补上英雄技能牌，把它从排除列表里删掉即可。
+        /// §3.3 的精通校验规则本身由 <c>DeckValidatorTests</c> 用构造卡守着。</para>
+        /// </summary>
+        [Test]
+        public void T04_内容包覆盖除英雄技能牌外的全部结算形态()
+        {
+            var kinds = _db.Cards.Values.Select(c => c.Kind)
+                .Concat(_db.Enemies.Values
+                    .SelectMany(e => e.Intents.Values)
+                    .Where(i => i.Card != null)
+                    .Select(i => i.Card.Kind))
+                .Distinct()
+                .ToList();
+
+            var expected = System.Enum.GetValues(typeof(CardKind)).Cast<CardKind>()
+                .Where(k => k != CardKind.Hero)
+                .ToList();
+
+            CollectionAssert.AreEquivalent(expected, kinds);
+            CollectionAssert.DoesNotContain(kinds, CardKind.Hero,
+                "内容包补上英雄技能牌了——请把这条测试并回 T04_内容包覆盖全部四种卡牌来源 的完整断言");
+        }
+
         [Test]
         public void T04_每张卡都有规则文字()
         {

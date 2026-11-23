@@ -21,6 +21,10 @@ namespace TCGinFU.Core
         public (int numerator, int denominator) Multiplier
             => IsSuperCrit ? (2, 1) : IsCrit ? (3, 2) : (1, 1);
 
+        /// <summary>按调整后的骰值重新判定。<see cref="CritRollContext"/> 用它收尾。</summary>
+        public CritResult WithRolls(IReadOnlyList<int> rolls, int critResist)
+            => CritResolver.Evaluate(rolls, critResist, rolls.Count >= 2);
+
         public static readonly CritResult None = new(false, false, System.Array.Empty<int>(), 0);
 
         public override string ToString()
@@ -57,12 +61,32 @@ namespace TCGinFU.Core
             int a = rng.RollDie(dice[colors[0]]);
             int b = rng.RollDie(dice[colors[1]]);
 
+            return Evaluate(new[] { a, b }, critResist, dualColor: true);
+        }
+
+        /// <summary>
+        /// 由已知骰值判定暴击。单独拆出来是因为骰值会被词条改——
+        /// 老卡「鹰眼锁定」掷骰+1、「命运锚点·七」把一颗骰视为 7，
+        /// 改完必须用同一套规则重新判，不能各自写一遍。
+        /// </summary>
+        public static CritResult Evaluate(IReadOnlyList<int> rolls, int critResist, bool dualColor)
+        {
+            if (rolls == null || rolls.Count == 0) return CritResult.None;
+
+            if (!dualColor || rolls.Count == 1)
+            {
+                return new CritResult(rolls[0] >= critResist, false, rolls, critResist);
+            }
+
+            int a = rolls[0];
+            int b = rolls[1];
+
             bool bothReach = a >= critResist && b >= critResist;
             bool matchedPair = a == b && a >= MatchedPairThreshold;
             bool superCrit = bothReach || matchedPair;
             bool crit = superCrit || a >= critResist || b >= critResist;
 
-            return new CritResult(crit, superCrit, new[] { a, b }, critResist);
+            return new CritResult(crit, superCrit, rolls, critResist);
         }
     }
 }

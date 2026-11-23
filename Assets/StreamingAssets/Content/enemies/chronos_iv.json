@@ -46,7 +46,8 @@
             "damageClass": "physical",
             "mp": 0,
             "pierce": false
-          }
+          },
+          "behaviourId": "gravity_sweep"
         },
         {
           "id": "dimension_cannon",
@@ -63,7 +64,8 @@
             "damageClass": "physical",
             "mp": 0,
             "pierce": true
-          }
+          },
+          "behaviourId": "dimension_cannon"
         },
         {
           "id": "aether_siphon",
@@ -80,7 +82,9 @@
             "damageClass": "magic",
             "mp": 10,
             "pierce": false
-          }
+          },
+          "mp": 10,
+          "behaviourId": "aether_siphon"
         },
         {
           "id": "clockwork_volley",
@@ -97,7 +101,8 @@
             "damageClass": "physical",
             "mp": 0,
             "pierce": false
-          }
+          },
+          "behaviourId": "clockwork_volley"
         },
         {
           "id": "phase_shift",
@@ -114,7 +119,9 @@
             "damageClass": "magic",
             "mp": 10,
             "pierce": false
-          }
+          },
+          "mp": 10,
+          "behaviourId": "phase_shift"
         },
         {
           "id": "armor_reconstruction",
@@ -131,7 +138,8 @@
             "damageClass": "none",
             "mp": 0,
             "pierce": false
-          }
+          },
+          "behaviourId": "armor_reconstruction"
         },
         {
           "id": "time_guillotine",
@@ -148,7 +156,8 @@
             "damageClass": "mixed",
             "mp": 0,
             "pierce": false
-          }
+          },
+          "behaviourId": "time_guillotine"
         },
         {
           "id": "fate_turbulence",
@@ -165,7 +174,8 @@
             "damageClass": "magic",
             "mp": 0,
             "pierce": false
-          }
+          },
+          "behaviourId": "fate_turbulence"
         },
         {
           "id": "causal_erasure",
@@ -182,7 +192,8 @@
             "damageClass": "physical",
             "mp": 0,
             "pierce": false
-          }
+          },
+          "behaviourId": "causal_erasure"
         },
         {
           "id": "zero_collapse",
@@ -199,9 +210,11 @@
             "damageClass": "pierce",
             "mp": 0,
             "pierce": true
-          }
+          },
+          "behaviourId": "zero_collapse"
         }
-      ]
+      ],
+      "mp": 30
     },
     {
       "id": "arm",

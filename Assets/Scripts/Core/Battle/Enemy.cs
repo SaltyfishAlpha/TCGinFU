@@ -15,6 +15,9 @@ namespace TCGinFU.Core
         DesignatedRowSingle,
         /// <summary>不指向玩家（自强化、召唤等）</summary>
         SelfOrNone,
+
+        /// <summary>当前 HP 最高者（老 Boss 的「因果抹杀令」）</summary>
+        HighestHpSingle,
     }
 
     /// <summary>敌人本轮揭示的一条行动意图（§8 ① / ④）。</summary>
@@ -40,6 +43,44 @@ namespace TCGinFU.Core
         /// <summary>命中后给目标挂的状态（可空）。</summary>
         public StatusEffect InflictedStatus { get; init; }
 
+        /// <summary>
+        /// 这条意图要打出的那张**敌人的牌**。
+        ///
+        /// <para>敌人的意图不是另一套机制——它就是敌人手里一套玩家看不到的牌，
+        /// 按阶段从备选池里挑一张宣告出来。所以这里直接挂 <see cref="CardDefinition"/>，
+        /// 结算时走和玩家出牌**完全相同**的那条管线：同样的 <see cref="EffectData"/>、
+        /// 同样的 <see cref="ICardBehaviour"/> 钩子、同样的伤害管线。</para>
+        ///
+        /// <para>这么做之前我给意图单独加过一套 on_intent_* 钩子，那是错的抽象：
+        /// 数据驱动效果、状态、触发器全都要再实现一遍，mod 作者还得学两套 API。</para>
+        /// </summary>
+        public CardDefinition Card { get; init; }
+
+        /// <summary>意图直接复用卡的行为 Id。</summary>
+        public string BehaviourId => Card?.BehaviourId;
+
+        /// <summary>打出这张牌要花的 MP。敌人不付 AP（裁定：敌人每轮只出一条意图）。</summary>
+        public int MpCost => Card?.MpCost ?? 0;
+
+        /// <summary>
+        /// 目标是否在**宣告时**就锁定（裁定 R-24）。
+        ///
+        /// <para>分界线在意图文本：</para>
+        /// <list type="bullet">
+        /// <item>「**选择/随机选择一个**位于后排的角色，攻击」——已经选定了具体某个人，
+        /// 他之后走到哪都算数，响应窗口里移动躲不掉。</item>
+        /// <item>「攻击**前排角色**」——指的是「结算时站在前排的那些人」，
+        /// 所以在响应窗口里挪出前排就是真的躲开了，挪进来的也会被打到。</item>
+        /// </list>
+        ///
+        /// <para>不显式指定时按 <see cref="Targeting"/> 推导：单体指向锁定，范围指向不锁定。
+        /// 自定义内容可以覆盖它。</para>
+        /// </summary>
+        public bool? LocksTargetOverride { get; init; }
+
+        public bool LocksTarget => LocksTargetOverride
+            ?? Targeting is IntentTargeting.DefaultSingle or IntentTargeting.DesignatedRowSingle;
+
         public override string ToString() => $"{Label}（{Targeting}{(Damage > 0 ? $" {Damage}点{Element}" : "")}）";
     }
 
@@ -47,14 +88,28 @@ namespace TCGinFU.Core
     {
         private readonly List<EnemyIntent> _intents = new();
 
-        public Enemy(string id, string name, int maxHp, EnemyRank rank, int? critResist = null)
+        public Enemy(string id, string name, int maxHp, EnemyRank rank, int? critResist = null, int maxMp = 0)
             : base(id, name, maxHp)
         {
             Rank = rank;
             CritResist = critResist ?? rank.DefaultCritResist();
+            MaxMp = maxMp;
+            Mp = maxMp;
         }
 
         public EnemyRank Rank { get; }
+
+        /// <summary>
+        /// 敌人也有 MP：老数据里「以太虹吸」「相位折跃」都标着消耗 10 MP，
+        /// 而它们恰好是最强的两条——读起来就是「放大招要蓄力」。
+        /// MP 不够时这条意图出不了，决策层会改挑别的。
+        /// </summary>
+        public int MaxMp { get; }
+
+        public int Mp { get; internal set; }
+
+        /// <summary>这条意图此刻出不出得起。</summary>
+        public bool CanAfford(EnemyIntent intent) => intent == null || Mp >= intent.MpCost;
 
         public override int CritResist { get; }
 

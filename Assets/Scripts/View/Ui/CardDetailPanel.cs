@@ -60,20 +60,58 @@ namespace TCGinFU.View
 
         public bool IsOpen => gameObject.activeSelf;
 
-        public static CardDetailPanel Create(Transform parent)
+        /// <summary>
+        /// 左侧卡图用的离屏摄影棚。<c>BattleView</c> 建好后指过来；
+        /// 没有也能用——卡图区整块隐藏，右边的文字照常。
+        /// </summary>
+        private CardPreviewStage _stage;
+        private RawImage _preview;
+
+        // 文字窗 560×540；卡图比它矮一圈，宽度按扑克比例反推。
+        // 两块并排后整体居中，所以窗口不再在屏幕正中（见下面的 totalWidth）
+        private const float WindowWidth = 560f;
+        private const float WindowHeight = 540f;
+        private const float PreviewHeight = 496f;
+        private const float PreviewGap = 16f;
+
+        public static CardDetailPanel Create(Transform parent, CardPreviewStage stage = null)
         {
             Image backdrop = UiBuilder.CreateImage("CardDetail", parent, new Color(0f, 0f, 0f, 0.62f));
             backdrop.rectTransform.Stretch();
 
             var panel = backdrop.gameObject.AddComponent<CardDetailPanel>();
+            panel._stage = stage;
+
+            float previewWidth = PreviewHeight / BattleLayoutAsset.PokerAspect;
+            float totalWidth = previewWidth + PreviewGap + WindowWidth;
+            float left = -totalWidth * 0.5f;
 
             Image window = UiBuilder.CreateImage(
                 "Window", backdrop.transform, new Color(0.15f, 0.16f, 0.20f, 0.99f));
             window.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
             window.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-            window.rectTransform.sizeDelta = new Vector2(560f, 540f);
-            window.rectTransform.anchoredPosition = Vector2.zero;
+            window.rectTransform.sizeDelta = new Vector2(WindowWidth, WindowHeight);
+            window.rectTransform.anchoredPosition = new Vector2(
+                left + previewWidth + PreviewGap + WindowWidth * 0.5f, 0f);
             UiBuilder.CreateBorder(window.rectTransform, new Color(1f, 1f, 1f, 0.26f));
+
+            // 卡图不画在窗口里，而是和窗口并排的一块独立区域——
+            // 它显示的是那张卡本身，不是面板的一个字段
+            if (stage != null)
+            {
+                var previewGo = new GameObject("Preview", typeof(RectTransform), typeof(RawImage));
+                previewGo.transform.SetParent(backdrop.transform, false);
+
+                panel._preview = previewGo.GetComponent<RawImage>();
+                panel._preview.texture = stage.Output;
+                panel._preview.raycastTarget = false;
+
+                RectTransform previewRect = panel._preview.rectTransform;
+                previewRect.anchorMin = previewRect.anchorMax = new Vector2(0.5f, 0.5f);
+                previewRect.sizeDelta = new Vector2(previewWidth, PreviewHeight);
+                previewRect.anchoredPosition = new Vector2(left + previewWidth * 0.5f, 0f);
+                UiBuilder.CreateBorder(previewRect, new Color(1f, 1f, 1f, 0.26f));
+            }
 
             // 顶部色条：按卡牌来源上色，和棋盘上那张卡对得上
             panel._accent = UiBuilder.CreateImage("Accent", window.transform, Color.gray, raycast: false);
@@ -179,8 +217,11 @@ namespace TCGinFU.View
 
             _accent.color = CardView.ColorOf(def.Category);
             _title.text = def.Name;
-            _subtitle.text = BuildSubtitle(def);
+            _subtitle.text = BuildSubtitle(def, viewer);
             _body.text = BuildBody(def, viewer);
+
+            // 棚里那张卡的费用也按 viewer 的面板算，和副标题、和手牌上印的保持一致
+            _stage?.ShowCard(def, costText: BattleSession.CostText(def, Engine, viewer));
 
             gameObject.SetActive(true);
             transform.SetAsLastSibling();
@@ -223,6 +264,9 @@ namespace TCGinFU.View
             _subtitle.text = BuildCombatantSubtitle(combatant);
             _body.text = BuildCombatantBody(combatant);
 
+            // 角色详情左边摆的就是棋盘上那张角色卡本身
+            _stage?.ShowCombatant(combatant, isEnemy);
+
             gameObject.SetActive(true);
             transform.SetAsLastSibling();
             ResizeContent();
@@ -253,7 +297,7 @@ namespace TCGinFU.View
             return string.Join("　|　", parts);
         }
 
-        private static string BuildCombatantBody(Combatant combatant)
+        private string BuildCombatantBody(Combatant combatant)
         {
             var builder = new StringBuilder();
 
@@ -265,8 +309,15 @@ namespace TCGinFU.View
                 + $"　魔法 {combatant.Shields.Magical}"
                 + $"（其中自动 {combatant.Shields.AutoMagical}）");
 
-            if (combatant is PlayerCharacter player) AppendPlayer(builder, player);
-            else if (combatant is Enemy enemy) AppendEnemy(builder, enemy);
+            if (combatant is PlayerCharacter player)
+            {
+                AppendPlayer(builder, player);
+                AppendStackedCards(builder, player);
+            }
+            else if (combatant is Enemy enemy)
+            {
+                AppendEnemy(builder, enemy);
+            }
 
             if (combatant.Statuses.All.Count > 0)
             {
@@ -277,6 +328,38 @@ namespace TCGinFU.View
 
             return builder.ToString().TrimEnd();
         }
+
+        /// <summary>
+        /// 充能区逐个列出来。
+        ///
+        /// <para>「区域」那一段已经报了数量，但充能是**横置压在角色卡下面**的，
+        /// 棋盘上既看不出有几个、也看不出是谁贴的——而「谁贴的」直接决定它被消耗后
+        /// 回谁的弃牌堆（§5.2），是要做决策的信息。</para>
+        ///
+        /// <para><b>但不写是哪张牌</b>：充能是背面朝下的暗信息，
+        /// 在这里泄出去等于绕过了牌背。升变牌与持续牌由上面的「区域」「升变中」两段负责。</para>
+        /// </summary>
+        private void AppendStackedCards(StringBuilder builder, PlayerCharacter player)
+        {
+            ChargeZone charges = player.Zones.Charges;
+            if (charges.Count == 0) return;
+
+            builder.AppendLine();
+            builder.AppendLine($"<b>充能区明细</b>　{charges.Count} / {charges.Capacity}");
+
+            foreach (ChargeToken token in charges.Tokens)
+            {
+                string owner = token.OwnerId == player.Id ? "自己贴的" : $"{DisplayName(token.OwnerId)} 贴的";
+                builder.AppendLine($"· <color=#999999>背面朝下</color>　{owner}");
+            }
+        }
+
+        /// <summary>
+        /// 把内部 id 换成角色名——面板上冒出「weiting」只会让人困惑。
+        /// 查不到（比如没绑引擎）就原样显示，总好过显示空白。
+        /// </summary>
+        private string DisplayName(string id)
+            => Engine?.State.FindPlayer(id)?.Name ?? id;
 
         private static void AppendPlayer(StringBuilder builder, PlayerCharacter player)
         {
@@ -378,12 +461,19 @@ namespace TCGinFU.View
         private static string BonusText(int bonus)
             => bonus == 0 ? "" : bonus > 0 ? $" + 加值 {bonus}" : $" − 补正 {-bonus}";
 
-        private static string BuildSubtitle(CardDefinition def)
+        /// <summary>
+        /// 驱动中的引擎，用来算此刻的真实费用（含减免）。由 <c>BattleView</c> 在建面板时填。
+        /// 为 null 时退回卡面基准值——构筑编辑器这类没有对局的场合就是这样。
+        /// </summary>
+        public BattleEngine Engine { get; set; }
+
+        private string BuildSubtitle(CardDefinition def, PlayerCharacter viewer)
         {
             var parts = new List<string>
             {
                 $"{CardView.Short(def.Category)} · {CardView.Short(def.Kind)}",
-                BattleSession.CostText(def),
+                // 和手牌上显示的保持一致：详情面板印 5MP、手里那张印绿色 0MP 会让人以为看错了
+                BattleSession.CostText(def, Engine, viewer),
             };
 
             if (def.Colors.Count > 0)
@@ -547,7 +637,12 @@ namespace TCGinFU.View
             _ => color.ToString(),
         };
 
-        public void Close() => gameObject.SetActive(false);
+        public void Close()
+        {
+            gameObject.SetActive(false);
+            // 收起摄影棚，预览相机就不再每帧渲染一张没人看的图
+            _stage?.Hide();
+        }
 
         /// <summary>点窗体以外的地方关闭。窗体是带射线的子物体，点在上面不会冒泡到这里。</summary>
         public void OnPointerClick(PointerEventData eventData) => Close();

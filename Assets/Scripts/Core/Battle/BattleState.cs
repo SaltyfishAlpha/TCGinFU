@@ -59,15 +59,26 @@ namespace TCGinFU.Core
         /// 常规仇恨指向（§4.2）：优先前排；前排无人则取后排**上一轮造成伤害最高**者。
         /// 第 1 轮前排空虚时没有「上一轮」数据，此时取后排第一个存活者。
         /// </summary>
+        /// <summary>
+        /// 挂着这个状态的角色不会被常规单体意图选中（老卡「战术隐蔽」）。
+        /// <para>只挡**常规单体**：范围攻击照打，否则一张 1 AP 的牌就能让人整轮无敌。</para>
+        /// </summary>
+        public const string HiddenStatusId = "hidden";
+
         public PlayerCharacter DefaultAggroTarget()
         {
-            List<PlayerCharacter> front = LivingPlayers.Where(p => p.Row == Row.Front).ToList();
+            // 全员都隐蔽时不能一个都不选——那会让这条意图凭空消失。
+            // 隐蔽只改变「优先选谁」，不改变「总得有人挨打」
+            IEnumerable<PlayerCharacter> visible = LivingPlayers.Where(p => !p.Statuses.Has(HiddenStatusId));
+            IEnumerable<PlayerCharacter> pool = visible.Any() ? visible : LivingPlayers;
+
+            List<PlayerCharacter> front = pool.Where(p => p.Row == Row.Front).ToList();
             if (front.Count > 0)
             {
                 return front.OrderBy(p => p.Slot).First();
             }
 
-            List<PlayerCharacter> back = LivingPlayers.Where(p => p.Row == Row.Back).ToList();
+            List<PlayerCharacter> back = pool.Where(p => p.Row == Row.Back).ToList();
             if (back.Count == 0) return null;
 
             return back

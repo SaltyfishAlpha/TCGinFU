@@ -83,6 +83,13 @@ namespace TCGinFU.Core
         Form,
         /// <summary>英雄技能牌（10 级精通）</summary>
         Hero,
+
+        /// <summary>
+        /// 敌人的牌。敌人的「意图」就是它手里一套玩家看不到的牌，
+        /// 按阶段从备选池里挑一张宣告出来，结算走和玩家出牌完全相同的管线。
+        /// <para>单列一个 kind 是为了让构筑校验与手牌界面能把它排除在外。</para>
+        /// </summary>
+        Enemy,
     }
 
     /// <summary>升变牌的触发方式（规则书 §6.1）。</summary>

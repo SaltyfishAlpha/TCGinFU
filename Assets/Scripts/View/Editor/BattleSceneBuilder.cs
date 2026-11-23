@@ -14,18 +14,14 @@ namespace TCGinFU.View.Editor
     /// </summary>
     public static class BattleSceneBuilder
     {
-        public const string ScenePath = "Assets/Scenes/Battle.unity";
         public const string ClockworkScenePath = "Assets/Scenes/ClockworkCollapse.unity";
         public const string LayoutPath = "Assets/Settings/BattleLayout.asset";
 
-        [MenuItem("TCGinFU/生成战斗场景", priority = 0)]
-        public static void GenerateAndOpen() => Generate(ScenePath, BattleScenario.哥布林);
-
         /// <summary>
-        /// 用迁移过来的真实卡池生成测试场景（米阔阔 + 维汀 对 克洛诺斯-IV型）。
+        /// 用内容包里的真实卡池生成正式场景（米阔阔 + 维汀 对 克洛诺斯-IV型）。
         /// 数据读 <c>Assets/StreamingAssets/Content</c>，见 Assets/docs/data_architecture.md。
         /// </summary>
-        [MenuItem("TCGinFU/生成命刻之战场景", priority = 1)]
+        [MenuItem("TCGinFU/生成命刻之战场景", priority = 0)]
         public static void GenerateClockworkAndOpen() => Generate(ClockworkScenePath, BattleScenario.命刻之战);
 
         private static void Generate(string scenePath, BattleScenario scenario)
@@ -73,7 +69,7 @@ namespace TCGinFU.View.Editor
                       + "按 Play 开打；改布局直接改那个资产。");
         }
 
-        [MenuItem("TCGinFU/重建默认布局资产", priority = 2)]
+        [MenuItem("TCGinFU/重建默认布局资产", priority = 1)]
         public static void RegenerateLayout()
         {
             BattleLayoutAsset existing = AssetDatabase.LoadAssetAtPath<BattleLayoutAsset>(LayoutPath);

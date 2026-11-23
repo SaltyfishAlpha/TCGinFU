@@ -75,7 +75,7 @@ namespace TCGinFU.View
                     key = "enemy_back", displayName = "敌方后排", source = ZoneSource.敌方后排,
                     anchorMin = new Vector2(0.14f, 0.805f), anchorMax = new Vector2(0.86f, 0.985f),
                     arrange = ZoneArrange.横排, cardScale = 0.92f, spacing = 22f,
-                    reservedSlots = 2, acceptsDrop = true,
+                    reservedSlots = 1, acceptsDrop = true,
                     background = new Color(0.6f, 0.2f, 0.2f, 0.05f),
                 },
                 new()
@@ -83,7 +83,7 @@ namespace TCGinFU.View
                     key = "enemy_front", displayName = "敌方前排", source = ZoneSource.敌方前排,
                     anchorMin = new Vector2(0.14f, 0.608f), anchorMax = new Vector2(0.86f, 0.788f),
                     arrange = ZoneArrange.横排, cardScale = 0.92f, spacing = 22f,
-                    reservedSlots = 2, acceptsDrop = true,
+                    reservedSlots = 1, acceptsDrop = true,
                     background = new Color(0.6f, 0.2f, 0.2f, 0.08f),
                 },
 
@@ -93,7 +93,7 @@ namespace TCGinFU.View
                     key = "party_front", displayName = "我方前排", source = ZoneSource.我方前排,
                     anchorMin = new Vector2(0.14f, 0.411f), anchorMax = new Vector2(0.86f, 0.591f),
                     arrange = ZoneArrange.横排, cardScale = 0.92f, spacing = 22f,
-                    reservedSlots = 2, acceptsDrop = true,
+                    reservedSlots = 1, acceptsDrop = true,
                     background = new Color(0.2f, 0.45f, 0.7f, 0.08f),
                 },
                 new()
@@ -101,7 +101,7 @@ namespace TCGinFU.View
                     key = "party_back", displayName = "我方后排", source = ZoneSource.我方后排,
                     anchorMin = new Vector2(0.14f, 0.214f), anchorMax = new Vector2(0.86f, 0.394f),
                     arrange = ZoneArrange.横排, cardScale = 0.92f, spacing = 22f,
-                    reservedSlots = 2, acceptsDrop = true,
+                    reservedSlots = 1, acceptsDrop = true,
                     background = new Color(0.2f, 0.45f, 0.7f, 0.06f),
                 },
 
@@ -110,7 +110,8 @@ namespace TCGinFU.View
                     key = "hand", displayName = "手牌", source = ZoneSource.手牌,
                     anchorMin = new Vector2(0.135f, 0.012f), anchorMax = new Vector2(0.865f, 0.197f),
                     arrange = ZoneArrange.扇形, cardScale = 1.0f, spacing = 14f,
-                    draggable = true, reservedSlots = 5,
+                    // 手牌只在空手时画一个占位：有牌时扇形自己居中，摆几张就占几张的地方
+                    draggable = true, reservedSlots = 1,
                     background = new Color(1f, 1f, 1f, 0.04f),
                 },
 
@@ -175,7 +176,7 @@ namespace TCGinFU.View
 
                 if (zone.stackStep <= 0.01f) zone.stackStep = 16f;
 
-                zone.reservedSlots = Mathf.Clamp(zone.reservedSlots, 0, 12);
+                zone.reservedSlots = Mathf.Clamp(zone.reservedSlots, 0, 4);
             }
         }
 

@@ -1,139 +1,87 @@
 # TCGinFU
 
-基于《最终物语》（Fabula Ultima）TRPG 框架的**局内协同 TCG 对战系统**。
+基于《最终物语》（Fabula Ultima，FU）TRPG 框架的**协同卡牌战斗游戏**。
 
-跑团的探索、交涉、休整沿用 FU 原规则；一旦进入战斗冲突，切换成本项目的卡牌系统进行小队协同打牌，
-战斗结束后角色的 HP、MP 与持续状态直接带回跑团——**战斗开始与结束都不自动回满**。
+设计上，跑团式的探索、交涉、休整沿用 FU 规则；进入战斗冲突后切换成本项目的卡牌系统，小队协同打牌，
+战斗结束后 HP、MP 与持续状态直接带回跑团。
+**目前只实现了战斗部分**：探索 / 叙事 / 战役层都还没有。
 
-> Unity 6000.3.8f1 · URP
+> Unity 6000.3.8f1 · URP · Input System Package
+>
+> 最后核对：2026-11-22
 
 ---
 
 ## 怎么跑起来
 
-### 正式界面（uGUI）
+### 主入口：命刻之战（JSON 内容包）
 
-> 菜单 `TCGinFU → 生成战斗场景` → 生成并打开 `Assets/Scenes/Battle.unity` → 按 Play
+> 菜单 `TCGinFU → 生成命刻之战场景` → 生成并打开 `Assets/Scenes/ClockworkCollapse.unity` → Play
 
-棋盘是**真 3D**：每张卡都是带厚度的网格物体，所以**卡组、弃牌堆、充能堆都能看出有多厚**。
-透视相机斜着看桌面，近处手牌大、远处敌人小。倾斜角度、视野、俯视高度都在布局资产里调
-（`boardTilt` / `cameraFov` / `cameraHeight`），卡厚是 `CardMeshFactory.CardThickness`。
+米阔阔 + 维汀 对 克洛诺斯-IV型。内容全部读 `Assets/StreamingAssets/Content`（JSON 数据 + Lua 行为脚本）。
+**这是构建设置里唯一的场景，也是仓库里唯一的场景。**
 
-操作：
+内容包缺失或出错时**不开局**，整屏显示加载报告（哪个文件、哪一行出错）并提供「重试 / 退出」。
+改完 JSON 点「重试」即可，不必重开游戏。
 
-- **右键手牌** → 菜单：`打出` / `贴充能…`
-  - 选 `贴充能…` → 点一名队友的角色卡 → 确认弹窗 → 确定
-- **左键拖**手牌到角色卡上 = 对这个目标打出（和菜单里的「打出」等价）
-- **点弃牌堆 / 持续区 / 已完成升变区** = 摊开查看里面所有的牌
-- 点角色卡切换目标与操作角色；左键点手牌 = 对当前选中目标出牌
-- 拖拽时合法目标亮绿、非法亮红
-- 顶栏：`自动出牌 / 跳过本步 / 自动打完 / 重开`
-- **按 F1 开关调试浮层**：完整战报 + 全体状态快照（见下）
+### 其他入口
 
-**棋盘上的一切都是卡**。角色和手牌同一个扑克比例（2.5 × 3.5 英寸），版式按实体角色卡来：
-名条 → 插画位 → HP 条 → 数值栏 → 意图栏。布局资产里只有一个 `cardWidth`，高度自动算，
-各区域只能整体 `cardScale` 缩放，不会被拉变形。
+- **调试沙盒（IMGUI）**：`TCGinFU → 战斗沙盒`（编辑器窗口，不用进 Play）。全部状态和完整战报平铺，
+  可调种子，能手动挑弃牌。**同一个种子必定重现同一局**，发现规则问题记下种子就能复现。
+  阵容与卡池由内容包决定，所以没有队伍人数 / 敌人预设可调。
+- **F1**：开关调试浮层（完整战报 + 全体状态快照）。非编辑器、非 Development Build 时自动销毁。
+- **Esc** 或顶栏「退出」：编辑器里退出 Play，构建里退出程序。
+- 改布局：`Assets/Settings/BattleLayout.asset` / 菜单 `TCGinFU → 重建默认布局资产`。
+  注意场景目前没绑布局资产（运行时用代码默认值），而仓库里这份资产是旧格式，
+  详见 [表现层架构 §3](Assets/docs/view_architecture.md)。
 
-**充能按实体牌的做法叠放**：与角色卡等大的牌横置（旋转 90°）压在队友角色卡**背后**、
-卡中心偏下的位置，一张比一张低。
+### 操作
 
-排位从上到下：敌后排 → 敌前排 → 我前排 → 我后排 → 手牌。
-敌方按它们自己的视角排，所以敌人的后排在更上方。
+| 操作 | 效果 |
+| ----- | ----- |
+| 左键点手牌 | 只弹提示，不出牌 |
+| 长按任意正面朝上的牌（0.35 秒） | 看卡牌详情 |
+| 右键手牌 | 菜单：`打出` / `贴充能…` / `查看详情` |
+| 拖手牌到角色卡 | 对该目标打出 |
+| 升变宣告时拖升变牌到自己的角色卡 | 发动升变 |
+| 贴充能 | 右键 →「贴充能…」→ 点一名队友的角色卡 → 确认。点空处**不**取消，用顶栏「取消充能」 |
+| 左键点角色卡 | 敌人 = 设为目标；队友 = 切换操作角色 |
+| 右键 / 长按角色卡 | 看角色详情 |
+| 拖自己的角色卡到我方另一排 | 走位，确认后消耗 1 AP（有免费移动则免费） |
+| 点弃牌堆 / 持续区 | 摊开查看 |
+| 顶栏主按钮（随阶段变） | `结束行动` / `不升变` / `放弃响应` / `自动弃牌`；选充能目标时变成 `取消充能` |
+| 顶栏其余按钮 | `自动出牌` / `跳过本步` / `自动打完` / `重开` / `退出` |
+| F1 / Esc | 调试浮层 / 退出 |
 
-区域即使没有牌也会画出空卡位轮廓，不会塌陷、牌位也不会乱跳。
-
-**场地区域全部是数据**，配置在 `Assets/Settings/BattleLayout.asset`：
-
-- 挪位置、改大小 → 改该区域的 `anchorMin/Max`（0–1 相对坐标，分辨率自适应）
-- 加一个区域 → 列表里加一条，选 `source` 和锚点，**不用改代码**
-- 删 / 临时隐藏 → 删一条或关 `visible`
-- 想同屏显示四个人的手牌 → 复制四份手牌区，`playerIndex` 分别填 0/1/2/3
-
-改完直接 Play 就生效，界面每次都按这个资产重建。误改了用菜单
-`TCGinFU → 重建默认布局资产` 恢复。区域调得太小装不下一张牌时，控制台会给出警告。
-
-详见 [表现层架构](Assets/docs/view_architecture.md)。
-
-### 调试浮层（正式发版要删掉）
-
-按 **F1** 开关。显示完整战报、全体角色状态快照（含两种护盾中自动盾的部分、
-充能牌的原持有者、升变剩余轮数等）、本局累计统计。
-
-移除方法：删掉 `Assets/Scripts/View/Debugging/BattleDebugOverlay.cs`，
-再删掉 `BattleSceneBuilder` 里 `AddComponent<BattleDebugOverlay>()` 那一行。
-不删也行——正式构建下它会在 `Awake` 里自我销毁。
-
-### 调试沙盒（IMGUI，保留）
-
-> 菜单 `TCGinFU → 战斗沙盒`（编辑器窗口，不用进 Play 模式）
-> 或 `TCGinFU → 生成战斗沙盒场景` → `Assets/Scenes/BattleSandbox.unity` → Play
-
-正式界面做好之前的临时工具，现在仍然留着：它把全部状态和完整战报平铺出来，
-查规则问题比正式 UI 方便。可以调种子、队伍人数（1–4）、敌人预设（木桩 / 哥布林 / 石像鬼 / 深渊领主 / 哥布林小队），
-点手牌出牌或贴充能，宣告升变，敌人阶段打时机牌响应，右侧实时看战报。
-`自动出牌` 让傻瓜 AI 替当前待行动的角色打完手牌，`自动打完` 直接演完整局。
-
-**同一个种子必定重现完全相同的一局**（洗牌与骰点都是确定性的），所以发现规则问题时把种子记下来就能复现。
-
-> 沙盒刻意用 IMGUI 而不是 uGUI：同一份绘制代码在编辑器窗口和 Play 模式里都能跑，
-> 不用拼 Canvas / 预制体 / 事件系统。这是**验规则的工具，不是游戏 UI**——
-> 正式表现层等 [`rulings_v0_5.md`](Assets/docs/rulings_v0_5.md) 里标 ⚠ 的几条定稿后再做。
+拖拽时合法目标亮绿、非法亮红。棋盘是真 3D（卡有厚度），区域布局全部是数据，
+细节见 [表现层架构](Assets/docs/view_architecture.md)。
 
 ---
 
 ## 当前进度
 
-规则书 v0.5 的**战斗核心规则引擎**已完成并通过测试（140 个单元/集成测试）。表现层尚未开始。
-
-| 层 | 状态 |
+| 部分 | 状态 |
 | ----- | ----- |
-| 规则引擎（轮次、出牌、升变、伤害、构筑校验） | ✅ 已完成 |
-| 样例内容（30 张卡组 + 形态组 + 三档敌人） | ✅ 已完成 |
-| 战报渲染 `BattleLog` | ✅ 已完成 |
-| 调试沙盒（编辑器窗口 + 可运行场景） | ✅ 已完成 |
-| 正式 UI：场地区域、抽牌、拖拽、高亮 | ⚠ 代码完成且编译通过，**但未在 Unity 里实跑** |
-| ScriptableObject 卡牌数据层 | ⚠ 代码已就位，但还没有实际资产，链路未实跑 |
-| UI 动效 / 美术 | ⬜ 未开始 |
+| 规则引擎（轮次、出牌、升变、伤害、响应窗口、走位、构筑校验） | ✅ |
+| JSON 内容包「命刻之战」：2 名角色、1 个首领（另带伴生部位「镇压重盾臂」）、49 张卡，其中 47 张可用 | ✅（缺陷见下） |
+| Lua 行为层（MoonSharp，卡牌 / 状态 / 敌人意图脚本） | ✅ |
+| 3D 战斗界面（拖拽、右键菜单、长按详情、走位、升变、充能） | ✅ 可用 |
+| 出牌前的选择界面（二选一、选元素、挑牌） | ⚠ 部分：界面已做，挑牌结果后端未接（B-2） |
+| 美术 | ⚠ 7 张 beta 占位图 + 按类型兜底 |
+| 探索 / 叙事 / 战役 / 构筑界面 / 成长 | ⬜ 未开始 |
 | 联网 | ⬜ 未开始 |
 
-沙盒里傻瓜 AI 自动打完的结果（种子 20251117），可以看出难度曲线是成立的：
+测试：EditMode **205 个**（177 个 `[Test]` + 28 个 `[TestCase]`），位于 `Assets/Scripts/Tests/EditMode`。
+目前 1 个红：`L02`（对应已知缺陷 B-4，因果抹杀令注册的是空行为）。
 
-| 敌人 | 1 人 | 2 人 | 3 人 | 4 人 |
-| ----- | ----- | ----- | ----- | ----- |
-| 哥布林 | 胜 4 轮 | 胜 4 轮 | 胜 4 轮 | 胜 1 轮 |
-| 石像鬼（精英） | 胜 12 轮 | 胜 7 轮 | 胜 5 轮 | 胜 4 轮 |
-| 深渊领主（首领） | **负** 3 轮 | **负** 6 轮 | 胜 10 轮 | 胜 8 轮 |
+规则书 2026-11-22 刚改了两处（取消主卡组类别配比、新增角色被动与角色专属牌），代码尚未跟上，
+见 [`known_issues.md`](Assets/docs/known_issues.md)。
 
-一局真实战斗的战报长这样（`BattleLog.Format(engine)`）：
+### 已知问题
 
-```
-── 第 3 轮 ──
-  石像鬼 意图：石爪（11 点）
-  石像鬼 意图：尖啸（6 点）
-  ★ 弓手 发动升变（第3轮保底跳出）
-  [Draw]
-  弓手 抽 5 张
-  [PlayerPhase]
-  弓手 打出「影袭」 → 石像鬼
-    石像鬼 受到 14 点暗伤害
-  [EnemyPhase]
-    护卫 受到 0 点物理伤害 [盾挡11]
-    弓手 受到 2 点风伤害 [盾挡4]
-```
-
----
-
-## 文档
-
-所有设计文档统一放在 `Assets/docs/`：
-
-| 文档 | 内容 |
-| ----- | ----- |
-| [`v0_5.md`](Assets/docs/v0_5.md) | **规则书**，唯一事实来源 |
-| [`architecture_v0_5.md`](Assets/docs/architecture_v0_5.md) | 架构设计、分层理由、实现步骤、测试跑法 |
-| [`rulings_v0_5.md`](Assets/docs/rulings_v0_5.md) | **规则裁定表**：规则书未明确、但实现必须做出选择的 18 处 |
-
-改规则前先看裁定表——引擎里每条有争议的取值都在那里标了依据、取值与不确定度。
+全部缺陷、规则书与代码的差距、未实现的规则，统一记在 [`known_issues.md`](Assets/docs/known_issues.md)，**只维护这一份**。
+目前最急的 4 条（B-1 ~ B-4）都是「文档说好了、游戏里不对」：压制连射的暴击骰、选牌结果被忽略、
+归零坍缩进不了意图池、因果抹杀令是空行为。
 
 ---
 
@@ -141,99 +89,53 @@
 
 ```
 Assets/Scripts/
-  Core/         TCGinFU.Core           规则引擎（零 Unity 依赖）
-  Content/      TCGinFU.Content        样例卡组、敌人、行为钩子（零 Unity 依赖）
-  Presentation/ TCGinFU.Presentation   BattleSession：引擎 + 选中状态 + 提交入口（零 Unity 依赖）
-  Data/         TCGinFU.Data           ScriptableObject 卡牌资产 → 烘焙成 Core 的 POCO
-  View/         TCGinFU.View           正式 uGUI 界面
-    Editor/     TCGinFU.View.Editor    战斗场景与布局资产生成
-  Sandbox/      TCGinFU.Sandbox        调试沙盒（IMGUI）
-    Editor/     TCGinFU.Sandbox.Editor 编辑器窗口 + 场景生成
-  Tests/        TCGinFU.Core.Tests     EditMode 测试
+  Core/           TCGinFU.Core            规则引擎（noEngineReferences）
+  Content/        TCGinFU.Content         内容包加载（Loading/、Json/）（noEngineReferences）
+  Scripting/      TCGinFU.Scripting       Lua 行为层，MoonSharp 只出现在这里（noEngineReferences）
+  Presentation/   TCGinFU.Presentation    BattleSession / ContentScenario：引擎 + 选中状态 + 开局（noEngineReferences）
+  View/           TCGinFU.View            3D 战斗界面
+    Editor/       TCGinFU.View.Editor     场景与布局资产生成
+  Sandbox/        TCGinFU.Sandbox         调试沙盒（IMGUI）
+    Editor/       TCGinFU.Sandbox.Editor  编辑器窗口
+  Tests/EditMode/ TCGinFU.Core.Tests      EditMode 测试
+
+Assets/StreamingAssets/Content/   内容包「命刻之战」
+  pack.json  statuses.json  cards/  characters/  enemies/  decks/  scripts/*.lua
+Assets/Resources/Art/             卡图（Resources 加载）
+Assets/Plugins/MoonSharp/         Lua 解释器
 ```
 
-`BattleSession` 是唯一的推进逻辑，正式 UI 和沙盒共用，不会出现两套流程对不上。
-它不引用 Unity，所以「自动打完不卡死」「同种子重现同一局」这类行为能在 `dotnet test` 里跑。
-
-`Core` 与 `Content` 都设了 `noEngineReferences: true`，不引用 `UnityEngine`。
-这样规则测试能脱离 Unity 跑（秒级，不必等域重载），将来做联网也能把这两层直接搬到服务端做权威结算。
-代价是里面不能用 `Vector2`、`Random`、`Debug.Log`、`[SerializeField]`——
-随机数走 `IRng`，日志走 `BattleEvent` 事件流，序列化字段放到 `Data` 层做镜像。
-
-### 引擎怎么用
-
-引擎是**同步、单线程、无协程**的。需要玩家决策的地方，它把 `Pending` 挂出来停住，等下一个动作提交：
-
-```csharp
-var state  = BattleSetup.Create(rng, players, enemies);
-var engine = new BattleEngine(state, EffectRegistry.CreateDefault(),
-                              SampleBehaviours.CreateRegistry(),
-                              SampleDeck.CreateStatusRegistry());
-engine.Start();
-
-while (state.Outcome == BattleOutcome.Ongoing)
-{
-    switch (engine.Pending.Kind)          // 引擎在等什么
-    {
-        case DecisionKind.PlayerActions:  // 玩家阶段，全队自由穿插
-            engine.Submit(new PlayCardAction(id, cardUid, targetId));
-            engine.Submit(new DeclareReadyAction(id));
-            break;
-        case DecisionKind.EnemyResponse:  // 敌人意图结算前的响应窗口
-            engine.Submit(new PassResponseAction(id));
-            break;
-        // TransformDeclaration / HandLimitDiscard ...
-    }
-}
-```
-
-非法动作会被**原样拒绝且不改动任何状态**（返回 `ActionResult.Fail(reason)`），
-所以 UI 可以乐观提交，失败了拿 `Reason` 提示即可。
-
-状态变更全部产出 `BattleEvent`：表现层订阅它做动画飘字，测试拿它做断言，将来联网时它就是下发给客户端的增量。
-
-### 卡牌怎么做
-
-数据驱动为主、脚本钩子为辅，两者共用同一条结算流水线：
-
-```
-校验（AP / MP / 充能 / 时机 / 目标 / Behaviour.CanPlay）
-  → 支付费用 → Behaviour.OnPlay
-  → 按顺序结算 EffectData[]
-  → Behaviour.OnResolved → 卡进弃牌堆 / 持续区
-```
-
-绝大多数卡 = 一串 `EffectData`，**不用写代码**：
-
-```csharp
-new CardDefinition("wpn_shortbow_shot", "短弓速射", CardCategory.Weapon, CardKind.Skill)
-{
-    Colors  = new[] { AttributeColor.Dexterity },
-    ApCost  = 1,
-    Effects = new[] { EffectData.Damage(new ValueExpr(ValueSource.WeaponDamage)) },
-};
-```
-
-数值用 `ValueExpr` 而不是裸 `int`，这样同一张形态牌在 5 级和 50 级会自动算出 12 和 27 点伤害
-（规则书 §6.3 的 `B_atk + 4`），不必为每个等级做一套卡。
-
-数据表达不了的（跨回合累计条件、随机次数、读当前敌人意图）才挂 `ICardBehaviour`。
-样例内容里 30 张卡只有 3 张挂了钩子，见 `Content/SampleBehaviours.cs`。
+`BattleSession` 是唯一的推进逻辑，正式 UI 和沙盒共用。引擎同步、单线程：需要玩家决策时挂出
+`Pending` 等下一个动作；非法动作原样拒绝、不改状态，所以 UI 可以乐观提交、失败了显示原因。
+状态变更全部产出 `BattleEvent`。
 
 ---
 
-## Unity MCP（让 AI 能自己看 Unity）
+## 文档
 
-工程里已经配好，但**需要重启 Claude Code 才会生效**（MCP 只在启动时连接）：
+都在 `Assets/docs/`。
 
-- Unity 侧：`Packages/manifest.json` 里已加 `com.coplaydev.unity-mcp`，打开 Unity 会自动拉取
-- 服务端：稀疏检出在 `~/.mcp-servers/unity-mcp/Server`，由 `.mcp.json` 指向
+| 文档 | 内容 | 状态 |
+| ----- | ----- | ----- |
+| [`v0_5.md`](Assets/docs/v0_5.md) | **规则书**，唯一事实来源 | 当前 |
+| [`rulings_v0_5.md`](Assets/docs/rulings_v0_5.md) | 规则裁定表：规则书没写清、实现必须选定的取值 | 当前 |
+| [`design_backlog.md`](Assets/docs/design_backlog.md) | 设计待办：还没写进规则书的方向、提议、待定问题（含数值基准） | 常驻 |
+| [`known_issues.md`](Assets/docs/known_issues.md) | 已知问题：缺陷、规则书与代码的差距、未实现的规则 | 常驻 |
+| [`architecture_v0_5.md`](Assets/docs/architecture_v0_5.md) | 引擎架构、分层理由 | 当前 |
+| [`data_architecture.md`](Assets/docs/data_architecture.md) | 内容包格式与加载 | 当前 |
+| [`view_architecture.md`](Assets/docs/view_architecture.md) | 表现层：3D 桌面、布局数据、交互 | 当前 |
+| [`behaviour_layer_handoff.md`](Assets/docs/behaviour_layer_handoff.md) | Lua 行为层交接：钩子、动词、迁移状态、工程坑 | 当前 |
+| [`ui_todo_handoff.md`](Assets/docs/ui_todo_handoff.md) | UI 待办交接 | 当前 |
+| [`archive/`](Assets/docs/archive/) | 一次性记录：讨论纪要、核对报告、已执行的交接单 | 已归档，仅供查历史 |
 
-> 为什么不直接 `uvx --from git+https://...`：那样 uvx 会完整克隆仓库，
-> 而仓库里 `TestProjects/` 有超长路径，Windows 下 checkout 直接报
-> `Filename too long`。所以只稀疏检出 `Server/` 到固定位置。
+改规则前先看裁定表。
 
-> ⚠ `.mcp.json` 里是**绝对路径**，换机器要改。
+**文档维护约定**：
+- 一次性的文档（讨论纪要、核对报告、交接单），内容落实之后移进 `archive/`，并在开头标注「已归档」。
+- 仍然有效的内容先搬进常驻文档（规则书、`design_backlog.md`、`known_issues.md`），再归档。
+- 常驻文档只写现状，不留「已修复」的记录。
+
+---
 
 ## 不启动 Unity 做验证
 
@@ -243,54 +145,36 @@ bash Tools/check-asmdefs.sh      # 按 asmdef 的真实程序集边界编译整�
 
 **必须用这个，不能把所有 .cs 塞进一个 csproj 编译。** 后者会把程序集边界整个抹掉，
 asmdef 少写一条 `references` 这种错误一个都抓不到——踩过：单工程编译全绿，
-Unity 里直接 `CS0234: 命名空间 TCGinFU 中不存在 Presentation`。
-
-脚本刻意**不用 ProjectReference**：MSBuild 的 P2P 引用是传递的，A→B→C 时 A 不写 C 也能编过；
-而 Unity 的 asmdef 引用不传递，用到谁就必须写谁。所以它按依赖顺序逐个编译，
-各自只引用显式列出的那几个 dll，与 Unity 行为一致。
+Unity 里直接 `CS0234`。脚本刻意不用 ProjectReference（MSBuild 的 P2P 引用是传递的，
+Unity 的 asmdef 引用不是），按依赖顺序逐个编译、只引用显式列出的 dll，也处理 `precompiledReferences`（MoonSharp）。
 
 > 需要先在 Unity 里打开过一次工程（生成 `.csproj` 与 `Library/ScriptAssemblies`），
-> 脚本靠它们定位 Unity 安装目录和包程序集。
+> 脚本靠它们定位 Unity 安装目录和包程序集；也可以用环境变量 `UNITY_MANAGED` 指定。
 
 ## 跑测试
 
-**Unity 内**：`Window → General → Test Runner → EditMode → Run All`
+- **Unity 内**：`Window → General → Test Runner → EditMode → Run All`，或通过 Unity MCP 的 `run_tests`。
+- **Unity 外**：可以拿 `check-asmdefs.sh` 产出的 dll 自建测试 / 控制台工程。在临时目录跑时要设
+  `TCGINFU_CONTENT_DIR` 指向内容包，否则 `ContentPaths` 找不到 `Assets/StreamingAssets/Content`。
 
-**Unity 外**（推荐，秒级）：`Core` 与 `Content` 不依赖 Unity，可以单独编译。
-在**仓库外**建三个临时 `.csproj`（放进 `Assets/` 会被 Unity 导入）：
+几个坑：
 
-| 工程 | `TargetFramework` | Include | 引用 |
-| ----- | ----- | ----- | ----- |
-| `Core.csproj` | `net8.0` | `Assets/Scripts/Core/**/*.cs` | — |
-| `Content.csproj` | `net8.0` | `Assets/Scripts/Content/**/*.cs` | Core |
-| `Tests.csproj` | `net8.0` | `Assets/Scripts/Tests/EditMode/**/*.cs` | Core, Content, NUnit, NUnit3TestAdapter, Microsoft.NET.Test.Sdk |
-
-三者都要 `<LangVersion>9.0</LangVersion>` 和 `<EnableDefaultCompileItems>false</EnableDefaultCompileItems>`，
-然后 `dotnet test Tests.csproj`。
-
-要连 `Data` 层一起验证时，`TargetFramework` 改 `netstandard2.1`，并引用 Unity 安装目录下的
-`Editor/Data/Managed/UnityEngine/UnityEngine.CoreModule.dll` 与 `UnityEngine.dll`。
-
-> `Core` 用了 C# 9 的 `init`，而 Unity 的 netstandard2.1 里没有 `IsExternalInit`。
-> `Core/Primitives/IsExternalInit.cs` 自备了一份并用 `#if !NET5_0_OR_GREATER` 包住——别删。
+- **asmdef 边界**：Core、Content、Scripting、Presentation 都是 `noEngineReferences`；测试程序集引用
+  Core、Content、Presentation、Scripting。新增依赖要在 asmdef 里显式写，不传递。
+- **`IsExternalInit`**：C# 9 的 `init` 在 netstandard2.1 里缺这个类型。`Core/Primitives/`、`Content/`、`Scripting/`
+  各自备了一份 `internal` shim（跨程序集看不见别人的 internal）——别删。
+- **NUnit 版本**：Unity 自带 NUnit 3.5，**没有 `Assert.Multiple`**（3.6 才加）。
+  用 NuGet 新版在 Unity 外验证会编译通过、到 Unity 里报 `CS0117`。
 
 ---
 
-## 下一步
+## Unity MCP（让 AI 能自己看 Unity）
 
-1. 过一遍 [`rulings_v0_5.md`](Assets/docs/rulings_v0_5.md) 里标 ⚠ 的 6 条，尤其
-   **R-18**（响应牌是否消耗 AP）与 **R-11**（响应窗口粒度）——这两条直接影响战斗手感，
-   定下来之后再接 UI 比较省返工；
-2. 把 `Content/SampleCards.cs` 的样例卡翻成 `CardDefinitionAsset` 资产并跑通往返，
-   这是目前唯一没有实跑验证过的链路（需要在 Unity 里做）；
-3. 接表现层：订阅 `BattleEvent`，提交 `IBattleAction`。
+- Unity 侧：`Packages/manifest.json` 里有 `com.coplaydev.unity-mcp`，打开 Unity 自动拉取。
+- 服务端：`.mcp.json` 用 `uvx --from <本机路径>/.mcp-servers/unity-mcp/Server mcp-for-unity` 启动，
+  服务端是稀疏检出的 `Server/` 目录。MCP 只在启动时连接，改配置后要重启 Claude Code。
 
-### 已知缺口
-
-- **数据层未实跑**：`CardDefinitionAsset` → `CardDefinition` 的烘焙只验证过能编译，
-  没有真实资产跑过往返。`ScriptableObject` 需要 Unity 运行时，跑不进 `dotnet test`。
-- **时机牌的「队友行动时」响应**：§7.1 提到时机牌可在「敌人阶段**或队友行动时**」打出。
-  目前玩家阶段本就是全队自由穿插，时机牌随时能打，算是覆盖了；
-  但没有「队友某张牌结算前」这种更细的插入点。等 R-11 定了一起做。
-- **武器牌卡池与装备的构筑期绑定**：§3.2 说武器牌卡池由装备槽解锁，
-  目前 `DeckValidator` 还没校验「卡组里的武器牌必须匹配当前装备」。
+> 为什么不直接 `uvx --from git+https://...`：那样会完整克隆仓库，而仓库里 `TestProjects/` 有超长路径，
+> Windows 下 checkout 报 `Filename too long`。
+>
+> ⚠ `.mcp.json` 里是**绝对路径**，换机器要改。

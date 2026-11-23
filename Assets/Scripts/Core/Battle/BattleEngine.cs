@@ -20,6 +20,9 @@ namespace TCGinFU.Core
         private (Enemy Enemy, EnemyIntent Intent)? _currentIntent;
         private List<Combatant> _currentIntentTargets = new();
 
+        /// <summary>当前响应窗口里**尚未结算**的那几次攻击。时机牌改的就是它们。</summary>
+        private List<AttackContext> _pendingAttacks = new();
+
         public BattleEngine(
             BattleState state,
             EffectRegistry effects = null,
@@ -42,6 +45,16 @@ namespace TCGinFU.Core
 
         /// <summary>当前响应窗口里敌人意图的目标（已解析仇恨，未计援护）。</summary>
         public IReadOnlyList<Combatant> CurrentIntentTargets => _currentIntentTargets;
+
+        /// <summary>
+        /// 当前响应窗口里即将发生的那几次攻击，可被时机牌改写（减伤 / 闪避 / 免暴击 / 改属性）。
+        /// 响应窗口之外为空。
+        /// </summary>
+        public IReadOnlyList<AttackContext> PendingAttacks => _pendingAttacks;
+
+        /// <summary>取针对某个目标的那次待结算攻击。时机牌「使目标……」用它定位。</summary>
+        public AttackContext PendingAttackOn(Combatant target)
+            => target == null ? null : _pendingAttacks.FirstOrDefault(a => ReferenceEquals(a.Target, target));
 
         public event Action<BattleEvent> EventEmitted;
 
@@ -83,6 +96,9 @@ namespace TCGinFU.Core
             {
                 ExitTransform(player);
             }
+
+            // 轮始触发在意图揭示**之前**：持续牌「轮始获得 X」这类词条要先于意图落地
+            FireTriggerAll(BattleTrigger.RoundStart);
 
             foreach (Enemy enemy in State.LivingEnemies.ToList())
             {
@@ -164,6 +180,7 @@ namespace TCGinFU.Core
             _covers.Clear();
             _currentIntent = null;
             _currentIntentTargets = new List<Combatant>();
+            _pendingAttacks = new List<AttackContext>();
 
             while (_intentQueue.Count > 0 && _intentQueue.Peek().Enemy.IsDown)
             {
@@ -179,6 +196,14 @@ namespace TCGinFU.Core
             (Enemy enemy, EnemyIntent intent) = _intentQueue.Dequeue();
             _currentIntent = (enemy, intent);
             _currentIntentTargets = ResolveIntentTargets(intent);
+
+            // 先把这次攻击摆出来，响应窗口里的时机牌才有东西可改
+            _pendingAttacks = _currentIntentTargets
+                .Select(t => new AttackContext(enemy, t, intent.Damage, intent.Element, CritResult.None)
+                {
+                    Intent = intent,
+                })
+                .ToList();
 
             // 裁定 R-11：每条意图结算前开一个响应窗口，全体 Pass 后才结算
             Pending = new PendingDecision(DecisionKind.EnemyResponse, State.LivingPlayers.Select(p => p.Id))
@@ -199,6 +224,8 @@ namespace TCGinFU.Core
             IntentTargeting.DesignatedRowSingle => Single(
                 State.LivingPlayersInRow(intent.DesignatedRow).OrderBy(p => p.Slot).FirstOrDefault()
                 ?? State.DefaultAggroTarget()),
+            IntentTargeting.HighestHpSingle => Single(
+                State.LivingPlayers.OrderByDescending(p => p.Hp).ThenBy(p => p.Slot).FirstOrDefault()),
             _ => new List<Combatant>(),
         };
 
@@ -211,25 +238,45 @@ namespace TCGinFU.Core
             {
                 (Enemy enemy, EnemyIntent intent) = _currentIntent.Value;
 
-                foreach (Combatant original in _currentIntentTargets)
+                // 范围意图在**结算时**才定谁挨打（裁定 R-24），
+                // 所以响应窗口里的走位能真的躲开，也能真的撞上去
+                if (!intent.LocksTarget) RebuildPendingAttacksForCurrentRow(enemy, intent);
+
+                foreach (AttackContext attack in _pendingAttacks)
                 {
+                    Combatant original = attack.Target;
+
                     // 援护：把承伤目标整体改写为援护者
-                    Combatant actual = _covers.TryGetValue(original.Id, out PlayerCharacter coverer) && !coverer.IsDown
-                        ? coverer
-                        : original;
-
-                    if (actual.IsDown) continue;
-
-                    if (intent.Damage > 0)
+                    if (_covers.TryGetValue(original.Id, out PlayerCharacter coverer) && !coverer.IsDown)
                     {
-                        DealDamage(enemy, actual, intent.Damage, intent.Element, CritResult.None);
+                        attack.Target = coverer;
                     }
 
-                    if (intent.InflictedStatus != null && !actual.IsDown)
+                    if (attack.Target.IsDown) continue;
+
+                    // 时机牌可能已经把这次攻击改没了（看破闪避的完全闪避）
+                    if (attack.Avoided)
                     {
-                        ApplyStatus(actual, CloneStatus(intent.InflictedStatus));
+                        Emit(new BattleEvent(BattleEventType.AttackAvoided, enemy.Id, attack.Target.Id)
+                        {
+                            Text = intent.Label,
+                            Round = State.Round,
+                        });
+
+                        continue;
+                    }
+
+                    if (attack.BaseAmount > 0) ResolveAttack(attack);
+
+                    if (intent.InflictedStatus != null && !attack.Target.IsDown)
+                    {
+                        ApplyStatus(attack.Target, CloneStatus(intent.InflictedStatus));
                     }
                 }
+
+                // 意图挂着的那张「敌人的牌」在这里打出：
+                // 和玩家出牌走同一条管线，同样的 EffectData、同样的 ICardBehaviour 钩子
+                PlayIntentCard(enemy, intent);
 
                 State.CheckOutcome();
             }
@@ -243,6 +290,34 @@ namespace TCGinFU.Core
             OpenNextIntentWindow();
         }
 
+        /// <summary>
+        /// 按**此刻**的站位重新解析范围意图的目标（裁定 R-24）。
+        ///
+        /// <para>已经被时机牌处理过的那几次攻击要原样留着——玩家为某个目标付出的减伤
+        /// 不该因为重新解析而丢掉。而刚挪进来的人拿到的是一次**全新**的攻击：
+        /// 别人打的时机牌保护不了他，这正是「挪进来要承担后果」的意思。</para>
+        /// </summary>
+        private void RebuildPendingAttacksForCurrentRow(Enemy enemy, EnemyIntent intent)
+        {
+            List<Combatant> current = ResolveIntentTargets(intent);
+            _currentIntentTargets = current;
+
+            var rebuilt = new List<AttackContext>(current.Count);
+
+            foreach (Combatant target in current)
+            {
+                AttackContext existing = _pendingAttacks.FirstOrDefault(a => ReferenceEquals(a.Target, target));
+
+                rebuilt.Add(existing ?? new AttackContext(
+                    enemy, target, intent.Damage, intent.Element, CritResult.None)
+                {
+                    Intent = intent,
+                });
+            }
+
+            _pendingAttacks = rebuilt;
+        }
+
         private static StatusEffect CloneStatus(StatusEffect source) => new(source.Id, source.Duration, source.Stacks)
         {
             DamagePerRound = source.DamagePerRound,
@@ -250,6 +325,12 @@ namespace TCGinFU.Core
             DotElement = source.DotElement,
             OutgoingDamageBonus = source.OutgoingDamageBonus,
             IncomingDamageReduction = source.IncomingDamageReduction,
+            IncomingDamageBonus = source.IncomingDamageBonus,
+            ConsumedOnTrigger = source.ConsumedOnTrigger,
+            BehaviourId = source.BehaviourId,
+            CritResistDelta = source.CritResistDelta,
+            IncomingMultiplierNumerator = source.IncomingMultiplierNumerator,
+            IncomingMultiplierDenominator = source.IncomingMultiplierDenominator,
         };
 
         /// <summary>⑤ 轮末结算阶段（§8 ⑤）。</summary>
@@ -277,6 +358,9 @@ namespace TCGinFU.Core
                     }
                 }
             }
+
+            // 轮末触发在持续伤害之后、状态递减之前——脚本还能看到本轮挂着的状态
+            FireTriggerAll(BattleTrigger.RoundEnd);
 
             foreach (Combatant combatant in AllCombatants())
             {

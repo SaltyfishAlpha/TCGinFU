@@ -64,6 +64,17 @@ nunit_dll() {
 }
 
 json_string() { sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$1" | head -1; }
+
+# overrideReferences 的 asmdef 要显式列出用到的预编译 dll（MoonSharp 等）。
+# Unity 按文件名在 Assets 里找，这里照做。
+json_precompiled() {
+    grep -q '"precompiledReferences"[[:space:]]*:[[:space:]]*\[[[:space:]]*\]' "$1" && return 0
+
+    sed -n '/"precompiledReferences"[[:space:]]*:[[:space:]]*\[/,/\]/p' "$1" \
+        | grep -oE '"[^"]+\.dll"' | tr -d '"'
+}
+
+find_plugin_dll() { find "$REPO/Assets" -name "$1" -not -path "*/Library/*" 2>/dev/null | head -1; }
 json_bool()   { sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\(true\|false\).*/\1/p" "$1" | head -1; }
 json_refs() {
     # 空数组要单独处理：`"references": [],` 一行里同时有 [ 和 ]，
@@ -139,13 +150,27 @@ generate_csproj() {
                      UnityEngine.AnimationModule UnityEngine.JSONSerializeModule \
                      UnityEngine.AudioModule UnityEngine.ParticleSystemModule \
                      UnityEngine.UnityWebRequestModule UnityEngine.VideoModule \
-                     UnityEngine.SpriteShapeModule UnityEngine.TilemapModule; do
+                     UnityEngine.SpriteShapeModule UnityEngine.TilemapModule \
+                     UnityEngine.ImageConversionModule; do
                 [[ -f "$UNITY_MANAGED/UnityEngine/$m.dll" ]] && \
                     echo "    <Reference Include=\"$m\"><HintPath>$(win_path "$UNITY_MANAGED/UnityEngine/$m.dll")</HintPath></Reference>"
             done
             echo "    <Reference Include=\"UnityEngine\"><HintPath>$(win_path "$UNITY_MANAGED/UnityEngine/UnityEngine.dll")</HintPath></Reference>"
             echo "    <Reference Include=\"UnityEditor\"><HintPath>$(win_path "$UNITY_MANAGED/UnityEditor.dll")</HintPath></Reference>"
         fi
+
+        local pre pre_path
+        while IFS= read -r pre; do
+            [[ -z "$pre" ]] && continue
+            # NUnit 不在 Assets 里，由下面的 *Tests* 分支从 PackageCache 取 Unity 自带那份
+            [[ "$pre" == "nunit.framework.dll" ]] && continue
+            pre_path="$(find_plugin_dll "$pre")"
+            if [[ -n "$pre_path" ]]; then
+                echo "    <Reference Include=\"${pre%.dll}\"><HintPath>$(win_path "$pre_path")</HintPath></Reference>"
+            else
+                echo "⚠ $name 的 precompiledReferences 里有 $pre，但 Assets 下找不到这个 dll" >&2
+            fi
+        done < <(json_precompiled "$f")
 
         local ref dll
         for ref in ${REFS_OF[$name]}; do

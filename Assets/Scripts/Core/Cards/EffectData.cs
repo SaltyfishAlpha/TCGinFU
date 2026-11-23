@@ -14,8 +14,12 @@ namespace TCGinFU.Core
         /// <summary>直接产生 N 个充能指示物</summary>
         GainCharge,
         ApplyStatus,
-        /// <summary>移动排位</summary>
+        /// <summary>移动排位。不指定 <see cref="EffectData.RowTarget"/> 时是「在前后排之间切换」</summary>
         MoveRow,
+        /// <summary>授予「可免费移动 1 次」的权利，由玩家自己决定何时兑现</summary>
+        GrantFreeMove,
+        /// <summary>己方或敌方前后排整体互换，保持各自的列</summary>
+        SwapRows,
         /// <summary>把本次结算的承伤目标改写为施放者（援护，裁定 R-12）</summary>
         Cover,
     }
@@ -50,6 +54,23 @@ namespace TCGinFU.Core
         public string StatusId { get; set; }
         public int Duration { get; set; } = 1;
         public EffectCondition Condition { get; set; } = EffectCondition.Always;
+
+        /// <summary>
+        /// 这条效果单独投一次暴击骰，而不是共用整张牌那一次（裁定 R-23）。
+        ///
+        /// <para>老卡「压制连射」卡面写的是「两次射击**分别独立**投掷敏捷骰判定暴击」，
+        /// 展开成 2 条 Damage 后共用一次骰结果是错的：数值期望对，但两段要么全暴要么全不暴，
+        /// 和卡面承诺的手感不是一回事。多段攻击的卡请把每一段都标上这个。</para>
+        /// </summary>
+        public bool RollsOwnCrit { get; set; }
+
+        /// <summary>
+        /// <see cref="EffectKind.MoveRow"/> 的目标排。null 表示「在前后排之间切换」。
+        ///
+        /// <para>定向与切换必须分开：「被击退至后排」对已经在后排的人应当无事发生，
+        /// 用切换会把他拉到前排，效果正好相反。</para>
+        /// </summary>
+        public Row? RowTarget { get; set; }
 
         public static EffectData Damage(ValueExpr amount, DamageElement element = DamageElement.Physical,
             TargetScope scope = TargetScope.SingleEnemy)

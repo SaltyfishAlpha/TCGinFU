@@ -1,0 +1,94 @@
+{
+  "statuses": [
+    {
+      "id": "exposed",
+      "name": "破绽",
+      "rulesText": "本轮内下一次受到的任意伤害+3。",
+      "incomingDamageBonus": 3,
+      "consumedOnTrigger": true,
+      "negative": true
+    },
+    {
+      "id": "next_attack_bonus",
+      "name": "蓄势",
+      "rulesText": "本轮下一次攻击造成的伤害+3。",
+      "outgoingDamageBonus": 3,
+      "consumedOnTrigger": true
+    },
+    {
+      "id": "next_magic_bonus",
+      "name": "苦痛转导",
+      "rulesText": "本轮打出的下一张魔法攻击牌伤害+3。",
+      "behaviourId": "status_next_magic_bonus"
+    },
+    {
+      "id": "wind_conversion",
+      "name": "翠风箭附",
+      "rulesText": "本轮你造成的所有物理伤害转化为风属性。",
+      "behaviourId": "status_wind_conversion"
+    },
+    {
+      "id": "anchor_seven",
+      "name": "命运锚点·七",
+      "rulesText": "本轮下一次掷骰可将其中1颗视为7。",
+      "behaviourId": "status_anchor_seven"
+    },
+    {
+      "id": "hidden",
+      "name": "隐蔽",
+      "rulesText": "本轮敌方的常规单体攻击意图无法将你选为目标。"
+    },
+    {
+      "id": "crit_roll_bonus",
+      "name": "应急催化剂",
+      "rulesText": "本轮下一次暴击掷骰结果+1。",
+      "behaviourId": "status_crit_roll_bonus"
+    },
+    {
+      "id": "oil",
+      "name": "元素涂油",
+      "rulesText": "本轮所有攻击附加指定元素属性，且造成的伤害+3。",
+      "outgoingDamageBonus": 3,
+      "behaviourId": "status_oil"
+    },
+    {
+      "id": "reflux_used",
+      "name": "灵智回流（本轮已触发）",
+      "rulesText": "记录本轮「灵智回流」已触发的次数。"
+    },
+    {
+      "id": "stone_used",
+      "name": "贤者之石（本轮已用）",
+      "rulesText": "记录本轮已对该角色用过「贤者之石解放」。"
+    },
+    {
+      "id": "arcane_barrier_cap",
+      "name": "奥术结界（充能上限+1）",
+      "rulesText": "充能区上限临时+1，持续本轮及下一轮。",
+      "behaviourId": "status_arcane_barrier_cap"
+    },
+    {
+      "id": "armor_watch",
+      "name": "装甲重构（待检）",
+      "rulesText": "轮末检查两项护盾是否都还在。",
+      "behaviourId": "status_armor_watch"
+    },
+    {
+      "id": "armor_overcharge",
+      "name": "装甲过载",
+      "rulesText": "所有伤害永久+3。",
+      "outgoingDamageBonus": 3
+    },
+    {
+      "id": "overheat",
+      "name": "过热",
+      "rulesText": "暴击抵抗降为4，受到的最终伤害×1.5。",
+      "critResistDelta": -3,
+      "incomingMultiplier": [
+        3,
+        2
+      ],
+      "negative": true
+    }
+  ]
+}

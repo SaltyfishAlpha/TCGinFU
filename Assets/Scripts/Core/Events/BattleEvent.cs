@@ -16,13 +16,27 @@ namespace TCGinFU.Core
         ChargePlaced,
         ChargeEvicted,
         ChargeSpent,
+        /// <summary>充能被消耗后没进弃牌堆，留在了充能区（「真理炼金矩阵」）</summary>
+        ChargeRetained,
+        /// <summary>充能被敌人吞噬（「以太虹吸」）。不是玩家主动消耗，不计入 ChargesSpent</summary>
+        ChargeDevoured,
         DamageDealt,
+        /// <summary>一次攻击被完全闪避，没有进入伤害管线</summary>
+        AttackAvoided,
+        /// <summary>「触发即消失」的状态（破绽等）被这次结算消耗掉了</summary>
+        StatusConsumed,
+        /// <summary>脚本化行为抛了异常，已被隔离——这张卡的这个钩子本次没生效</summary>
+        BehaviourFaulted,
+        /// <summary>脚本自己往战报里写的一行</summary>
+        ScriptLog,
         Healed,
         ShieldGained,
         ShieldRefreshed,
         StatusApplied,
         StatusExpired,
         RowChanged,
+        /// <summary>获得一次「可免费移动」的权利，等玩家自己兑现</summary>
+        FreeMoveGranted,
         Covered,
         CrisisEntered,
         CrisisLeft,
@@ -58,6 +72,20 @@ namespace TCGinFU.Core
         public int Amount { get; init; }
 
         public string CardId { get; init; }
+
+        /// <summary>
+        /// 打出的那张牌。表现层拿它做出牌演出（左侧亮出卡面）。
+        ///
+        /// <para>光有 <see cref="CardId"/> 不够：敌人的意图牌是内嵌在 <c>EnemyContent</c> 里的，
+        /// 不进内容包的卡牌索引，按 id 查不到。与其让表现层对玩家牌和敌人牌走两条不同的
+        /// 查找路径（还得赶在意图被清空之前查），不如由发事件的一方直接带上。</para>
+        ///
+        /// <para><see cref="CardDefinition"/> 是不可变的，所以这仍然是只读快照。
+        /// 但它**不可序列化**——将来下发给远端客户端时要落回 <see cref="CardId"/>，
+        /// 由对端自己按内容包解析。</para>
+        /// </summary>
+        public CardDefinition Card { get; init; }
+
         public string Text { get; init; }
         public int Round { get; init; }
 

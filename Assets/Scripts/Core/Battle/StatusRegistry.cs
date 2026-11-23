@@ -26,6 +26,23 @@ namespace TCGinFU.Core
 
         public int IncomingDamageReduction { get; init; }
 
+        /// <summary>每层给宿主**受到**的伤害 flat 加成（【破绽】）。</summary>
+        public int IncomingDamageBonus { get; init; }
+
+        /// <summary>触发一次即消失，而不是按轮递减。</summary>
+        public bool ConsumedOnTrigger { get; init; }
+
+        /// <summary>挂着期间生效的脚本行为 Id。</summary>
+        public string BehaviourId { get; init; }
+
+        /// <summary>对宿主暴击抵抗线的修正（负数 = 更容易被暴击）。</summary>
+        public int CritResistDelta { get; init; }
+
+        /// <summary>宿主受到的最终伤害倍率，分数形式。(0,0) 表示不改。</summary>
+        public int IncomingMultiplierNumerator { get; init; }
+
+        public int IncomingMultiplierDenominator { get; init; }
+
         public StatusEffect Create(int duration, int stacks) => new(Id, duration, stacks)
         {
             DamagePerRound = DamagePerRound,
@@ -33,6 +50,12 @@ namespace TCGinFU.Core
             DotElement = DotElement,
             OutgoingDamageBonus = OutgoingDamageBonus,
             IncomingDamageReduction = IncomingDamageReduction,
+            IncomingDamageBonus = IncomingDamageBonus,
+            ConsumedOnTrigger = ConsumedOnTrigger,
+            BehaviourId = BehaviourId,
+            CritResistDelta = CritResistDelta,
+            IncomingMultiplierNumerator = IncomingMultiplierNumerator,
+            IncomingMultiplierDenominator = IncomingMultiplierDenominator,
         };
     }
 

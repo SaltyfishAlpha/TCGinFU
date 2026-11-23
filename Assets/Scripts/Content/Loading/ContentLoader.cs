@@ -35,7 +35,25 @@ namespace TCGinFU.Content.Loading
                 return;
             }
 
+            db.DefaultCardBackArtId = Blank(manifest["defaultCardBack"].AsString());
+
+            foreach (KeyValuePair<string, JsonValue> entry in manifest["artFallback"].Fields)
+            {
+                string artId = Blank(entry.Value.AsString());
+                if (artId != null) db.AddArtFallback(entry.Key, artId);
+            }
+
+            // 脚本不是 JSON，本类只记下清单；真正执行它们的是 TCGinFU.Scripting，
+            // 那是个带 MoonSharp 依赖的程序集，不该被纯数据加载器拖进来
+            foreach (JsonValue entry in manifest["scripts"].Items)
+            {
+                string rel = entry.AsString();
+                if (rel == null) { report.Errors.Add("pack.json 的 scripts 里有非字符串项"); continue; }
+                db.AddScriptPath(rel);
+            }
+
             // 顺序有意义：卡牌必须先于卡组加载，卡组展开时要按 Id 找卡
+            LoadList(db, readFile, report, manifest["statuses"], "statuses", LoadStatuses);
             LoadList(db, readFile, report, manifest["cards"], "cards", LoadCards);
             LoadList(db, readFile, report, manifest["characters"], "characters", LoadCharacters);
             LoadList(db, readFile, report, manifest["enemies"], "enemies", LoadEnemies);
@@ -123,8 +141,15 @@ namespace TCGinFU.Content.Loading
                 MpCost = node["mp"].AsInt(),
                 ChargeCost = node["charge"].AsInt(),
                 HasCrit = node["hasCrit"].AsBool(),
+                // 迁移时 ranged 落在 unmapped 里，现在它是正式字段了；两处都认，老包不用改
+                IsRanged = node["ranged"].Exists ? node["ranged"].AsBool() : node["unmapped"]["ranged"].AsBool(),
+                RequiresBackRow = node["requiresBackRow"].Exists
+                    ? node["requiresBackRow"].AsBool()
+                    : node["unmapped"]["requires_back_row"].AsBool(),
                 ClassId = Blank(node["classId"].AsString()),
                 RulesText = node["rulesText"].AsString(),
+                ArtId = Blank(node["art"].AsString()),
+                BackArtId = Blank(node["backArt"].AsString()),
                 BehaviourId = Blank(node["behaviourId"].AsString()),
                 WeaponBaseDamage = node["weaponBaseDamage"].AsInt(),
                 ArmorBaseShield = node["armorBaseShield"].AsInt(),
@@ -138,6 +163,66 @@ namespace TCGinFU.Content.Loading
                     .Select((e, i) => ReadEffect(e, $"{where} 的 effects[{i}]", errors))
                     .ToArray(),
             };
+        }
+
+        /// <summary>
+        /// 把一条意图读成一张**敌人的牌**。
+        ///
+        /// <para>敌人的意图不是另一套机制，所以它的效果也该是 <see cref="EffectData"/>、
+        /// 行为也该是同一套 <see cref="ICardBehaviour"/>。这里顺手把老数据里
+        /// <c>unmapped.mp</c> 的费用提成正式字段——「以太虹吸消耗10MP」写在卡面上却不生效，
+        /// 是老迁移留下的坑。</para>
+        /// </summary>
+        private static CardDefinition ReadEnemyCard(
+            JsonValue node, string intentId, string where, List<string> errors)
+        {
+            return new CardDefinition(
+                intentId,
+                node["name"].AsString(intentId),
+                CardCategory.Class,
+                CardKind.Enemy)
+            {
+                MpCost = node["mp"].Exists ? node["mp"].AsInt() : node["unmapped"]["mp"].AsInt(),
+                RulesText = node["text"].AsString(),
+                BehaviourId = Blank(node["behaviourId"].AsString()),
+                Element = node["element"].AsEnum(
+                    DamageElement.Physical, $"{where} 的意图 {intentId} 的 element", errors),
+                Effects = node["effects"].Items
+                    .Select((e, i) => ReadEffect(e, $"{where} 的意图 {intentId} 的 effects[{i}]", errors))
+                    .ToArray(),
+            };
+        }
+
+        // ───────────────────────────── 状态 ─────────────────────────────
+
+        /// <summary>
+        /// 状态的数值属于状态本身，不属于挂它的那张卡——
+        /// 否则每张挂流血的卡都要把「每层每轮 2 点」重抄一遍，改平衡时漏一张就不一致了。
+        /// </summary>
+        private static void LoadStatuses(ContentDatabase db, JsonValue root, string file, LoadReport report)
+        {
+            foreach (JsonValue node in root["statuses"].Items)
+            {
+                string id = node["id"].AsString();
+                if (string.IsNullOrWhiteSpace(id)) { report.Errors.Add($"{file}：有状态缺少 id"); continue; }
+
+                string where = $"{file} 的状态 {id}";
+
+                db.AddStatus(new StatusDefinition(id)
+                {
+                    DamagePerRound = node["damagePerRound"].AsInt(),
+                    HealPerRound = node["healPerRound"].AsInt(),
+                    DotElement = node["dotElement"].AsEnum(DamageElement.Poison, $"{where} 的 dotElement", report.Errors),
+                    OutgoingDamageBonus = node["outgoingDamageBonus"].AsInt(),
+                    IncomingDamageReduction = node["incomingDamageReduction"].AsInt(),
+                    IncomingDamageBonus = node["incomingDamageBonus"].AsInt(),
+                    ConsumedOnTrigger = node["consumedOnTrigger"].AsBool(),
+                    BehaviourId = Blank(node["behaviourId"].AsString()),
+                    CritResistDelta = node["critResistDelta"].AsInt(),
+                    IncomingMultiplierNumerator = node["incomingMultiplier"][0].AsInt(),
+                    IncomingMultiplierDenominator = node["incomingMultiplier"][1].AsInt(),
+                }, report, file);
+            }
         }
 
         private static EffectData ReadEffect(JsonValue node, string where, List<string> errors)
@@ -157,13 +242,18 @@ namespace TCGinFU.Content.Loading
                 Amount = new ValueExpr(
                     amount["source"].AsEnum(ValueSource.Flat, $"{where} 的 amount.source", errors),
                     amount["add"].AsInt(), times, dividedBy),
-                // 援护改写的是「本次结算的既定目标」，作用域强制成 CurrentTarget，与 SerializedEffect 保持一致
+                // 援护改写的是「本次结算的既定目标」，所以作用域强制成 CurrentTarget，忽略 JSON 里写的 target
                 Target = new TargetSelector(kind == EffectKind.Cover ? TargetScope.CurrentTarget : scope),
                 Element = node["element"].AsEnum(DamageElement.Physical, $"{where} 的 element", errors),
                 ShieldKind = node["shieldKind"].AsEnum(ShieldKind.Physical, $"{where} 的 shieldKind", errors),
                 StatusId = Blank(node["statusId"].AsString()),
                 Duration = node["duration"].AsInt(1),
                 Condition = node["condition"].AsEnum(EffectCondition.Always, $"{where} 的 condition", errors),
+                RollsOwnCrit = node["rollsOwnCrit"].AsBool(),
+                // 不写 rowTarget 就是「在前后排之间切换」；写了就是定向移动
+                RowTarget = node["rowTarget"].Exists
+                    ? node["rowTarget"].AsEnum(Row.Back, $"{where} 的 rowTarget", errors)
+                    : (Row?)null,
             };
         }
 
@@ -229,6 +319,7 @@ namespace TCGinFU.Content.Loading
                 StartingRow = node["startingRow"].AsEnum(Row.Front, $"{where} 的 startingRow", errors),
                 ChargeCapacity = node["chargeCapacity"].AsInt(2),
                 DeckId = node["deckId"].AsString(),
+                PortraitId = Blank(node["portrait"].AsString()),
                 LegacyHp = node["legacy"]["hp"].AsInt(),
                 LegacyMp = node["legacy"]["mp"].AsInt(),
             };
@@ -314,6 +405,15 @@ namespace TCGinFU.Content.Loading
                         DamageElement.Physical, $"{where} 的意图 {intentId} 的 element", errors),
                     DesignatedRow = node2["designatedRow"].AsEnum(
                         Row.Front, $"{where} 的意图 {intentId} 的 designatedRow", errors),
+                    // 不写就按 targeting 推导（单体锁定 / 范围结算时定，裁定 R-24）
+                    LocksTargetOverride = node2["locksTarget"].Exists
+                        ? node2["locksTarget"].AsBool()
+                        : (bool?)null,
+
+                    // 意图挂的那张「敌人的牌」。宣告出来的那段攻击仍然记在 Damage/Element 上
+                    // （响应窗口要预览它、时机牌要改它），卡面负责的是**后续效果**：
+                    // 吞噬充能、前后排互换、命刻+1 之类
+                    Card = ReadEnemyCard(node2, intentId, where, errors),
                 };
             }
 
@@ -338,6 +438,7 @@ namespace TCGinFU.Content.Loading
                 Hp = node["hp"].AsInt(1),
                 Rank = node["rank"].AsEnum(EnemyRank.Normal, $"{where} 的 rank", errors),
                 CritResist = critResist < 0 ? null : critResist,
+                MaxMp = node["mp"].AsInt(),
                 Row = node["row"].AsEnum(Row.Front, $"{where} 的 row", errors),
                 Affinities = affinities,
                 Intents = intents,

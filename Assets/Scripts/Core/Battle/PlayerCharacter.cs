@@ -29,7 +29,11 @@ namespace TCGinFU.Core
             Armor = armor ?? ArmorProfile.Unarmored;
 
             MaxMp = sheet.MaxMp;
-            Mp = currentMp ?? sheet.MaxMp;
+
+            // 和 HP 一样夹到上限。不夹的话传个超额的 currentMp 进来，
+            // 角色会一直顶在上限之上，而「回复 10 MP」却只回得了 0——
+            // 表现出来是「这张回蓝牌没生效」，查起来会怀疑到卡牌身上
+            Mp = Math.Clamp(currentMp ?? sheet.MaxMp, 0, MaxMp);
 
             if (currentHp.HasValue)
             {
@@ -53,8 +57,26 @@ namespace TCGinFU.Core
         /// <summary>本轮是否已用掉那唯一一次贴充能机会（§5.2，裁定 R-08）。</summary>
         public bool HasPlacedChargeThisRound { get; internal set; }
 
+        /// <summary>
+        /// 本轮额外的贴充能次数（老卡「真理炼金矩阵」：升变期间每轮可贴 2 次）。
+        /// 常规那一次用完后才消耗这里，轮始重置。
+        /// </summary>
+        public int ExtraChargePlacements { get; internal set; }
+
+        /// <summary>
+        /// 充能区上限的临时加成（老卡「奥术结界」）。不随轮次清零——
+        /// 卡面说的是「本轮及下一轮」，什么时候收回由发它的那张卡自己负责。
+        /// </summary>
+        public int ChargeCapacityBonus { get; internal set; }
+
         /// <summary>本轮是否已走位（裁定 R-16）。</summary>
         public bool HasMovedThisRound { get; internal set; }
+
+        /// <summary>
+        /// 攒着的「免费移动」次数。卡面写「**可**免费移动1次」时存在这里，
+        /// 由玩家自己决定何时兑现——不花 AP，也不占本轮唯一一次常规走位。
+        /// </summary>
+        public int FreeMoves { get; internal set; }
 
         /// <summary>玩家阶段是否已宣布行动完毕。</summary>
         public bool IsReady { get; internal set; }
@@ -72,7 +94,7 @@ namespace TCGinFU.Core
         /// <summary>形态防御基准 B_def = 当前防具基础护盾 + L_bonus（§6.3）。</summary>
         public int FormDefenseBase => Armor.ShieldAt(Tier) + Sheet.LevelBonus;
 
-        public ValueContext ValueContext(int chargeSpent = 0)
+        public override ValueContext ValueContext(int chargeSpent = 0)
             => new(Weapon.DamageAt(Tier), Armor.ShieldAt(Tier), Sheet.LevelBonus, Sheet.TotalLevel, chargeSpent);
 
         public bool SpendMp(int amount)
@@ -95,6 +117,7 @@ namespace TCGinFU.Core
         {
             Ap = ApPerRound;
             HasPlacedChargeThisRound = false;
+            ExtraChargePlacements = 0;
             HasMovedThisRound = false;
             IsReady = false;
             Shields.RefreshAuto(Sheet.AutoPhysicalShield, Sheet.AutoMagicShield);
@@ -103,6 +126,8 @@ namespace TCGinFU.Core
         internal void EndRound()
         {
             Ap = 0;
+            // 没用掉的免费移动不留到下一轮——卡面给的是「本轮」的一次机动
+            FreeMoves = 0;
             Shields.ClearAuto();
             RollDamageStats();
         }

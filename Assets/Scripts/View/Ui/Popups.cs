@@ -13,6 +13,7 @@ namespace TCGinFU.View
         private Text _title;
         private VerticalLayoutGroup _list;
         private readonly List<GameObject> _buttons = new();
+        private Action _onCancel;
 
         public bool IsOpen => gameObject.activeSelf;
 
@@ -51,10 +52,22 @@ namespace TCGinFU.View
             return menu;
         }
 
-        /// <summary>在屏幕坐标 <paramref name="screenPosition"/> 处弹出菜单。</summary>
-        public void Open(string title, Vector2 screenPosition, IEnumerable<(string Label, Action OnPick)> options)
+        /// <summary>
+        /// 在屏幕坐标 <paramref name="screenPosition"/> 处弹出菜单。
+        /// </summary>
+        /// <param name="onCancel">
+        /// 点别处关掉菜单时回调。出牌前的「几选一」是一条多步流程的中间环节，
+        /// 关掉菜单等于放弃这次出牌——没有这个回调的话流程会卡在半截，
+        /// 玩家既看不到牌被打出、也没有任何提示说明发生了什么。
+        /// </param>
+        public void Open(
+            string title,
+            Vector2 screenPosition,
+            IEnumerable<(string Label, Action OnPick)> options,
+            Action onCancel = null)
         {
             _title.text = title;
+            _onCancel = onCancel;
 
             foreach (GameObject button in _buttons) Destroy(button);
             _buttons.Clear();
@@ -64,6 +77,8 @@ namespace TCGinFU.View
                 Action captured = onPick;
                 Button button = UiBuilder.CreateButton(label, _window, 160f, () =>
                 {
+                    // 先清掉取消回调再关：否则「选了一项」也会被当成「放弃」
+                    _onCancel = null;
                     Close();
                     captured?.Invoke();
                 });
@@ -99,7 +114,13 @@ namespace TCGinFU.View
             _window.anchoredPosition = position;
         }
 
-        public void Close() => gameObject.SetActive(false);
+        public void Close()
+        {
+            Action cancelled = _onCancel;
+            _onCancel = null;
+            gameObject.SetActive(false);
+            cancelled?.Invoke();
+        }
 
         public void OnPointerClick(PointerEventData eventData) => Close();
     }

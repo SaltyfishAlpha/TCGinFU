@@ -31,12 +31,28 @@ namespace TCGinFU.Core
         /// <summary>暴击抵抗线（§7.3）。</summary>
         public abstract int CritResist { get; }
 
+        /// <summary>
+        /// 求值 <see cref="ValueExpr"/> 用的面板快照。
+        ///
+        /// <para>敌人没有武器与防具，所以默认是一组零值——
+        /// 敌人的卡面本来就全是固定数值（老数据里一条公式都没有）。
+        /// 真要给敌人做「随等级成长」的卡时再在这里补。</para>
+        /// </summary>
+        public virtual ValueContext ValueContext(int chargeSpent = 0)
+            => new(0, 0, 0, 0, chargeSpent);
+
         public bool IsDown => Hp <= 0;
 
         /// <summary>本轮造成的总伤害，用于前排空虚时的仇恨回退判定（§4.2）。</summary>
         public int DamageDealtThisRound { get; internal set; }
 
         public int DamageDealtLastRound { get; internal set; }
+
+        /// <summary>
+        /// 本轮累计受到的 HP 伤害。老卡「若目标本轮已受到过伤害」这类前置条件要读它，
+        /// 而「本轮」这个口径靠状态表达不了（状态最细也只到轮）。
+        /// </summary>
+        public int DamageTakenThisRound { get; internal set; }
 
         /// <summary>扣血，返回实际损失的 HP。</summary>
         public int LoseHp(int amount)
@@ -60,6 +76,7 @@ namespace TCGinFU.Core
         {
             DamageDealtLastRound = DamageDealtThisRound;
             DamageDealtThisRound = 0;
+            DamageTakenThisRound = 0;
         }
 
         public override string ToString() => $"{Name}({Hp}/{MaxHp})";

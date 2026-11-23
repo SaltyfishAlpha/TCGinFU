@@ -89,6 +89,16 @@ namespace TCGinFU.Core.Tests
                 Colors = new[] { AttributeColor.Dexterity },
             };
 
+        /// <summary>英雄技能牌：§3.3 要求所属职业满 10 级精通才能编入。</summary>
+        public static CardDefinition HeroCard(string id = "hero", string classId = "浪客")
+            => new(id, id, CardCategory.Class, CardKind.Hero)
+            {
+                ClassId = classId,
+                ApCost = 3,
+                Colors = new[] { AttributeColor.Dexterity },
+                Effects = new[] { EffectData.Damage(ValueExpr.FormAttack(0)) },
+            };
+
         public static CardDefinition FillerCard(string id)
             => new(id, id, CardCategory.Class, CardKind.Skill) { ApCost = 1 };
 

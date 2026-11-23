@@ -44,21 +44,30 @@ namespace TCGinFU.Core
     /// </summary>
     public static class DamageResolver
     {
+        /// <param name="ignoreShield">无视目标多少点护盾（老卡「鹰眼锁定」）。</param>
+        /// <param name="critMultiplier">改写暴击倍率，null 用默认的 ×1.5 / ×2（老卡「幻影夜行」×1.75）。</param>
         public static DamageResult Resolve(
             Combatant source,
             Combatant target,
             int baseAmount,
             DamageElement element,
-            CritResult crit)
+            CritResult crit,
+            int ignoreShield = 0,
+            (int Numerator, int Denominator)? critMultiplier = null)
         {
             bool wasInCrisis = IsInCrisis(target);
 
-            // ② flat 修正：攻方状态加成 - 守方状态减伤
-            int modifiers = (source?.Statuses.SumOutgoingDamageBonus ?? 0) - target.Statuses.SumIncomingDamageReduction;
+            // ② flat 修正：攻方状态加成 + 守方状态易伤（破绽）- 守方状态减伤
+            int modifiers = (source?.Statuses.SumOutgoingDamageBonus ?? 0)
+                            + target.Statuses.SumIncomingDamageBonus
+                            - target.Statuses.SumIncomingDamageReduction;
             int afterModifiers = Max0(baseAmount + modifiers);
 
-            // ③ 暴击
-            (int num, int den) = crit.Multiplier;
+            // ③ 暴击。改写的倍率只在真的暴了的时候算数——
+            // 不然「暴击倍率×1.75」会把普通攻击也放大 1.75 倍
+            (int num, int den) = crit.IsCrit && critMultiplier.HasValue
+                ? (critMultiplier.Value.Numerator, critMultiplier.Value.Denominator)
+                : crit.Multiplier;
             int afterCrit = afterModifiers * num / den;
 
             // ④ 属性克制
@@ -88,8 +97,16 @@ namespace TCGinFU.Core
                 _ => afterCrit,
             };
 
+            // ④.5 受伤倍率（老 Boss「过热：受到最终伤害×1.5」）。
+            // 放在克制之后、护盾之前：它放大的是「最终伤害」，而护盾扣的就是最终伤害
+            (int inNum, int inDen) = target.Statuses.IncomingMultiplier;
+            if (inDen > 0 && inNum != inDen) afterAffinity = afterAffinity * inNum / inDen;
+
             // ⑤ 护盾（裁定 R-03：护盾扣的是最终伤害）
-            int absorbed = target.Shields.Absorb(element.ToShieldKind(), afterAffinity);
+            // 无视护盾的那几点先从「可被护盾吃掉的额度」里扣掉，再让护盾去挡剩下的——
+            // 护盾本身不会因为被无视而消耗，这与老引擎的 ignore_shield 一致。
+            int shieldable = Max0(afterAffinity - ignoreShield);
+            int absorbed = target.Shields.Absorb(element.ToShieldKind(), shieldable);
             int toHp = afterAffinity - absorbed;
 
             // ⑥ 扣血

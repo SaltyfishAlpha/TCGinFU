@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &2070100335
+--- !u!1 &985981314
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,10 +127,10 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 2070100339}
-  - component: {fileID: 2070100338}
-  - component: {fileID: 2070100337}
-  - component: {fileID: 2070100336}
+  - component: {fileID: 985981318}
+  - component: {fileID: 985981317}
+  - component: {fileID: 985981316}
+  - component: {fileID: 985981315}
   m_Layer: 0
   m_Name: BattleView
   m_TagString: Untagged
@@ -138,25 +138,25 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &2070100336
+--- !u!114 &985981315
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2070100335}
+  m_GameObject: {fileID: 985981314}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7b3bfb45ceb20834a846b28242b2acdc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: TCGinFU.View::TCGinFU.View.QuitOnEscape
---- !u!114 &2070100337
+--- !u!114 &985981316
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2070100335}
+  m_GameObject: {fileID: 985981314}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a172ec235ba1f524fa4acca839044bbb, type: 3}
@@ -165,13 +165,13 @@ MonoBehaviour:
   visibleOnStart: 1
   uiScale: 1
   widthRatio: 0.34
---- !u!114 &2070100338
+--- !u!114 &985981317
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2070100335}
+  m_GameObject: {fileID: 985981314}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a957d8c4d384bc34880c5be7eaffaaf1, type: 3}
@@ -179,15 +179,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: TCGinFU.View::TCGinFU.View.BattleView
   layout: {fileID: 0}
   seed: 20251117
-  partySize: 2
-  scenario: 5
---- !u!4 &2070100339
+  scenario: 0
+--- !u!4 &985981318
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2070100335}
+  m_GameObject: {fileID: 985981314}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -200,4 +199,4 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 2070100339}
+  - {fileID: 985981318}

@@ -5,6 +5,7 @@
         "TCGinFU.Core",
         "TCGinFU.Content",
         "TCGinFU.Presentation",
+        "TCGinFU.Scripting",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

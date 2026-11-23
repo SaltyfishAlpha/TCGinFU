@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using TCGinFU.Content.Loading;
 using TCGinFU.Core;
 using TCGinFU.Presentation;
 using UnityEngine;
@@ -26,10 +27,7 @@ namespace TCGinFU.View
         [Header("开局参数")]
         [SerializeField] private int seed = 20251117;
 
-        [Range(1, 4)]
-        [SerializeField] private int partySize = 2;
-
-        [SerializeField] private BattleScenario scenario = BattleScenario.哥布林;
+        [SerializeField] private BattleScenario scenario = BattleScenario.命刻之战;
 
         private readonly List<IDropTarget> _dropTargets = new();
         private readonly List<ZoneView> _zones = new();
@@ -43,6 +41,8 @@ namespace TCGinFU.View
         private CardContextMenu _contextMenu;
         private ConfirmDialog _confirmDialog;
         private CardDetailPanel _detailPanel;
+        private CardPreviewStage _previewStage;
+        private CardShowcase _showcase;
         private IDropTarget _hoveredTarget;
 
         private CardInstance _pendingChargeCard;
@@ -62,8 +62,22 @@ namespace TCGinFU.View
             if (layout == null) layout = BattleLayoutAsset.CreateDefault();
             layout.Normalize();
 
-            Session = new BattleSession { Seed = seed, PartySize = partySize, EnemyPreset = scenario };
+            Session = new BattleSession { Seed = seed, EnemyPreset = scenario };
             Session.Restart();
+
+            // 内容包没加载起来就不开局：把报告直接摊在屏幕上，而不是搭一张空桌子。
+            // 静默退回到另一套内容会让「内容包坏了」看起来像「游戏能玩」。
+            if (!Session.IsLoaded)
+            {
+                BuildLoadFailureScreen();
+                return;
+            }
+
+            // 整局只有一套牌背与一组兜底图，从内容包取一次就够
+            CardView.DefaultBackArtId = ContentScenario.LastLoaded?.DefaultCardBackArtId;
+            CardArtLibrary.Fallbacks = ContentScenario.LastLoaded?.ArtFallbacks;
+            // 卡面图跟着内容包走（玩家包在前、官方包在后），包里没有才退回包体内的兜底图
+            CardArtLibrary.SearchRoots = ContentPaths.ResolveAll();
 
             BuildScene();
             Refresh();
@@ -135,10 +149,13 @@ namespace TCGinFU.View
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = layout.tableColor * 0.4f;
 
+            // 离屏摄影棚那一层归预览相机，桌面相机看不见它（见 CardPreviewStage）
+            camera.cullingMask = ~(1 << CardPreviewStage.PreviewLayer);
+
             // 3D 卡牌靠碰撞体拾取，所以必须挂 PhysicsRaycaster，
             // 否则 IPointerClickHandler / IBeginDragHandler 一个都不会触发
             var raycaster = cameraGo.AddComponent<PhysicsRaycaster>();
-            raycaster.eventMask = ~0;
+            raycaster.eventMask = camera.cullingMask;
 
             float tilt = layout.boardTilt * Mathf.Deg2Rad;
             float visibleHeight = boardWorldSize.y * Mathf.Cos(tilt);
@@ -193,9 +210,102 @@ namespace TCGinFU.View
 
             // 详情面板最后建：它要盖在牌堆查看面板之上，
             // 这样在弃牌堆里点一张牌也能看详情
-            _detailPanel = CardDetailPanel.Create(hudGo.transform);
+            _previewStage = CardPreviewStage.Create(transform);
+            _detailPanel = CardDetailPanel.Create(hudGo.transform, _previewStage);
+
+            // 演出单开一座棚子：和详情面板共用的话，打牌时正好开着详情
+            // 就会两边抢同一张 RenderTexture
+            _showcase = CardShowcase.Create(hudGo.transform, CardPreviewStage.Create(transform));
             // 查看面板里的牌按「当前操作角色」的面板算公式
             _peekPanel.CardClickHandler = card => _detailPanel.Open(card, Session.SelectedPlayer);
+        }
+
+        /// <summary>
+        /// 内容包加载失败时的整屏报告。只有一块可滚动的文本和两个按钮，
+        /// 不建棋盘、不建相机——此时 <c>Session.State</c> 是 null，碰什么都会空引用。
+        ///
+        /// <para>报告里带着出错的文件与行号，玩家改坏自己的 JSON 之后照着改就行。</para>
+        /// </summary>
+        private void BuildLoadFailureScreen()
+        {
+            EnsureEventSystem();
+
+            var hudGo = new GameObject("LoadFailureCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            hudGo.transform.SetParent(transform, false);
+
+            var canvas = hudGo.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 200;
+
+            var scaler = hudGo.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = layout.referenceResolution;
+
+            Image backdrop = UiBuilder.CreateImage("Backdrop", hudGo.transform, new Color(0.06f, 0.05f, 0.08f, 1f));
+            backdrop.rectTransform.anchorMin = Vector2.zero;
+            backdrop.rectTransform.anchorMax = Vector2.one;
+            backdrop.rectTransform.sizeDelta = Vector2.zero;
+
+            Text title = UiBuilder.CreateText(
+                "Title", backdrop.transform, "内容包加载失败，无法开局", 26,
+                TextAnchor.UpperLeft, new Color(1f, 0.6f, 0.6f));
+            title.rectTransform.anchorMin = new Vector2(0f, 1f);
+            title.rectTransform.anchorMax = new Vector2(1f, 1f);
+            title.rectTransform.pivot = new Vector2(0.5f, 1f);
+            title.rectTransform.anchoredPosition = new Vector2(0f, -24f);
+            title.rectTransform.sizeDelta = new Vector2(-48f, 40f);
+
+            Text report = UiBuilder.CreateText(
+                "Report", backdrop.transform, Session.Message, 15, TextAnchor.UpperLeft);
+            report.rectTransform.anchorMin = new Vector2(0f, 0f);
+            report.rectTransform.anchorMax = new Vector2(1f, 1f);
+            report.rectTransform.offsetMin = new Vector2(24f, 64f);
+            report.rectTransform.offsetMax = new Vector2(-24f, -72f);
+            report.horizontalOverflow = HorizontalWrapMode.Wrap;
+            report.verticalOverflow = VerticalWrapMode.Truncate;
+
+            var bar = new GameObject("Buttons", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            bar.transform.SetParent(backdrop.transform, false);
+            var barRect = (RectTransform)bar.transform;
+            barRect.anchorMin = new Vector2(0f, 0f);
+            barRect.anchorMax = new Vector2(1f, 0f);
+            barRect.pivot = new Vector2(0.5f, 0f);
+            barRect.anchoredPosition = new Vector2(0f, 14f);
+            barRect.sizeDelta = new Vector2(-48f, 36f);
+
+            var group = bar.GetComponent<HorizontalLayoutGroup>();
+            group.spacing = 8;
+            group.childAlignment = TextAnchor.MiddleLeft;
+            group.childForceExpandWidth = false;
+            group.childForceExpandHeight = false;
+
+            // 改完 JSON 不必重开游戏：重试会重新读一遍内容包
+            UiBuilder.CreateButton("重试", bar.transform, 96f, RetryLoad);
+            UiBuilder.CreateButton("退出", bar.transform, 96f, AppExit.Quit);
+        }
+
+        /// <summary>重新读内容包。成功就把这块报告拆掉、照常开局。</summary>
+        private void RetryLoad()
+        {
+            Session.Restart();
+            if (!Session.IsLoaded)
+            {
+                // 还是坏的：换一份报告继续显示
+                Transform canvas = transform.Find("LoadFailureCanvas");
+                if (canvas != null) Destroy(canvas.gameObject);
+                BuildLoadFailureScreen();
+                return;
+            }
+
+            Transform failure = transform.Find("LoadFailureCanvas");
+            if (failure != null) Destroy(failure.gameObject);
+
+            CardView.DefaultBackArtId = ContentScenario.LastLoaded?.DefaultCardBackArtId;
+            CardArtLibrary.Fallbacks = ContentScenario.LastLoaded?.ArtFallbacks;
+            CardArtLibrary.SearchRoots = ContentPaths.ResolveAll();
+
+            BuildScene();
+            Refresh();
         }
 
         private void BuildTopBar(Transform parent)
@@ -223,6 +333,11 @@ namespace TCGinFU.View
             _contextButton = UiBuilder.CreateButton("结束行动", bar.transform, 96f, SubmitContextAction);
             _contextButtonLabel = _contextButton.GetComponentInChildren<Text>();
 
+            // 走位与升变**不在**顶栏：
+            // 走位 = 把角色卡拖到对排 + 确认；升变 = 把升变牌拖到自己的角色卡上。
+            // 两者都是棋盘上的动作，放进顶栏按钮会让它们和「重开」「退出」这类
+            // 全局调试入口混在一起，玩家反而找不到。顶栏只留阶段推进与调试。
+
             UiBuilder.CreateButton("自动出牌", bar.transform, 86f, () => { Session.AutoPlay(); Refresh(); });
             UiBuilder.CreateButton("跳过本步", bar.transform, 86f, () => { Session.SkipPending(); Refresh(); });
             UiBuilder.CreateButton("自动打完", bar.transform, 86f, () => { Session.SkipToEnd(); Refresh(); });
@@ -235,10 +350,51 @@ namespace TCGinFU.View
 
         // ──────────────────────────── 刷新 ────────────────────────────
 
+        // 读到哪儿了。引擎的事件表是只追加的，所以记一个游标就能拿到「这次刷新之间新发生的事」
+        private BattleEngine _eventSource;
+        private int _eventCursor;
+
+        /// <summary>
+        /// 把这次刷新之间新打出的牌送去演出。
+        ///
+        /// <para>状态走 <see cref="Refresh"/> 整体重建，**演出走事件**——
+        /// 「现在手里有哪些牌」是状态，「刚才打出了什么」只有事件说得清：
+        /// 等 Refresh 跑完，那张牌早就离开手牌进弃牌堆了。</para>
+        ///
+        /// <para>玩家出牌和敌人意图发的是同一条 <see cref="BattleEventType.CardPlayed"/>，
+        /// 所以这里不必分两种情况。</para>
+        /// </summary>
+        private void DrainPlayedCards()
+        {
+            if (_showcase == null) return;
+
+            // 重开一局会换掉引擎，游标得跟着归零，否则新一局的前几张牌会被当成「已经看过了」
+            if (!ReferenceEquals(_eventSource, Session.Engine))
+            {
+                _eventSource = Session.Engine;
+                _eventCursor = 0;
+                _showcase.Clear();
+            }
+
+            IReadOnlyList<BattleEvent> events = Session.Engine.Events;
+            for (; _eventCursor < events.Count; _eventCursor++)
+            {
+                BattleEvent e = events[_eventCursor];
+                if (e.Type != BattleEventType.CardPlayed) continue;
+
+                _showcase.Enqueue(e.Card, Session.State?.Find(e.ActorId)?.Name);
+            }
+        }
+
         public void Refresh()
         {
             BattleState state = Session.State;
             PendingDecision pending = Session.Engine.Pending;
+
+            // 每次刷新都重新指过去：重开一局会换掉引擎，只在建面板时设一次就会留下陈旧引用
+            _detailPanel.Engine = Session.Engine;
+
+            DrainPlayedCards();
 
             _statusText.text =
                 $"第 {state.Round} 轮 · {PhaseName(state.Phase)} · 命刻 {state.SceneClock}"
@@ -316,7 +472,14 @@ namespace TCGinFU.View
             {
                 CardView view = RentCardView(card.Uid);
                 view.Root.gameObject.SetActive(true);
-                view.Bind(card, zone, zone.Layout.faceDown, draggable, zone.SlotSize);
+
+                // 正面朝上的牌显示持有者此刻的真实费用（含减免）；
+                // 背面朝上的牌本来就不显示费用，不必白算一次
+                string costText = zone.Layout.faceDown
+                    ? null
+                    : BattleSession.CostText(card.Definition, Session.Engine, Session.State.FindPlayer(card.OwnerId));
+
+                view.Bind(card, zone, zone.Layout.faceDown, draggable, zone.SlotSize, costText);
                 zone.Add(view);
                 live.Add(card.Uid);
             }
@@ -338,6 +501,11 @@ namespace TCGinFU.View
                     view.DropHandler = HandleCombatantDrop;
                     view.ClickHandler = HandleCombatantClick;
                     view.ContextHandler = v => _detailPanel.Open(v.Combatant);
+                    view.LongPressHandler = v => _detailPanel.Open(v.Combatant);
+                    view.BoardPointResolver = ResolveBoardPoint;
+                    view.BeginDragHandler = OnCombatantBeginDrag;
+                    view.DragHandler = OnCombatantDrag;
+                    view.EndDragHandler = OnCombatantEndDrag;
                     _combatantViews[combatant.Id] = view;
                     _dropTargets.Add(view);
                 }
@@ -345,6 +513,12 @@ namespace TCGinFU.View
                 bool selected = isEnemy
                     ? Session.SelectedEnemyId == combatant.Id
                     : Session.SelectedPlayerId == combatant.Id;
+
+                // 只有自己人、而且此刻真的走得动，才拖得起来——
+                // 拖得动却放不下去是最让人困惑的交互
+                view.Draggable = !isEnemy
+                                 && combatant is PlayerCharacter movable
+                                 && CanMoveRow(movable);
 
                 view.Root.gameObject.SetActive(true);
                 view.Bind(combatant, isEnemy, selected);
@@ -580,7 +754,20 @@ namespace TCGinFU.View
         /// 棋盘上的 3D 卡塞不下卡面规则文字，而那恰恰是打牌时最需要读的东西；
         /// 而且「点一下就把牌打出去」太容易误触。打出走拖拽。
         /// </summary>
+        /// <summary>
+        /// 轻点一下**不**做任何会改变局面的事。打出走拖拽，看详情走长按——
+        /// 「点一下就把牌打出去」太容易误触，而误触在这种回合制里是不可撤销的。
+        /// </summary>
         public void OnCardClick(CardView card)
+        {
+            if (card.Card == null || card.FaceDown) return;
+
+            Session.SetMessage($"「{card.Card.Name}」：长按看详情，拖到目标上打出。");
+            Refresh();
+        }
+
+        /// <summary>长按 = 看详情。和角色卡是同一个手势（见 <see cref="LongPress"/>）。</summary>
+        public void OnCardLongPress(CardView card)
         {
             if (card.Card == null) return;
 
@@ -647,6 +834,25 @@ namespace TCGinFU.View
             if (card.Zone == null || !card.Zone.Layout.draggable) return false;
 
             CardDefinition def = card.Card.Definition;
+            bool transformWindow = Session.Engine.Pending.Kind == DecisionKind.TransformDeclaration;
+
+            // 升变牌和别的牌一样是从手里打出去的——拖到**自己**的角色卡上，
+            // 因为升变牌就是这一局里的新角色卡（§6.2 ②）
+            if (def.Kind == CardKind.Transform)
+            {
+                if (!transformWindow) return false;
+
+                PlayerCharacter owner = ResolvePlayer(card.Zone.Layout.playerIndex);
+                if (owner == null || !ReferenceEquals(view.Combatant, owner)) return false;
+
+                // 条件没达成的升变牌直接标成不可放置，而不是拖过去才被引擎一句话挡回来
+                return Session.Engine.TransformCandidates(owner).Any(c => c.Uid == card.Card.Uid);
+            }
+
+            // 升变窗口里只能发动升变，别的牌直接标成不可放置，
+            // 省得玩家拖过去才被一句报错挡回来
+            if (transformWindow) return false;
+
             bool needsEnemy = def.Effects.Any(e => e.Target.Scope == TargetScope.SingleEnemy);
             bool needsAlly = def.Effects.Any(e => e.Target.Scope == TargetScope.SingleAlly);
 
@@ -666,9 +872,13 @@ namespace TCGinFU.View
 
             if (view.Combatant is Enemy) Session.SelectedEnemyId = view.Combatant.Id;
 
-            Session.Submit(
-                new PlayCardAction(player.Id, card.Card.Uid, view.Combatant.Id),
-                $"打出「{card.Card.Name}」→ {view.Combatant.Name}。");
+            bool transform = card.Card.Definition.Kind == CardKind.Transform;
+
+            PlayCardWithChoices(
+                player, card.Card, view.Combatant.Id,
+                transform
+                    ? $"{player.Name} 发动升变：{card.Card.Name}。"
+                    : $"打出「{card.Card.Name}」→ {view.Combatant.Name}。");
         }
 
         /// <summary>点可查看的叠放区域 → 把里面的牌全部摊开（弃牌堆是公开信息）。</summary>
@@ -751,7 +961,166 @@ namespace TCGinFU.View
                 ? owner.Id
                 : Session.SelectedEnemyId;
 
-            Session.Submit(new PlayCardAction(owner.Id, card.Uid, target), $"打出「{card.Name}」。");
+            PlayCardWithChoices(owner, card, target, $"打出「{card.Name}」。");
+        }
+
+        // ──────────────────────────── 出牌前的玩家选择 ────────────────────────────
+
+        /// <summary>
+        /// 打出一张牌。卡面要玩家做选择的（二选一、选元素、从牌堆里挑牌），
+        /// 先把问题一个个问完，再带着答案提交。
+        ///
+        /// <para>这里是**唯一**的出牌入口，右键菜单与拖拽都走它——
+        /// 两条路各写一份的话，补一张要选择的卡就得记得改两处，迟早漏掉一处，
+        /// 表现出来就是「拖着打能选、右键打不能选」这种说不清的差异。</para>
+        /// </summary>
+        private void PlayCardWithChoices(PlayerCharacter owner, CardInstance card, string targetId, string message)
+        {
+            IReadOnlyList<ChoicePrompt> prompts = CardChoiceCatalog.For(card.Definition.Id);
+            if (prompts.Count == 0)
+            {
+                SubmitPlay(owner, card, targetId, message, null, null);
+                return;
+            }
+
+            AskPrompt(owner, card, targetId, message, prompts, 0,
+                new Dictionary<string, int>(), new List<int>());
+        }
+
+        /// <summary>按顺序问第 <paramref name="index"/> 个问题；问完就提交。</summary>
+        private void AskPrompt(
+            PlayerCharacter owner,
+            CardInstance card,
+            string targetId,
+            string message,
+            IReadOnlyList<ChoicePrompt> prompts,
+            int index,
+            Dictionary<string, int> answers,
+            List<int> pickedUids)
+        {
+            // 条件不成立的问题直接跳过（「没选涂油就不问是哪个元素」）
+            while (index < prompts.Count && prompts[index].When != null && !prompts[index].When(answers))
+            {
+                index++;
+            }
+
+            if (index >= prompts.Count)
+            {
+                SubmitPlay(owner, card, targetId, message, answers, pickedUids);
+                return;
+            }
+
+            ChoicePrompt prompt = prompts[index];
+
+            void Next() => AskPrompt(owner, card, targetId, message, prompts, index + 1, answers, pickedUids);
+            void Cancel()
+            {
+                Session.SetMessage($"已取消打出「{card.Name}」。");
+                Refresh();
+            }
+
+            if (prompt.IsPick)
+            {
+                AskCardPick(owner, card, prompt, pickedUids, Next, Cancel);
+                return;
+            }
+
+            var options = new List<(string, System.Action)>();
+            foreach ((string label, int value) in prompt.Options)
+            {
+                if (prompt.OptionAvailable != null && !prompt.OptionAvailable(owner, value)) continue;
+
+                int captured = value;
+                options.Add((label, () =>
+                {
+                    answers[prompt.Key] = captured;
+                    Next();
+                }));
+            }
+
+            // 一个选项都没有（条件全不满足）就别弹空菜单，交给引擎/脚本的默认值
+            if (options.Count == 0)
+            {
+                Next();
+                return;
+            }
+
+            // 菜单弹在屏幕中部偏上：拖拽出牌时鼠标停在角色卡上，
+            // 跟着鼠标弹会把刚放下的那张牌挡住
+            _contextMenu.Open(
+                prompt.Title,
+                new Vector2(Screen.width * 0.5f - 90f, Screen.height * 0.6f),
+                options,
+                Cancel);
+        }
+
+        /// <summary>从手牌 / 弃牌堆里挑牌。</summary>
+        private void AskCardPick(
+            PlayerCharacter owner,
+            CardInstance card,
+            ChoicePrompt prompt,
+            List<int> pickedUids,
+            System.Action next,
+            System.Action cancel)
+        {
+            List<CardInstance> candidates = prompt.PickFrom switch
+            {
+                ChoiceSource.手牌 => owner.Zones.Hand.ToList(),
+                ChoiceSource.弃牌堆 => owner.Zones.Discard.ToList(),
+                _ => new List<CardInstance>(),
+            };
+
+            // 正在打出的这张牌自己不在候选里——它马上就要离开手牌了，
+            // 让玩家把它选成「要贴成充能的那张」只会得到一个说不清的结果
+            candidates.RemoveAll(c => c.Uid == card.Uid);
+
+            if (candidates.Count == 0)
+            {
+                // 没得选不等于打不出（「最多2张」允许一张都不贴），
+                // 空不空由卡面自己处理，界面只是没什么可问的
+                next();
+                return;
+            }
+
+            string source = prompt.PickFrom == ChoiceSource.手牌 ? "手牌" : "弃牌堆";
+            _peekPanel.OpenForSelection(
+                $"{card.Name}　{prompt.Title}（{owner.Name} 的{source}）",
+                candidates,
+                prompt.MinPick,
+                prompt.MaxPick,
+                picked =>
+                {
+                    pickedUids.Clear();
+                    foreach (CardInstance c in picked) pickedUids.Add(c.Uid);
+                    next();
+                },
+                cancel);
+        }
+
+        private void SubmitPlay(
+            PlayerCharacter owner,
+            CardInstance card,
+            string targetId,
+            string message,
+            Dictionary<string, int> answers,
+            List<int> pickedUids)
+        {
+            // 「为卡面词条付充能」目前只有 ChargeForMp 这一个入口，
+            // 而它的本意是「拿充能抵 MP」——这条链是错的（见 ui_todo_handoff §2）。
+            // 在牌效那边把入口理清之前，先照着它走：调合·万能灵药的 MP 费用是 0，
+            // 所以借道抵扣不会产生副作用，而 ctx.charge_spent 能拿到正确的数字。
+            int chargeForMp = answers != null && answers.TryGetValue("charge", out int charges) ? charges : 0;
+
+            var action = new PlayCardAction(owner.Id, card.Uid, targetId, chargeForMp);
+
+            if (answers != null)
+            {
+                foreach (KeyValuePair<string, int> answer in answers) action.With(answer.Key, answer.Value);
+            }
+
+            if (pickedUids != null && pickedUids.Count > 0) action.WithMany("card", pickedUids);
+
+            Session.Submit(action, message);
             Refresh();
         }
 
@@ -843,7 +1212,131 @@ namespace TCGinFU.View
 
             _contextButton.interactable = pending.Kind != DecisionKind.None
                                           && Session.State.Outcome == BattleOutcome.Ongoing;
+
         }
+
+        // ──────────────────────────── 拖拽走位 ────────────────────────────
+
+        /// <summary>此刻这名角色走不走得动（时机 + 代价都算上）。</summary>
+        private bool CanMoveRow(PlayerCharacter player)
+        {
+            PendingDecision pending = Session.Engine.Pending;
+            bool free = player.FreeMoves > 0;
+
+            // 攒着的免费移动在响应窗口里也能兑现（「翻滚披风」那次机动就是为了赶在敌人落手前挪开）
+            bool timingOk = pending.Kind == DecisionKind.PlayerActions
+                            || (free && pending.Kind == DecisionKind.EnemyResponse);
+
+            return timingOk
+                   && pending.WaitingOn.Contains(player.Id)
+                   && !player.IsDown
+                   && Session.State.Outcome == BattleOutcome.Ongoing
+                   && (free || (!player.HasMovedThisRound && player.Ap >= 1));
+        }
+
+        /// <summary>把屏幕坐标投到桌面平面上，供角色卡跟着鼠标走。</summary>
+        private Vector3? ResolveBoardPoint(CombatantView view, PointerEventData eventData)
+        {
+            if (BoardCamera == null || BoardRoot == null) return null;
+
+            Vector3 normal = BoardRoot.forward;
+            Vector3 origin = BoardRoot.position
+                             + normal * CardMeshFactory.TowardCamera
+                             * (CardView.DragLift * BoardRoot.lossyScale.z);
+
+            var plane = new Plane(normal, origin);
+            Ray ray = BoardCamera.ScreenPointToRay(eventData.position);
+            return plane.Raycast(ray, out float distance) ? ray.GetPoint(distance) : null;
+        }
+
+        private void OnCombatantBeginDrag(CombatantView view)
+        {
+            _contextMenu.Close();
+
+            // 拖起来的角色卡挂到桌面根节点下，否则它还受所在区域的排布摆布
+            view.Root.SetParent(BoardRoot, true);
+            HighlightMoveTarget(view, CardHighlight.合法);
+        }
+
+        private void OnCombatantDrag(CombatantView view, PointerEventData eventData)
+        {
+            ZoneView target = FindRowZoneUnder(eventData);
+            HighlightMoveTarget(view, IsOppositeRowZone(view, target) ? CardHighlight.悬停 : CardHighlight.合法);
+        }
+
+        private void OnCombatantEndDrag(CombatantView view, PointerEventData eventData)
+        {
+            HighlightMoveTarget(view, CardHighlight.正常);
+
+            ZoneView target = FindRowZoneUnder(eventData);
+            bool moved = IsOppositeRowZone(view, target);
+
+            // 无论确认与否都先 Refresh：角色卡现在挂在桌面根节点下，
+            // 不放回去的话它会一直飘在鼠标松开的位置
+            Refresh();
+
+            if (!moved || view.Combatant is not PlayerCharacter player) return;
+
+            string destination = player.Row == Row.Front ? "后排" : "前排";
+            string cost = player.FreeMoves > 0 ? $"免费（剩 {player.FreeMoves} 次）" : "消耗 1 AP";
+
+            _confirmDialog.Open($"把 {player.Name} 移动到{destination}？\n{cost}", () =>
+            {
+                Session.Submit(new MoveRowAction(player.Id), $"{player.Name} 移动到{destination}。");
+                Refresh();
+            });
+        }
+
+        private void HighlightMoveTarget(CombatantView view, CardHighlight state)
+        {
+            if (view.Combatant is not PlayerCharacter player) return;
+
+            Row target = player.Row == Row.Front ? Row.Back : Row.Front;
+            foreach (ZoneView zone in _zones)
+            {
+                if (RowZoneOf(zone) == target && IsOwnSideZone(zone)) zone.SetDropHighlight(state);
+            }
+        }
+
+        private bool IsOppositeRowZone(CombatantView view, ZoneView zone)
+        {
+            if (zone == null || view.Combatant is not PlayerCharacter player) return false;
+            if (!IsOwnSideZone(zone)) return false;
+
+            Row target = player.Row == Row.Front ? Row.Back : Row.Front;
+            return RowZoneOf(zone) == target;
+        }
+
+        private static bool IsOwnSideZone(ZoneView zone)
+            => zone.Layout.source is ZoneSource.我方前排 or ZoneSource.我方后排;
+
+        private static Row? RowZoneOf(ZoneView zone) => zone.Layout.source switch
+        {
+            ZoneSource.我方前排 => Row.Front,
+            ZoneSource.我方后排 => Row.Back,
+            _ => null,
+        };
+
+        /// <summary>射线找鼠标下方的前/后排区域底板。</summary>
+        private ZoneView FindRowZoneUnder(PointerEventData eventData)
+        {
+            if (BoardCamera == null) return null;
+
+            Ray ray = BoardCamera.ScreenPointToRay(eventData.position);
+            int count = Physics.RaycastNonAlloc(ray, _hits, 1000f);
+            if (count == 0) return null;
+
+            System.Array.Sort(_hits, 0, count, RaycastDistanceComparer.Instance);
+
+            for (int i = 0; i < count; i++)
+            {
+                var zone = _hits[i].collider.transform.GetComponentInParent<ZoneView>();
+                if (zone != null && RowZoneOf(zone).HasValue) return zone;
+            }
+
+            return null;
+        }
+
 
         private void SubmitContextAction()
         {

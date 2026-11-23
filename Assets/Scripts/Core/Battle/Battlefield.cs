@@ -61,10 +61,19 @@ namespace TCGinFU.Core
         /// 对排已满返回 false。
         /// </summary>
         public bool SwitchRow(Combatant combatant)
-        {
-            Row target = combatant.Row == Row.Front ? Row.Back : Row.Front;
-            Combatant[] targetArray = RowArray(target);
+            => MoveTo(combatant, combatant.Row == Row.Front ? Row.Back : Row.Front);
 
+        /// <summary>
+        /// 移动到**指定**排。已经在那排了返回 false（什么都没发生），目标排满了也返回 false。
+        ///
+        /// <para>定向移动和 <see cref="SwitchRow"/> 不能混为一谈：
+        /// 「被击退至后排」对已经在后排的人应当无事发生，用切换会把他拉到前排——正好反了。</para>
+        /// </summary>
+        public bool MoveTo(Combatant combatant, Row target)
+        {
+            if (combatant == null || combatant.Row == target) return false;
+
+            Combatant[] targetArray = RowArray(target);
             int slot = FindSlot(targetArray, preferred: combatant.Slot);
             if (slot < 0) return false;
 
@@ -73,6 +82,33 @@ namespace TCGinFU.Core
             combatant.Row = target;
             combatant.Slot = slot;
             return true;
+        }
+
+        /// <summary>
+        /// 前后排整体互换，**保持各自的列**（老卡「相位折跃」）。
+        ///
+        /// <para>必须原子地做：逐个调 <see cref="SwitchRow"/> 会让先动的人把对排槽位占掉，
+        /// 后动的人被挤到别的列，相邻关系（§4.3 的「正前方」）就乱了。</para>
+        /// </summary>
+        public void SwapRows()
+        {
+            var moving = new List<(Combatant Combatant, Row To, int Slot)>();
+
+            for (int slot = 0; slot < SlotsPerRow; slot++)
+            {
+                if (_front[slot] != null) moving.Add((_front[slot], Row.Back, slot));
+                if (_back[slot] != null) moving.Add((_back[slot], Row.Front, slot));
+            }
+
+            System.Array.Clear(_front, 0, SlotsPerRow);
+            System.Array.Clear(_back, 0, SlotsPerRow);
+
+            foreach ((Combatant combatant, Row to, int slot) in moving)
+            {
+                RowArray(to)[slot] = combatant;
+                combatant.Row = to;
+                combatant.Slot = slot;
+            }
         }
 
         private static int FindSlot(Combatant[] array, int preferred)

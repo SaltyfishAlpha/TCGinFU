@@ -79,7 +79,8 @@ namespace TCGinFU.View.Debugging
 
         private void OnGUI()
         {
-            if (!_visible || _view?.Session == null) return;
+            // 没开起局时这个浮层没东西可显示，加载报告由 BattleView 整屏摊开
+            if (!_visible || _view?.Session == null || !_view.Session.IsLoaded) return;
 
             Matrix4x4 previous = GUI.matrix;
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one * uiScale);
