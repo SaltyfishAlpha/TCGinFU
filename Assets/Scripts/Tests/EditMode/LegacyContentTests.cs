@@ -65,6 +65,25 @@ namespace TCGinFU.Tests
             }
         }
 
+        /// <summary>
+        /// §3.1：形态卡组跟着升变牌走，不再写在卡组文件里。
+        /// 逐张钉住内容——这次搬家只换了存放位置，开局拿到的 10 张必须一模一样。
+        /// </summary>
+        [TestCase("phantom_nightwalk", "shadow_dash_assault:3 night_eviscerate:3 thieves_trick:2 smoke_decoy:2")]
+        [TestCase("hawkeye_overdrive", "wind_chasing_arrows:3 death_sentence:3 arrow_storm_coverage:2 wind_wall_counter:2")]
+        [TestCase("cosmic_collapse", "event_horizon_singularity:3 grand_chaos_roulette:3 soul_devouring_feast:2 time_paradox:2")]
+        [TestCase("truth_alchemy_matrix", "elemental_proliferation_bomb:3 philosophers_stone_release:3 aether_reassembly_crucible:2 alchemical_protection_field:2")]
+        public void T02_升变牌自带的形态卡组与搬家前一致(string transformId, string expected)
+        {
+            CardDefinition transform = _db.Card(transformId);
+
+            Assert.That(transform.Role, Is.EqualTo(CardRole.Transform));
+            Assert.That(
+                string.Join(" ", transform.FormDeck.Select(e => $"{e.CardId}:{e.Count}")),
+                Is.EqualTo(expected));
+            Assert.That(transform.FormDeck.Sum(e => e.Count), Is.EqualTo(DeckList.FormDeckSize));
+        }
+
         // ── T-3 构筑校验（§5.3 的重新归类是否真的合法） ──
 
         [TestCase("miku")]
@@ -78,8 +97,10 @@ namespace TCGinFU.Tests
             Assert.That(result.IsValid, Is.True, result.ToString());
         }
 
-        [TestCase("miku", 12, 8, 7, 3)]
-        [TestCase("weiting", 13, 5, 8, 4)]
+        // §3.2 不再限制配比，这里只是把现状钉住，改动卡组时能一眼看见影响。
+        // 武器 / 防具各只剩「角色装备着的那张」（§7.1 ⏸），其余按语义归回了职业牌
+        [TestCase("miku", 21, 3, 3, 3)]
+        [TestCase("weiting", 16, 5, 5, 4)]
         public void T03_来源配比与文档一致(string heroId, int cls, int weapon, int armor, int treasure)
         {
             DeckList deck = _db.BuildDeck(_db.Character(heroId).DeckId, new LoadReport());
@@ -88,6 +109,56 @@ namespace TCGinFU.Tests
             Assert.That(deck.CountOf(CardCategory.Weapon), Is.EqualTo(weapon), "武器牌");
             Assert.That(deck.CountOf(CardCategory.Armor), Is.EqualTo(armor), "防具牌");
             Assert.That(deck.CountOf(CardCategory.Treasure), Is.EqualTo(treasure), "秘宝牌");
+        }
+
+        /// <summary>
+        /// §7.1：每张职业牌恰好归属 1 个职业，且必须是持有者学过的职业；
+        /// 武器 / 防具 / 秘宝牌一个职业都不带。
+        ///
+        /// <para>加载器只能查「职业牌有没有写 classId」，查不出「写的是不是这个角色学过的」——
+        /// 那要把卡和角色对起来看。早期迁移把所有牌都标成角色主职业，就是这里漏掉的。</para>
+        /// </summary>
+        [Test]
+        public void T03_每张职业牌的职业都是持有者学过的()
+        {
+            var failures = new List<string>();
+
+            foreach (CardDefinition card in _db.Cards.Values)
+            {
+                string owner = CardOwner(card.Id);
+                CharacterContent character = owner == null ? null : _db.Character(owner);
+
+                if (card.Category != CardCategory.Class)
+                {
+                    if (card.ClassId != null) failures.Add($"{card.Id}：{card.Category} 牌不该带职业 {card.ClassId}");
+                    continue;
+                }
+
+                if (card.ClassId == null) { failures.Add($"{card.Id}：职业牌没有职业"); continue; }
+                if (character == null) { failures.Add($"{card.Id}：owner {owner} 不是已知角色"); continue; }
+
+                if (!character.Sheet.HasClass(card.ClassId))
+                {
+                    failures.Add($"{card.Id}：职业 {card.ClassId}，但 {owner} 没学过");
+                }
+            }
+
+            Assert.That(failures, Is.Empty, string.Join("\n", failures));
+        }
+
+        /// <summary>卡牌 JSON 的 <c>owner</c> 字段。加载器还不读它（见 known_issues §2.3），所以直接从文件取。</summary>
+        private string CardOwner(string cardId)
+        {
+            var source = new FileContentSource(_root);
+            foreach (string file in new[] { "cards/miku.json", "cards/weiting.json", "cards/forms.json" })
+            {
+                foreach (JsonValue card in Json.Parse(source.Read(file))["cards"].Items)
+                {
+                    if (card["id"].AsString() == cardId) return card["owner"].AsString();
+                }
+            }
+
+            return null;
         }
 
         // ── T-4 Id 唯一性（老版本 validate() 也查这条） ──

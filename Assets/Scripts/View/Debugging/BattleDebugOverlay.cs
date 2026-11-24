@@ -156,7 +156,9 @@ namespace TCGinFU.View.Debugging
                     + $"  盾 物{player.Shields.Physical}(自{player.Shields.AutoPhysical})"
                     + $"/魔{player.Shields.Magical}(自{player.Shields.AutoMagical})");
                 builder.AppendLine(
-                    $"  手{player.Zones.Hand.Count} 组{player.Zones.Deck.Count} 弃{player.Zones.Discard.Count}"
+                    $"  手{player.Zones.Hand.Count} 组{player.Zones.Deck.Count}"
+                    + (player.Zones.FormDeck.Count > 0 ? $" 升变组{player.Zones.FormDeck.Count}" : "")
+                    + $" 弃{player.Zones.Discard.Count + player.Zones.FormDiscard.Count}"
                     + $" 充能{player.Zones.Charges.Count}/{player.Zones.Charges.Capacity}"
                     + $" 持续[{player.Zones.Continuous?.Name ?? "空"}]");
 

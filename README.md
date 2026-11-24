@@ -73,11 +73,13 @@
 | 探索 / 叙事 / 战役 / 构筑界面 / 成长 | ⬜ 未开始 |
 | 联网 | ⬜ 未开始 |
 
-测试：EditMode 约 **270 个**（静态计数：242 个 `[Test]` + 28 个 `[TestCase]`），位于 `Assets/Scripts/Tests/EditMode`。
-最近一次记录在案的全量运行是 2026-11-23 充能交接单验收时，**244 条全绿**（含 L02）；之后新增的 `CardClassificationTests` 等还没有记录在案的运行结果。
+测试：EditMode 约 **299 个**（静态计数：262 个 `[Test]` + 37 个 `[TestCase]`），位于 `Assets/Scripts/Tests/EditMode`。
+最近一次全量运行是 2026-11-23 卡牌重新分类交接单验收时 **299 条全绿**——但跑的是拿
+`check-asmdefs.sh` 产出的 dll 搭的反射式运行器，不是 Unity Test Runner（fixture 隔离、
+`[OneTimeTearDown]` 这些没有完全复刻），**以 Unity 里跑出来的为准**。
 **测试数量只在这里维护**，其他文档不再各写一份。
 
-规则书近两天的改动里，取消主卡组类别配比、角色被动与角色专属牌这两项代码还没跟上，
+规则书近两天的改动里，角色被动与角色专属牌代码还没跟上，
 见 [`known_issues.md`](Assets/docs/known_issues.md)。
 
 ### 已知问题
@@ -128,7 +130,6 @@ Assets/Plugins/MoonSharp/         Lua 解释器
 | [`view_architecture.md`](Assets/docs/view_architecture.md) | 表现层：3D 桌面、布局数据、交互 | 当前 |
 | [`behaviour_layer_handoff.md`](Assets/docs/behaviour_layer_handoff.md) | Lua 行为层交接：钩子、动词、迁移状态、工程坑 | 当前 |
 | [`ui_todo_handoff.md`](Assets/docs/ui_todo_handoff.md) | UI 待办交接 | 当前 |
-| [`card_reclass_handoff.md`](Assets/docs/card_reclass_handoff.md) | 交接单：卡牌按语义重新分类、混沌法师改名熵术士、形态卡组改由升变牌定义 | 待执行，做完归档 |
 | [`archive/`](Assets/docs/archive/) | 一次性记录：讨论纪要、核对报告、已执行的交接单 | 已归档，仅供查历史 |
 
 改规则前先看裁定表。

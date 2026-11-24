@@ -117,6 +117,8 @@ namespace TCGinFU.View
 
                 new()
                 {
+                    // 主卡组与升变卡组共用这一块地：升变期间这里装的是形态牌，
+                    // 标题会自己换成「升变卡组」（见 BattleView.ResolveZoneTitle）
                     key = "deck", displayName = "卡组", source = ZoneSource.卡组,
                     anchorMin = new Vector2(0.01f, 0.012f), anchorMax = new Vector2(0.125f, 0.197f),
                     arrange = ZoneArrange.堆叠, cardScale = 0.95f, faceDown = true, reservedSlots = 1,
@@ -134,13 +136,12 @@ namespace TCGinFU.View
                     arrange = ZoneArrange.堆叠, cardScale = 0.95f, reservedSlots = 1, peekable = true,
                     background = new Color(0.5f, 0.3f, 0.8f, 0.09f),
                 },
-                // 已完成升变区：规则书 §4.1 / §6.2 ⑤ 仍然需要这个区域（用完的升变牌与
-                // 形态牌移出本局都堆在这儿），但升变期间升变牌已经盖在角色卡上了，
-                // 这块地平时一直是空的，白占一个卡位。默认隐藏，需要查看时把 visible 打开。
+                // 除外区（§4.1）：卡面写「消耗」的一次性牌打出后进这儿，升变结束的整套
+                // 升变牌与形态牌也进这儿。**默认可见**——它原来叫「已完成升变区」、
+                // 平时一直空着所以藏了起来，接了一次性牌之后常规牌局里就会用到。
                 new()
                 {
-                    key = "completed", displayName = "已完成升变", source = ZoneSource.已完成升变区,
-                    visible = false,
+                    key = "exile", displayName = "除外区", source = ZoneSource.除外区,
                     anchorMin = new Vector2(0.01f, 0.214f), anchorMax = new Vector2(0.125f, 0.394f),
                     arrange = ZoneArrange.堆叠, cardScale = 0.95f, reservedSlots = 1,
                     background = new Color(0.8f, 0.6f, 0.2f, 0.07f),

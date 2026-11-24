@@ -47,8 +47,8 @@ namespace TCGinFU.Core.Tests
             Assert.IsTrue(player.Transform.Active);
             Assert.AreEqual(5, player.Zones.Hand.Count, "形态首轮抽 5 张，代替常规抽牌");
             Assert.IsTrue(player.Zones.Hand.All(c => c.IsFormCard));
-            Assert.AreEqual(5, player.Zones.Deck.Count);
-            Assert.AreEqual(40, player.Zones.Stash.Deck.Count, "原主卡组被暂存到场外");
+            Assert.AreEqual(5, player.Zones.FormDeck.Count, "形态组 10 张抽掉 5 张");
+            Assert.AreEqual(40, player.Zones.Deck.Count, "主卡组留在场上，不被形态牌顶替");
         }
 
         [Test]
@@ -87,7 +87,7 @@ namespace TCGinFU.Core.Tests
         }
 
         [Test]
-        public void 升变持续两轮后退出并归还原卡组()
+        public void 升变持续两轮后退出并取回原手牌()
         {
             (BattleEngine engine, PlayerCharacter player, Enemy enemy) = Setup();
             engine.Start();
@@ -103,18 +103,42 @@ namespace TCGinFU.Core.Tests
             Assert.AreEqual(2, engine.State.Round);
             Assert.IsTrue(player.Transform.Active);
             Assert.AreEqual(9, player.Zones.Hand.Count, "4 张留存 + 剩余 5 张全抽");
-            Assert.AreEqual(0, player.Zones.Deck.Count);
+            Assert.AreEqual(0, player.Zones.FormDeck.Count);
+            Assert.AreEqual(40, player.Zones.Deck.Count, "整个升变期间主卡组一张没动");
 
             AdvanceOneRound(engine, player);
 
             // ── 第 3 轮轮始：退出升变 ──
             Assert.AreEqual(3, engine.State.Round);
             Assert.IsFalse(player.Transform.Active);
-            Assert.AreEqual(11, player.Zones.CompletedTransform.Count, "10 张形态牌 + 1 张升变牌移出本局");
+            Assert.AreEqual(11, player.Zones.Exile.Count, "10 张形态牌 + 1 张升变牌整套进除外区");
             Assert.AreEqual(0, player.Zones.FormDiscard.Count);
             Assert.IsFalse(player.Zones.Hand.Any(c => c.IsFormCard));
             Assert.AreEqual(3, player.Zones.Hand.Count, "取回原手牌（空）后按常规抽 3 张");
             Assert.AreEqual(37, player.Zones.Deck.Count);
+        }
+
+        /// <summary>
+        /// 墓地对外算一个：主弃牌堆与形态弃牌堆在规则上是两摞（形态牌要整体移出本局），
+        /// 但展示和「从墓地回收」这类效果都该同时够得着两边。
+        /// </summary>
+        [Test]
+        public void 弃牌堆同时含主卡组与升变卡组的弃牌()
+        {
+            (BattleEngine engine, PlayerCharacter player, Enemy enemy) = Setup();
+            engine.Start();
+
+            var spent = new CardInstance(TestFactory.FillerCard("spent"), player.Id);
+            player.Zones.Discard.AddTop(spent);
+
+            CardInstance candidate = engine.TransformCandidates(player).Single();
+            engine.Submit(new DeclareTransformAction(player.Id, candidate.Uid));
+            engine.Submit(new PlayCardAction(player.Id, player.Zones.Hand[0].Uid, enemy.Id));
+
+            CardInstance[] all = player.Zones.AllDiscards.ToArray();
+            Assert.AreEqual(2, all.Length, "升变期间打出的形态牌也算在弃牌堆里");
+            Assert.IsTrue(all[0].IsFormCard, "刚打出的形态牌露在最上面");
+            Assert.AreSame(spent, all[1]);
         }
 
         [Test]

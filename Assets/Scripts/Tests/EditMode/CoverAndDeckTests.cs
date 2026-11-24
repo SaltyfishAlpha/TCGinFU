@@ -341,18 +341,29 @@ namespace TCGinFU.Core.Tests
             StringAssert.Contains("30", result.ToString());
         }
 
+        /// <summary>
+        /// §3.2（2026-11-22 起）取消了主卡组类别配比：只要总数 30 张、同名不超限，
+        /// 全是职业牌也合法——把基础攻防牌整体优化出卡组是允许的构筑选择。
+        /// </summary>
         [Test]
-        public void 职业牌少于十二张被拒绝()
+        public void 不再限制类别配比()
         {
             var deck = new DeckList();
-            Add(deck, CardCategory.Class, "cls", 11);
-            Add(deck, CardCategory.Weapon, "wpn", 8);
-            Add(deck, CardCategory.Armor, "arm", 8);
-            Add(deck, CardCategory.Treasure, "tre", 3);
+            Add(deck, CardCategory.Class, "cls", 30);
+
+            DeckValidationResult result = DeckValidator.Validate(deck);
+            Assert.IsTrue(result.IsValid, result.ToString());
+        }
+
+        [Test]
+        public void 形态牌不能编入主卡组()
+        {
+            DeckList deck = ValidDeck();
+            deck.MainDeck[0] = TestFactory.FormStrike("night_eviscerate");
 
             DeckValidationResult result = DeckValidator.Validate(deck);
             Assert.IsFalse(result.IsValid);
-            StringAssert.Contains("职业牌", result.ToString());
+            StringAssert.Contains("不能编入主卡组", result.ToString());
         }
 
         [Test]
@@ -421,8 +432,8 @@ namespace TCGinFU.Core.Tests
             DeckList deck = ValidDeck();
             deck.MainDeck[0] = TestFactory.TransformCard("awaken_a", "浪客");
             deck.MainDeck[1] = TestFactory.TransformCard("awaken_b", "神射手");
-            deck.FormDecks["awaken_a"] = FormDeck();
-            deck.FormDecks["awaken_b"] = FormDeck();
+            deck.FormDecks["awaken_a"] = FormDeck("浪客");
+            deck.FormDecks["awaken_b"] = FormDeck("神射手");
 
             DeckValidationResult result = DeckValidator.Validate(deck);
             Assert.IsTrue(result.IsValid, result.ToString());
@@ -508,9 +519,9 @@ namespace TCGinFU.Core.Tests
             Assert.IsTrue(result.IsValid, result.ToString());
         }
 
-        private static List<CardDefinition> FormDeck()
+        private static List<CardDefinition> FormDeck(string classId = "浪客")
             => Enumerable.Range(0, DeckList.FormDeckSize)
-                .Select(i => TestFactory.FormStrike($"form{i}"))
+                .Select(i => TestFactory.FormStrike($"form{i}", classId: classId))
                 .ToList();
     }
 }

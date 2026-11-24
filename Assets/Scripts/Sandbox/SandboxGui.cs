@@ -225,7 +225,9 @@ namespace TCGinFU.Sandbox
                         $"盾 物{player.Shields.Physical}（自动{player.Shields.AutoPhysical}）"
                         + $" / 魔{player.Shields.Magical}（自动{player.Shields.AutoMagical}）");
                     GUILayout.Label(
-                        $"手牌 {player.Zones.Hand.Count}　卡组 {player.Zones.Deck.Count}　弃牌 {player.Zones.Discard.Count}");
+                        $"手牌 {player.Zones.Hand.Count}　卡组 {player.Zones.Deck.Count}"
+                        + (player.Zones.FormDeck.Count > 0 ? $"　升变卡组 {player.Zones.FormDeck.Count}" : "")
+                        + $"　弃牌 {player.Zones.Discard.Count + player.Zones.FormDiscard.Count}");
                     GUILayout.Label(
                         $"充能 {player.Zones.Charges.Count}/{player.Zones.Charges.Capacity}"
                         + $"　持续区 {(player.Zones.Continuous?.Name ?? "空")}");

@@ -18,6 +18,24 @@
       "rulesText": "前置条件：本局累计触发2次暴击，或全队累计消耗2个充能指示物。第3轮前抽到时，可0 AP展示此牌并洗回主卡组，抽1张牌且视为达成1次前置条件。第3轮开始时若条件满足，可从主卡组直接跳出发动升变，持续2轮。升变期间你的暴击伤害倍率提升至×1.75；每当你的攻击触发暴击时，回复5 MP。",
       "behaviourId": "phantom_nightwalk",
       "effects": [],
+      "formDeck": [
+        {
+          "card": "shadow_dash_assault",
+          "count": 3
+        },
+        {
+          "card": "night_eviscerate",
+          "count": 3
+        },
+        {
+          "card": "thieves_trick",
+          "count": 2
+        },
+        {
+          "card": "smoke_decoy",
+          "count": 2
+        }
+      ],
       "unmapped": {
         "ranged": false
       },
@@ -41,6 +59,24 @@
       "rulesText": "轮始阶段若自身处于后排且此牌在手牌中，可在第1或第2轮直接发动升变；若前3轮未摸到，第3轮起可从主卡组自动跳出发动，持续2轮。升变期间只要你处于后排，所有【暴击】掷骰结果+2，且双色牌触发【超暴击】的伤害倍率从×2提升至×2.5。",
       "behaviourId": "hawkeye_overdrive",
       "effects": [],
+      "formDeck": [
+        {
+          "card": "wind_chasing_arrows",
+          "count": 3
+        },
+        {
+          "card": "death_sentence",
+          "count": 3
+        },
+        {
+          "card": "arrow_storm_coverage",
+          "count": 2
+        },
+        {
+          "card": "wind_wall_counter",
+          "count": 2
+        }
+      ],
       "unmapped": {
         "ranged": false
       },
@@ -116,7 +152,7 @@
       "id": "read_dodge",
       "name": "看破闪避",
       "owner": "miku",
-      "category": "Armor",
+      "category": "Class",
       "play": "Timing",
       "classId": "浪客",
       "colors": [
@@ -129,8 +165,6 @@
       "rulesText": "在敌人阶段自身或相邻队友被宣告为单体攻击目标时打出。投掷1颗敏捷骰，若点数≥敌方暴击抵抗，完全闪避本次攻击并抽1张牌；若未达标，仍为目标抵消6点伤害。",
       "behaviourId": "read_dodge",
       "effects": [],
-      "armorBaseShield": 7,
-      "shieldKind": "Physical",
       "unmapped": {
         "ranged": false,
         "can_target_self": true
@@ -143,7 +177,7 @@
       "owner": "miku",
       "category": "Class",
       "play": "Skill",
-      "classId": "浪客",
+      "classId": "神射手",
       "colors": [
         "Dexterity"
       ],
@@ -178,9 +212,9 @@
       "id": "suppressing_volley",
       "name": "压制连射",
       "owner": "miku",
-      "category": "Weapon",
+      "category": "Class",
       "play": "Skill",
-      "classId": "浪客",
+      "classId": "神射手",
       "colors": [
         "Dexterity"
       ],
@@ -211,8 +245,6 @@
           "rollsOwnCrit": true
         }
       ],
-      "weaponBaseDamage": 7,
-      "twoHanded": true,
       "unmapped": {
         "ranged": true,
         "hits": 2
@@ -225,7 +257,7 @@
       "owner": "miku",
       "category": "Class",
       "play": "Skill",
-      "classId": "浪客",
+      "classId": "神射手",
       "colors": [
         "Dexterity",
         "Insight"
@@ -258,7 +290,7 @@
       "owner": "miku",
       "category": "Class",
       "play": "Continuous",
-      "classId": "浪客",
+      "classId": "神射手",
       "colors": [
         "Dexterity",
         "Insight"
@@ -281,7 +313,7 @@
       "owner": "miku",
       "category": "Class",
       "play": "Skill",
-      "classId": "浪客",
+      "classId": "神射手",
       "colors": [
         "Dexterity",
         "Insight"
@@ -315,7 +347,6 @@
       "owner": "miku",
       "category": "Weapon",
       "play": "Skill",
-      "classId": "浪客",
       "colors": [
         "Dexterity"
       ],
@@ -348,9 +379,9 @@
       "id": "rapid_arrow_rain",
       "name": "连珠箭雨",
       "owner": "miku",
-      "category": "Weapon",
+      "category": "Class",
       "play": "Skill",
-      "classId": "浪客",
+      "classId": "神射手",
       "colors": [
         "Dexterity"
       ],
@@ -371,8 +402,6 @@
           "target": "SingleEnemy"
         }
       ],
-      "weaponBaseDamage": 7,
-      "twoHanded": true,
       "unmapped": {
         "ranged": true
       },
@@ -384,7 +413,6 @@
       "owner": "miku",
       "category": "Armor",
       "play": "Timing",
-      "classId": "浪客",
       "colors": [],
       "ap": 0,
       "mp": 0,
@@ -405,9 +433,9 @@
       "id": "tactical_concealment",
       "name": "战术隐蔽",
       "owner": "miku",
-      "category": "Armor",
+      "category": "Class",
       "play": "Skill",
-      "classId": "浪客",
+      "classId": "神射手",
       "colors": [],
       "ap": 1,
       "mp": 0,
@@ -426,8 +454,6 @@
           "target": "Self"
         }
       ],
-      "armorBaseShield": 7,
-      "shieldKind": "Physical",
       "unmapped": {
         "ranged": false
       },
@@ -439,7 +465,6 @@
       "owner": "miku",
       "category": "Treasure",
       "play": "Skill",
-      "classId": "浪客",
       "colors": [],
       "ap": 0,
       "mp": 0,
@@ -470,7 +495,6 @@
       "owner": "miku",
       "category": "Treasure",
       "play": "Skill",
-      "classId": "浪客",
       "colors": [
         "Dexterity"
       ],

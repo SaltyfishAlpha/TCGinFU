@@ -35,6 +35,58 @@ namespace TCGinFU.Core.Tests
             Assert.AreEqual(2, zone.Count);
         }
 
+        /// <summary>
+        /// 「真理炼金矩阵」保住的充能要回到**原位**（最早置入端）。
+        /// 当成新贴的追加到末尾的话，下一次溢出顶谁就跟着错了。
+        /// </summary>
+        [Test]
+        public void 保住的充能放回最早置入端()
+        {
+            var zone = new ChargeZone(2);
+            var a = new ChargeToken(new CardInstance(TestFactory.FillerCard("a"), "p1"));
+            var b = new ChargeToken(new CardInstance(TestFactory.FillerCard("b"), "p1"));
+
+            zone.Push(a, out ChargeToken _);
+            zone.Push(b, out ChargeToken _);
+
+            // 消耗一个 → 取走最早的 a；判定为「留在充能区」→ 放回去
+            Assert.AreSame(a, zone.Pop());
+            zone.Restore(a, out ChargeToken evicted);
+
+            Assert.IsNull(evicted);
+            Assert.AreEqual(2, zone.Count);
+            Assert.AreSame(a, zone.Tokens[0], "a 仍是最早置入的那个");
+
+            // 再贴一张，顶出去的应当还是 a
+            var c = new ChargeToken(new CardInstance(TestFactory.FillerCard("c"), "p1"));
+            zone.Push(c, out ChargeToken e);
+            Assert.AreSame(a, e);
+        }
+
+        /// <summary>
+        /// 放回时充能区已经满了，只可能是 Pop 与放回之间钩子又贴了充能。
+        /// 顶出去的是那次贴入，而不是这个从没离开过充能区的。
+        /// </summary>
+        [Test]
+        public void 放回时已满则顶出期间新贴的那个()
+        {
+            var zone = new ChargeZone(2);
+            var a = new ChargeToken(new CardInstance(TestFactory.FillerCard("a"), "p1"));
+            var b = new ChargeToken(new CardInstance(TestFactory.FillerCard("b"), "p1"));
+            var mid = new ChargeToken(new CardInstance(TestFactory.FillerCard("mid"), "p1"));
+
+            zone.Push(a, out ChargeToken _);
+            zone.Push(b, out ChargeToken _);
+
+            Assert.AreSame(a, zone.Pop());
+            zone.Push(mid, out ChargeToken _); // 钩子里又贴了一个，充能区重新满了
+            zone.Restore(a, out ChargeToken evicted);
+
+            Assert.AreSame(mid, evicted);
+            Assert.AreEqual(2, zone.Count);
+            Assert.AreSame(a, zone.Tokens[0]);
+        }
+
         /// <summary>§4.1：被顶出的牌回到**该卡原持有者**的弃牌堆，而不是充能区主人的。</summary>
         [Test]
         public void 顶出的牌回到原持有者的弃牌堆()
@@ -98,6 +150,40 @@ namespace TCGinFU.Core.Tests
             player.Zones.SetContinuous(second, out CardInstance replaced2);
             Assert.AreSame(first, replaced2);
             Assert.AreSame(second, player.Zones.Continuous);
+        }
+    }
+
+    /// <summary>§4.1 除外区：卡面写「消耗」的一次性牌打出后离场，不进弃牌堆。</summary>
+    public class ExileZoneTests
+    {
+        [Test]
+        public void 一次性牌打出后进除外区而不是弃牌堆()
+        {
+            PlayerCharacter player = TestFactory.Player();
+            Enemy enemy = TestFactory.Enemy(hp: 100);
+            (BattleEngine engine, _, _) = TestFactory.Duel(new XorShift32Rng(7), player, enemy);
+            engine.Start();
+
+            CardInstance card = TestFactory.AddToHand(player, TestFactory.OneShotCard());
+            Assert.IsTrue(engine.Submit(new PlayCardAction(player.Id, card.Uid, enemy.Id)).Ok);
+
+            Assert.AreSame(card, player.Zones.Exile.Single(), "打出即消耗，牌进除外区");
+            Assert.IsTrue(player.Zones.Discard.IsEmpty, "不进弃牌堆就不会被洗回主卡组");
+        }
+
+        [Test]
+        public void 没写消耗的牌照旧进弃牌堆()
+        {
+            PlayerCharacter player = TestFactory.Player();
+            Enemy enemy = TestFactory.Enemy(hp: 100);
+            (BattleEngine engine, _, _) = TestFactory.Duel(new XorShift32Rng(7), player, enemy);
+            engine.Start();
+
+            CardInstance card = TestFactory.AddToHand(player, TestFactory.StrikeCard("plain"));
+            Assert.IsTrue(engine.Submit(new PlayCardAction(player.Id, card.Uid, enemy.Id)).Ok);
+
+            Assert.AreSame(card, player.Zones.Discard.Single());
+            Assert.IsTrue(player.Zones.Exile.IsEmpty);
         }
     }
 

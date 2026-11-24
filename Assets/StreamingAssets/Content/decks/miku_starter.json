@@ -67,49 +67,5 @@
       "card": "verdant_wind_arrow",
       "count": 1
     }
-  ],
-  "formDecks": [
-    {
-      "transformCard": "phantom_nightwalk",
-      "cards": [
-        {
-          "card": "shadow_dash_assault",
-          "count": 3
-        },
-        {
-          "card": "night_eviscerate",
-          "count": 3
-        },
-        {
-          "card": "thieves_trick",
-          "count": 2
-        },
-        {
-          "card": "smoke_decoy",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "transformCard": "hawkeye_overdrive",
-      "cards": [
-        {
-          "card": "wind_chasing_arrows",
-          "count": 3
-        },
-        {
-          "card": "death_sentence",
-          "count": 3
-        },
-        {
-          "card": "arrow_storm_coverage",
-          "count": 2
-        },
-        {
-          "card": "wind_wall_counter",
-          "count": 2
-        }
-      ]
-    }
   ]
 }

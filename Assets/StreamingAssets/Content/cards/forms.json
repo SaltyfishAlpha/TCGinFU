@@ -28,7 +28,6 @@
           "target": "SingleEnemy"
         }
       ],
-      "formId": "phantom",
       "unmapped": {
         "ranged": false,
         "damage_formula": "B_atk",
@@ -69,7 +68,6 @@
           "target": "SingleEnemy"
         }
       ],
-      "formId": "phantom",
       "unmapped": {
         "ranged": false,
         "damage_formula": "B_atk + 4",
@@ -95,7 +93,6 @@
       "rulesText": "从弃牌堆选择1张牌直接置入自己或队友的充能区，并使该角色本轮下一次攻击伤害+3。",
       "behaviourId": "thieves_trick",
       "effects": [],
-      "formId": "phantom",
       "unmapped": {
         "ranged": false,
         "can_target_self": true
@@ -131,7 +128,6 @@
           "target": "SingleAlly"
         }
       ],
-      "formId": "phantom",
       "unmapped": {
         "ranged": false,
         "can_target_self": true,
@@ -167,7 +163,6 @@
           "target": "SingleEnemy"
         }
       ],
-      "formId": "hawkeye",
       "unmapped": {
         "ranged": true,
         "damage_formula": "B_atk + 2",
@@ -205,7 +200,6 @@
           "target": "SingleEnemy"
         }
       ],
-      "formId": "hawkeye",
       "unmapped": {
         "ranged": true,
         "damage_formula": "B_atk * 2",
@@ -242,7 +236,6 @@
           "target": "AllEnemies"
         }
       ],
-      "formId": "hawkeye",
       "unmapped": {
         "ranged": true,
         "damage_formula": "B_atk",
@@ -287,7 +280,6 @@
           "target": "SingleAlly"
         }
       ],
-      "formId": "hawkeye",
       "unmapped": {
         "ranged": false,
         "can_target_self": true,
@@ -304,7 +296,7 @@
       "category": "Class",
       "role": "Form",
       "play": "Skill",
-      "classId": "混沌法师",
+      "classId": "熵术士",
       "colors": [
         "Insight",
         "Willpower"
@@ -326,7 +318,6 @@
           "target": "SingleEnemy"
         }
       ],
-      "formId": "cosmic",
       "unmapped": {
         "ranged": true,
         "damage_formula": "B_atk + 4",
@@ -341,7 +332,7 @@
       "category": "Class",
       "role": "Form",
       "play": "Skill",
-      "classId": "混沌法师",
+      "classId": "熵术士",
       "colors": [
         "Insight",
         "Willpower"
@@ -363,7 +354,6 @@
           "target": "AllEnemies"
         }
       ],
-      "formId": "cosmic",
       "unmapped": {
         "ranged": true,
         "damage_formula": "B_atk + 2",
@@ -378,7 +368,7 @@
       "category": "Class",
       "role": "Form",
       "play": "Skill",
-      "classId": "混沌法师",
+      "classId": "熵术士",
       "colors": [
         "Willpower"
       ],
@@ -414,7 +404,6 @@
           "target": "AllAllies"
         }
       ],
-      "formId": "cosmic",
       "unmapped": {
         "ranged": true,
         "damage_formula": "B_atk",
@@ -429,7 +418,7 @@
       "category": "Class",
       "role": "Form",
       "play": "Timing",
-      "classId": "混沌法师",
+      "classId": "熵术士",
       "colors": [
         "Insight"
       ],
@@ -459,7 +448,6 @@
           "target": "SingleAlly"
         }
       ],
-      "formId": "cosmic",
       "unmapped": {
         "ranged": false,
         "can_target_self": true,
@@ -495,7 +483,6 @@
           "target": "SingleEnemy"
         }
       ],
-      "formId": "alchemy",
       "unmapped": {
         "ranged": true,
         "damage_formula": "B_atk + 3",
@@ -522,7 +509,6 @@
       "rulesText": "令1名我方角色立即获得+2 AP、回复10 MP并抽1张牌（每轮对同一角色限用1次）。",
       "behaviourId": "philosophers_stone_release",
       "effects": [],
-      "formId": "alchemy",
       "unmapped": {
         "ranged": false,
         "can_target_self": true
@@ -548,7 +534,6 @@
       "rulesText": "从你的弃牌堆将最多2张牌直接贴入全队任意角色的充能区，随后抽1张牌。",
       "behaviourId": "aether_reassembly_crucible",
       "effects": [],
-      "formId": "alchemy",
       "unmapped": {
         "ranged": false
       },
@@ -573,7 +558,6 @@
       "rulesText": "敌人阶段打出，为前排全体或后排全体提供B_def点全能护盾（本5级构筑为8点），并移除每名受保护角色身上的1个负面状态。",
       "behaviourId": "alchemical_protection_field",
       "effects": [],
-      "formId": "alchemy",
       "unmapped": {
         "ranged": false,
         "target_group": "front_row_or_back_row",

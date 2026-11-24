@@ -156,7 +156,7 @@ namespace TCGinFU.Core
         public int DrawCountFor(PlayerCharacter player)
         {
             if (player.Transform.IsFirstFormRound) return 5;
-            if (player.Transform.IsSecondFormRound) return player.Zones.Deck.Count;
+            if (player.Transform.IsSecondFormRound) return player.Zones.FormDeck.Count;
             return State.Round == 1 ? 5 : 3;
         }
 

@@ -18,13 +18,8 @@ namespace TCGinFU.Core
     /// </summary>
     public static class DeckValidator
     {
-        private static readonly (CardCategory Category, string Label, int Min, int Max)[] CategoryRules =
-        {
-            (CardCategory.Class, "职业牌（含升变牌）", 12, 16),
-            (CardCategory.Weapon, "武器牌", 3, 8),
-            (CardCategory.Armor, "防具牌", 3, 8),
-            (CardCategory.Treasure, "秘宝牌", 0, 6),
-        };
+        // §3.2（2026-11-22 起）：主卡组只约束总张数与同名上限，**不设类别配比**。
+        // 把基础攻防牌整体优化出卡组是允许的构筑选择，由卡牌强度自然调节。
 
         /// <param name="sheet">
         /// 可选。传入时额外校验与角色相关的规则（英雄技能牌的 10 级精通要求）；
@@ -44,13 +39,10 @@ namespace TCGinFU.Core
                 result.Errors.Add($"主卡组必须恒定 {DeckList.MainDeckSize} 张，当前 {deck.MainDeck.Count} 张");
             }
 
-            foreach ((CardCategory category, string label, int min, int max) in CategoryRules)
+            // 形态牌只能待在形态卡组里（§7.1）
+            foreach (CardDefinition form in deck.MainDeck.Where(c => c.Role == CardRole.Form).Distinct())
             {
-                int count = deck.CountOf(category);
-                if (count < min || count > max)
-                {
-                    result.Errors.Add($"{label}应为 {min}–{max} 张，当前 {count} 张");
-                }
+                result.Errors.Add($"形态牌「{form.Name}」不能编入主卡组");
             }
 
             // 同名上限：普通牌 3 张，升变牌 1 张
@@ -70,10 +62,25 @@ namespace TCGinFU.Core
             return result;
         }
 
-        /// <summary>§3.3：英雄技能牌只有在该职业达到 10 级精通时才能获得。</summary>
+        /// <summary>
+        /// §7.1：职业牌只能编进学过该职业的角色卡组；
+        /// §3.3：英雄技能牌还要求该职业达到 10 级精通。
+        /// </summary>
         private static void ValidateAgainstCharacter(DeckList deck, CharacterSheet sheet, DeckValidationResult result)
         {
             IEnumerable<CardDefinition> allCards = deck.MainDeck.Concat(deck.FormDecks.Values.SelectMany(f => f));
+
+            // 主卡组里的每张职业牌（含升变牌）都要是角色学过的职业。
+            // 形态卡组不单独查：它跟着升变牌走，升变牌合法形态组就合法
+            foreach (CardDefinition card in deck.MainDeck
+                         .Where(c => c.Category == CardCategory.Class && c.ClassId != null)
+                         .Distinct())
+            {
+                if (!sheet.HasClass(card.ClassId))
+                {
+                    result.Errors.Add($"职业牌「{card.Name}」属于 {card.ClassId}，但角色没有该职业");
+                }
+            }
 
             foreach (CardDefinition hero in allCards.Where(c => c.IsHeroSkill).Distinct())
             {
@@ -95,13 +102,6 @@ namespace TCGinFU.Core
                 }
             }
 
-            foreach (CardDefinition transform in deck.TransformCards.Distinct())
-            {
-                if (transform.ClassId != null && !sheet.HasClass(transform.ClassId))
-                {
-                    result.Errors.Add($"升变牌「{transform.Name}」要求职业 {transform.ClassId}，但角色没有该职业");
-                }
-            }
         }
 
         private static void ValidateFormDecks(DeckList deck, DeckValidationResult result)
@@ -130,17 +130,18 @@ namespace TCGinFU.Core
                     result.Errors.Add($"「{transform.Name}」的形态组里混入了非形态牌「{stray.Name}」");
                 }
 
-                // 一组形态牌只能出自同一个形态。没标 formId 的（测试构造卡、英雄技能牌）跳过
-                string[] formIds = form
-                    .Where(c => c.Role == CardRole.Form && !string.IsNullOrEmpty(c.FormId))
-                    .Select(c => c.FormId)
-                    .Distinct()
-                    .ToArray();
-
-                if (formIds.Length > 1)
+                // 形态牌的职业要和它所在的升变牌一致。
+                // 以后主线升变若要共用形态牌（design_backlog O-4），再放开这条
+                if (transform.ClassId != null)
                 {
-                    result.Errors.Add(
-                        $"「{transform.Name}」的形态组混了 {formIds.Length} 个形态的牌：{string.Join(" / ", formIds)}");
+                    foreach (CardDefinition off in form
+                                 .Where(c => c.Role == CardRole.Form && c.ClassId != transform.ClassId)
+                                 .Distinct())
+                    {
+                        result.Errors.Add(
+                            $"「{transform.Name}」（{transform.ClassId}）的形态组里混了"
+                            + $"{off.ClassId ?? "无职业"}的形态牌「{off.Name}」");
+                    }
                 }
             }
 

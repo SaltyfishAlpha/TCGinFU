@@ -210,7 +210,7 @@ namespace TCGinFU.Core
         }
 
         /// <summary>
-        /// 卡牌结算完后的归宿：持续区 / 形态弃牌堆 / 弃牌堆。本规则没有除外区。
+        /// 卡牌结算完后的归宿：持续区 / 形态弃牌堆 / 除外区 / 弃牌堆。
         /// <para>先看打法再看标记：形态牌里若有持续牌，它该进持续区而不是形态弃牌堆。</para>
         /// </summary>
         private void SendToRestingPlace(PlayerCharacter actor, CardInstance card)
@@ -231,7 +231,10 @@ namespace TCGinFU.Core
                 return;
             }
 
+            // 形态牌先判：它有自己的弃牌堆，弹出升变时整摞跟着除外（R-14），
+            // 跟「打出即消耗」是两套时机，不该被 ExileOnResolve 抢走
             if (card.IsFormCard) actor.Zones.FormDiscard.AddTop(card);
+            else if (card.Definition.ExileOnResolve) actor.Zones.Exile.AddTop(card);
             else actor.Zones.Discard.AddTop(card);
         }
 

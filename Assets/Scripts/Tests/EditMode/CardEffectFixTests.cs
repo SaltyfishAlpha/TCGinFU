@@ -634,24 +634,25 @@ namespace TCGinFU.Tests
             }
         }
 
-        [TestCase("tactical_concealment")]
-        [TestCase("arcane_barrier")]
-        public void F22b_防具技能牌不再因为是防具就能响应(string cardId)
+        // 一张职业牌 + 一张防具牌：能不能响应只看打法，和类别没关系
+        [TestCase("tactical_concealment", CardCategory.Class)]
+        [TestCase("arcane_barrier", CardCategory.Armor)]
+        public void F22b_技能牌不会因为类别而获得响应资格(string cardId, CardCategory category)
         {
-            // §7.1 改成「只有时机牌能响应，与类别无关」之前，这两张「防具 · 技能」
+            // §7.1 改成「只有时机牌能响应，与类别无关」之前，「防具 · 技能」
             // 靠「是防具」混进响应窗口——那样防具牌标成技能还是时机就没区别了。
             (BattleEngine engine, PlayerCharacter player, Enemy _) = Duel(intentDamage: 20);
 
             CardDefinition def = _db.Card(cardId);
-            Assert.That(def.Category, Is.EqualTo(CardCategory.Armor), "这条测的是防具牌");
-            Assert.That(def.Play, Is.EqualTo(CardPlay.Skill), "这条测的是防具里的技能牌");
+            Assert.That(def.Category, Is.EqualTo(category), "类别变了，这条用例要换一张同类别的牌");
+            Assert.That(def.Play, Is.EqualTo(CardPlay.Skill), "这条测的是技能牌");
 
             CardInstance card = TestFactory.AddToHand(player, def);
             engine.Submit(new DeclareReadyAction(player.Id));
             Assert.That(engine.Pending.Kind, Is.EqualTo(DecisionKind.EnemyResponse), "没开出响应窗口");
 
             ActionResult result = engine.Submit(new PlayCardAction(player.Id, card.Uid, player.Id));
-            Assert.That(result.Ok, Is.False, $"{def.Name} 是防具 · 技能，不该能在敌人阶段打出");
+            Assert.That(result.Ok, Is.False, $"{def.Name} 的打法是技能，不该能在敌人阶段打出");
 
             // 挡回去的理由必须是打法，不能是 AP 不够这种碰巧——否则这条测试什么也没守住
             Assert.That(result.Reason, Does.Contain("时机牌"), $"挡回的理由不对：{result.Reason}");
@@ -660,9 +661,9 @@ namespace TCGinFU.Tests
         [TestCase("read_dodge")]
         [TestCase("rolling_cloak")]
         [TestCase("sages_robe")]
-        public void F22c_防具时机牌照旧能响应(string cardId)
+        public void F22c_时机牌照旧能响应(string cardId)
         {
-            // 反面：别把「只有时机牌能响应」收紧成「防具牌都不能响应」
+            // 反面：别把「只有时机牌能响应」收紧成「只有某个类别能响应」
             Assert.That(_db.Card(cardId).Play, Is.EqualTo(CardPlay.Timing), $"{cardId} 的打法标错了");
         }
 

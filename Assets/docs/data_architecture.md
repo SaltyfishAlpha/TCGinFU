@@ -268,7 +268,7 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 ```json
 {
   "id": "suppressing_volley", "name": "压制连射", "owner": "miku",
-  "category": "Weapon", "play": "Skill", "classId": "浪客", "colors": ["Dexterity"],
+  "category": "Class", "play": "Skill", "classId": "神射手", "colors": ["Dexterity"],
   "ap": 1, "mp": 10, "charge": 0, "hasCrit": true,
   "rulesText": "对单个敌人连续射击2次，每次造成5点物理伤害【暴击】；两次射击分别独立投掷敏捷骰判定暴击。",
   "behaviourId": "suppressing_volley",
@@ -276,7 +276,6 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
     { "kind": "Damage", "amount": { "source": "Flat", "add": 5 }, "element": "Physical", "target": "SingleEnemy" },
     { "kind": "Damage", "amount": { "source": "Flat", "add": 5 }, "element": "Physical", "target": "SingleEnemy" }
   ],
-  "weaponBaseDamage": 7, "twoHanded": true,
   "unmapped": { "ranged": true, "hits": 2 },
   "art": "cards/suppressing_volley"
 }
@@ -289,9 +288,9 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 | `category` | `CardCategory`，默认 `Class` | **类别**：这张牌从哪来（§7.1）。和 `play` 是两个互不相干的维度 |
 | `play` | `CardPlay`，**必填** | **打法**：什么时候打、打出后去哪。只有 `Skill` / `Timing` / `Continuous` 三种。唯一能省的是升变牌（`role: Transform`），它不按打法结算；其余的牌漏写就报错——默认成 `Skill` 会让一张写着「受击时打出」的牌在响应窗口被拒收 |
 | `role` | `CardRole`，默认 `Normal` | 打法之外的**标记**：`Transform`（升变牌）/ `Form`（形态牌）。不是第四、第五种打法——形态牌仍然有自己的 `play`。`EnemyIntent` 不能手写，敌人意图只能定义在 `enemies/*.json` 里 |
-| `formId` | 字符串 | 形态牌属于哪一组形态。`role: Form` 必填，其余的牌写了报错。构筑校验据此确认没把别组的形态牌混进同一个形态卡组 |
+| `formDeck` | `{ card, count }` 数组 | **升变牌自带的形态卡组**（§3.1），合计 10 张，玩家不挑。`role: Transform` 必填，其余的牌写了报错。记在升变牌上而不是卡组文件里：这是内容定义，不是构筑选择；而且同一张形态牌可以同时出现在多张升变牌的形态卡组中 |
 | `hero` | 布尔，默认 false | 英雄技能牌（职业 10 级精通所得，§3.3）。这是**标记**不是类别也不是打法：它属于职业牌，可以是任意打法 |
-| `classId` | 字符串 | 职业名，如「浪客」 |
+| `classId` | 字符串 | 职业名，如「浪客」。**职业牌（含升变牌、形态牌）必填，其余类别写了报错**——§7.1：每张职业牌只归属 1 个职业，武器 / 防具 / 秘宝牌不带职业。「写的是不是持有者学过的职业」加载器查不了，归 `DeckValidator`（测试 T-3） |
 | `colors` | `AttributeColor[]`，最多 2 项 | 超过 2 项报错；空数组 = 无色（不投暴击骰） |
 | `ap` / `mp` / `charge` | 整数，默认 0 | `charge` 是卡面**硬费用**（「消耗 X 个充能」里的 X），不够就打不出 |
 | `chargeOptions` | 整数数组，默认空 | 玩家可以**额外选择**消耗几个充能（见下） |
@@ -377,8 +376,8 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 
 ```json
 {
-  "id": "weiting", "name": "维汀", "subtitle": "混沌法师 · 造物使",
-  "classes": [{ "classId": "混沌法师", "level": 4 }, { "classId": "造物使", "level": 1 }],
+  "id": "weiting", "name": "维汀", "subtitle": "熵术士 · 造物使",
+  "classes": [{ "classId": "熵术士", "level": 4 }, { "classId": "造物使", "level": 1 }],
   "dice": { "Might": "D8", "Insight": "D10", "Dexterity": "D8", "Willpower": "D8" },
   "hpBonus": -10, "mpBonus": 5, "startingRow": "Front", "chargeCapacity": 2,
   "weaponCardId": "weakness_analysis", "armorCardId": "arcane_barrier", "deckId": "weiting_starter",
@@ -462,13 +461,17 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 ```json
 {
   "id": "miku_starter", "name": "米阔阔 · 起始构筑", "characterId": "miku",
-  "main": [{ "card": "ambush_opening", "count": 2 }],
-  "formDecks": [{ "transformCard": "phantom_nightwalk", "cards": [{ "card": "shadow_dash_assault", "count": 3 }] }]
+  "main": [{ "card": "ambush_opening", "count": 2 }]
 }
 ```
 
 `id` 必填；`count` 默认 1、最小 1；`card` 缺失的条目被丢弃。卡 id 不存在要到 `ContentDatabase.BuildDeck` 展开时才报错。
 加载时**不做构筑校验**；校验由 `DeckValidator` 另行调用（测试 T-3）。
+
+**卡组文件里没有形态卡组**（§3.1）：编入哪张升变牌，`BuildDeck` 就按那张牌的 `formDeck` 自动展开它那 10 张。
+玩家唯一能动形态卡组的地方是用**主动型英雄技能牌**替换其中 1 张；内容包里还没有英雄技能牌，
+所以这条替换记录（形如 `"heroSwaps": [{ "transform": "…", "replace": "…", "with": "…" }]`）**尚未实现**，
+格式先占住位，等补上英雄技能牌再做。
 
 ### 4.8 枚举合法值
 

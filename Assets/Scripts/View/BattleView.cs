@@ -506,7 +506,7 @@ namespace TCGinFU.View
         private void FillCardZone(ZoneView zone, HashSet<int> live)
         {
             IReadOnlyList<CardInstance> cards = ResolveCards(zone.Layout);
-            zone.SetLabel($"{zone.Layout.displayName} ({cards.Count})");
+            zone.SetLabel($"{ResolveZoneTitle(zone.Layout)} ({cards.Count})");
 
             // 选充能目标期间整张手牌都不可拖：这一步是模态的，
             // 中途还能把别的牌打出去只会让人以为充能没生效
@@ -679,6 +679,18 @@ namespace TCGinFU.View
             return index < players.Count ? players[index] : null;
         }
 
+        /// <summary>
+        /// 区域标题。卡组区是主卡组与升变卡组共用的一块地，标题必须跟着当下装的那摞走——
+        /// 否则升变期间玩家看到的是「卡组 (5)」，会以为自己 30 张的主卡组被抽剩 5 张了。
+        /// </summary>
+        private string ResolveZoneTitle(ZoneLayout zoneLayout)
+        {
+            if (zoneLayout.source != ZoneSource.卡组) return zoneLayout.displayName;
+
+            PlayerCharacter player = ResolvePlayer(zoneLayout.playerIndex);
+            return player != null && player.Transform.Active ? "升变卡组" : zoneLayout.displayName;
+        }
+
         private IReadOnlyList<CardInstance> ResolveCards(ZoneLayout zoneLayout)
         {
             PlayerCharacter player = ResolvePlayer(zoneLayout.playerIndex);
@@ -688,14 +700,18 @@ namespace TCGinFU.View
             return zoneLayout.source switch
             {
                 ZoneSource.手牌 => zones.Hand.ToList(),
-                ZoneSource.卡组 => zones.Deck.ToList(),
-                ZoneSource.弃牌堆 => zones.Discard.ToList(),
+                // 卡组区是两摞牌共用的一块地：升变期间摆的是升变卡组，平时是主卡组。
+                // 想把两摞分开摆，就在布局里另加一块 ZoneSource.升变卡组 的区域
+                ZoneSource.卡组 => (player.Transform.Active ? zones.FormDeck : zones.Deck).ToList(),
+                ZoneSource.升变卡组 => zones.FormDeck.ToList(),
+                // 弃牌堆一块显示两摞：主卡组的弃牌 + 升变卡组的弃牌（形态牌在上）
+                ZoneSource.弃牌堆 => zones.AllDiscards.ToList(),
                 ZoneSource.充能区 => zones.Charges.Tokens.Select(t => t.Card).ToList(),
                 ZoneSource.持续区 => zones.Continuous != null
                     ? new List<CardInstance> { zones.Continuous }
                     : (IReadOnlyList<CardInstance>)System.Array.Empty<CardInstance>(),
                 ZoneSource.形态卡组 => zones.FormDecks.Values.SelectMany(p => p).ToList(),
-                ZoneSource.已完成升变区 => zones.CompletedTransform.ToList(),
+                ZoneSource.除外区 => zones.Exile.ToList(),
                 _ => System.Array.Empty<CardInstance>(),
             };
         }

@@ -75,11 +75,11 @@ namespace TCGinFU.Core.Tests
             string id = "form_strike",
             int bonus = 4,
             CardPlay play = CardPlay.Skill,
-            string formId = "test_form")
+            string classId = "浪客")
             => new(id, id, CardCategory.Class, play)
             {
                 Role = CardRole.Form,
-                FormId = formId,
+                ClassId = classId,
                 ApCost = 1,
                 Colors = new[] { AttributeColor.Might },
                 Effects = new[] { EffectData.Damage(ValueExpr.FormAttack(bonus)) },
@@ -111,6 +111,16 @@ namespace TCGinFU.Core.Tests
                 ApCost = 3,
                 Colors = new[] { AttributeColor.Dexterity },
                 Effects = new[] { EffectData.Damage(ValueExpr.FormAttack(0)) },
+            };
+
+        /// <summary>卡面写「消耗」的一次性牌：打出结算完进除外区，不进弃牌堆（§4.1）。</summary>
+        public static CardDefinition OneShotCard(string id = "one_shot", int damage = 5)
+            => new(id, id, CardCategory.Weapon, CardPlay.Skill)
+            {
+                ExileOnResolve = true,
+                ApCost = 1,
+                Colors = new[] { AttributeColor.Might },
+                Effects = new[] { EffectData.Damage(ValueExpr.Flat(damage)) },
             };
 
         public static CardDefinition FillerCard(string id)

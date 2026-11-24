@@ -81,15 +81,31 @@ namespace TCGinFU.Tests
         }
 
         [Test]
-        public void 形态牌必须声明属于哪一组形态()
+        public void 升变牌必须自带形态卡组()
         {
             LoadReport missing = LoadCards(
-                "{ \"id\": \"x\", \"role\": \"Form\", \"play\": \"Timing\" }");
-            Assert.That(missing.ToString(), Does.Contain("缺少 formId"));
+                "{ \"id\": \"x\", \"role\": \"Transform\", \"classId\": \"浪客\" }");
+            Assert.That(missing.ToString(), Does.Contain("缺少 formDeck"));
 
             LoadReport stray = LoadCards(
-                "{ \"id\": \"y\", \"play\": \"Skill\", \"formId\": \"phantom\" }");
-            Assert.That(stray.ToString(), Does.Contain("只有 role 为 Form"));
+                "{ \"id\": \"y\", \"play\": \"Skill\", \"classId\": \"浪客\","
+                + " \"formDeck\": [{ \"card\": \"z\", \"count\": 10 }] }");
+            Assert.That(stray.ToString(), Does.Contain("只有 role 为 Transform"));
+        }
+
+        /// <summary>
+        /// §7.1：每张职业牌只归属 1 个职业；武器 / 防具 / 秘宝牌不带职业。
+        /// 两头都要拦——早期迁移把攻防牌硬塞给角色主职业，就是从这个口子漏进来的。
+        /// </summary>
+        [Test]
+        public void 职业牌必须带职业而其他类别不许带()
+        {
+            LoadReport missing = LoadCards("{ \"id\": \"x\", \"category\": \"Class\", \"play\": \"Skill\" }");
+            Assert.That(missing.ToString(), Does.Contain("职业牌必须写 classId"));
+
+            LoadReport stray = LoadCards(
+                "{ \"id\": \"y\", \"category\": \"Weapon\", \"play\": \"Skill\", \"classId\": \"浪客\" }");
+            Assert.That(stray.ToString(), Does.Contain("不带职业"));
         }
 
         [Test]
@@ -108,7 +124,7 @@ namespace TCGinFU.Tests
             var db = new ContentDatabase();
             LoadReport report = LoadCards(
                 "{ \"id\": \"smoke\", \"category\": \"Class\", \"role\": \"Form\","
-                + " \"play\": \"Timing\", \"formId\": \"phantom\" }",
+                + " \"play\": \"Timing\", \"classId\": \"浪客\" }",
                 db);
 
             Assert.That(report.IsValid, Is.True, report.ToString());
@@ -116,30 +132,53 @@ namespace TCGinFU.Tests
             CardDefinition card = db.Card("smoke");
             Assert.That(card.Role, Is.EqualTo(CardRole.Form));
             Assert.That(card.Play, Is.EqualTo(CardPlay.Timing));
-            Assert.That(card.FormId, Is.EqualTo("phantom"));
+            Assert.That(card.ClassId, Is.EqualTo("浪客"));
+        }
+
+        /// <summary>
+        /// §3.1：「这张升变牌配哪 10 张」是内容定义，记在升变牌上，不在玩家卡组文件里。
+        /// 这样同一张形态牌可以同时属于多张升变牌——`formId` 那种一对一的记法做不到。
+        /// </summary>
+        [Test]
+        public void 升变牌的形态卡组读得进来()
+        {
+            var db = new ContentDatabase();
+            LoadReport report = LoadCards(
+                "{ \"id\": \"phantom_nightwalk\", \"category\": \"Class\", \"role\": \"Transform\","
+                + " \"classId\": \"浪客\", \"formDeck\": ["
+                + "{ \"card\": \"night_eviscerate\", \"count\": 3 },"
+                + "{ \"card\": \"smoke_decoy\", \"count\": 7 }] }",
+                db);
+
+            Assert.That(report.IsValid, Is.True, report.ToString());
+
+            IReadOnlyList<FormDeckEntry> formDeck = db.Card("phantom_nightwalk").FormDeck;
+            Assert.That(formDeck.Sum(e => e.Count), Is.EqualTo(DeckList.FormDeckSize));
+            Assert.That(formDeck[0].CardId, Is.EqualTo("night_eviscerate"));
+            Assert.That(formDeck[0].Count, Is.EqualTo(3));
         }
 
         // ──────────────────────── 构筑校验 ────────────────────────
 
         [Test]
-        public void 形态组混进别组的形态牌会被挡下()
+        public void 形态组混进别职业的形态牌会被挡下()
         {
             DeckList deck = DeckWithFormCards(
                 Enumerable.Range(0, DeckList.FormDeckSize)
-                    .Select(i => TestFactory.FormStrike($"form{i}", formId: i == 0 ? "hawkeye" : "phantom"))
+                    .Select(i => TestFactory.FormStrike($"form{i}", classId: i == 0 ? "神射手" : "浪客"))
                     .ToList());
 
             DeckValidationResult result = DeckValidator.Validate(deck);
 
-            Assert.That(result.ToString(), Does.Contain("混了 2 个形态的牌"));
+            Assert.That(result.ToString(), Does.Contain("神射手的形态牌"));
         }
 
         [Test]
-        public void 同组形态牌照常通过校验()
+        public void 同职业形态牌照常通过校验()
         {
             DeckList deck = DeckWithFormCards(
                 Enumerable.Range(0, DeckList.FormDeckSize)
-                    .Select(i => TestFactory.FormStrike($"form{i}", formId: "phantom"))
+                    .Select(i => TestFactory.FormStrike($"form{i}", classId: "浪客"))
                     .ToList());
 
             Assert.That(DeckValidator.Validate(deck).ToString(), Does.Not.Contain("形态"));

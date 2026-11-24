@@ -36,10 +36,10 @@
     {
       "id": "weiting",
       "name": "维汀",
-      "subtitle": "混沌法师 · 造物使",
+      "subtitle": "熵术士 · 造物使",
       "classes": [
         {
-          "classId": "混沌法师",
+          "classId": "熵术士",
           "level": 4
         },
         {

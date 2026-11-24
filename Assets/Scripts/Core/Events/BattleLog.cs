@@ -38,6 +38,9 @@ namespace TCGinFU.Core
                 BattleEventType.ChargePlaced => $"  {Name(e.ActorId)} 贴 1 个充能到 {Name(e.TargetId)}",
                 BattleEventType.ChargeEvicted => $"    {Name(e.TargetId)} 充能区溢出，退还给 {Name(e.ActorId)}",
                 BattleEventType.ChargeSpent => $"  {Name(e.ActorId)} 消耗 1 个充能（{e.Text}）",
+                BattleEventType.ChargeRetained =>
+                    $"  {Name(e.ActorId)} 消耗 1 个充能（{e.Text}），但该充能留在充能区、未进弃牌堆",
+                BattleEventType.ChargeDevoured => $"  {Name(e.ActorId)} 被吞噬 1 个充能",
                 BattleEventType.ContinuousReplaced => $"    持续牌被顶替，旧牌进弃牌堆",
                 BattleEventType.RowChanged => $"  {Name(e.ActorId)} 走位 {e.Text}",
                 BattleEventType.Covered => $"    {Name(e.ActorId)} 援护 {Name(e.TargetId)}",

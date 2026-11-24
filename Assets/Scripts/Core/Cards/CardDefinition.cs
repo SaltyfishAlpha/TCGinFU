@@ -36,16 +36,34 @@ namespace TCGinFU.Core
         public CardRole Role { get; init; } = CardRole.Normal;
 
         /// <summary>
+        /// 一次性牌：卡面写着「消耗」或「使用后置入除外区」。打出结算完进除外区，不进弃牌堆，
+        /// 也就不会被洗回主卡组（§4.1）。
+        ///
+        /// <para>这是**声明式字段**不是脚本钩子：对绝大多数卡，「打出后去哪」是无条件的静态归宿，
+        /// 引擎读一个 bool 就够了，而且构筑校验与卡面 UI 也能读到它。
+        /// 等真出现「有条件地除外」或「跨回合置入」的卡，要加的是一个 Lua 可调的除外原语，
+        /// 而不是让每张卡自己判断归宿。</para>
+        ///
+        /// <para>升变牌与形态牌**不靠这个字段**：它们整套在弹出升变时离场（§6.2 ⑤），
+        /// 时机与「打出即除外」不同。</para>
+        /// </summary>
+        public bool ExileOnResolve { get; init; }
+
+        /// <summary>
         /// 英雄技能牌（职业 10 级精通所得，§3.3）。
         /// <para>这是**标记**不是类别也不是打法：英雄技能牌属于职业牌，可以是任意打法。</para>
         /// </summary>
         public bool IsHeroSkill { get; init; }
 
         /// <summary>
-        /// 形态牌所属的形态卡组标识（<see cref="Role"/> 为 <see cref="CardRole.Form"/> 时有值）。
-        /// 同一组形态牌共用一个值，构筑校验据此确认没把别组的形态牌混进来。
+        /// 升变牌自带的形态卡组（<see cref="Role"/> 为 <see cref="CardRole.Transform"/> 时有值）。
+        /// 合计 <see cref="DeckList.FormDeckSize"/> 张，玩家不挑（§3.1）。
+        ///
+        /// <para>为什么记在升变牌上而不是卡组文件里：「这张升变牌配哪 10 张」是**内容定义**，
+        /// 不是构筑选择。写在卡组文件里就得每个角色抄一份，而且一张形态牌只能归属一张升变牌；
+        /// 记在这里，同一张形态牌可以同时出现在多张升变牌的形态卡组中。</para>
         /// </summary>
-        public string FormId { get; init; }
+        public IReadOnlyList<FormDeckEntry> FormDeck { get; init; } = Array.Empty<FormDeckEntry>();
 
         /// <summary>卡牌颜色。单色 1 项，还原双属性检定的卡为 2 项（§2.2）。</summary>
         public IReadOnlyList<AttributeColor> Colors { get; init; } = Array.Empty<AttributeColor>();
@@ -164,5 +182,18 @@ namespace TCGinFU.Core
         public bool DealsDamage => Effects.Any(e => e.Kind == EffectKind.Damage);
 
         public override string ToString() => $"{Name}({Id})";
+    }
+
+    /// <summary>升变牌形态卡组里的一项：某张形态牌带几张。</summary>
+    public readonly struct FormDeckEntry
+    {
+        public FormDeckEntry(string cardId, int count)
+        {
+            CardId = cardId;
+            Count = count;
+        }
+
+        public string CardId { get; }
+        public int Count { get; }
     }
 }

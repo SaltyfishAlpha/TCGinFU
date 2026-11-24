@@ -6,7 +6,7 @@
       "owner": "weiting",
       "category": "Class",
       "role": "Transform",
-      "classId": "混沌法师",
+      "classId": "熵术士",
       "colors": [
         "Insight",
         "Willpower"
@@ -18,6 +18,24 @@
       "rulesText": "前置条件：本局累计触发2次「灵智回流」效果，或累计回复过15 MP。第3轮前抽到时，可0 AP展示此牌并洗回主卡组，抽1张牌并对自己造成1点刺痛伤害（可直接触发在场的「灵智回流」）。第3轮开始时若条件满足，可从主卡组直接跳出发动升变，持续2轮。升变期间你的所有骰子投掷结果+2；每当你回复HP或MP时，对生命值最低的敌人自动造成3点暗属性穿透伤害。",
       "behaviourId": "cosmic_collapse",
       "effects": [],
+      "formDeck": [
+        {
+          "card": "event_horizon_singularity",
+          "count": 3
+        },
+        {
+          "card": "grand_chaos_roulette",
+          "count": 3
+        },
+        {
+          "card": "soul_devouring_feast",
+          "count": 2
+        },
+        {
+          "card": "time_paradox",
+          "count": 2
+        }
+      ],
       "unmapped": {
         "ranged": false
       },
@@ -40,6 +58,24 @@
       "rulesText": "轮始阶段若全队充能区合计有至少3个充能指示物且此牌在手牌中，可在第1或第2轮提前发动；否则在第3轮起可从主卡组自动跳出发动，持续2轮。升变期间你每轮可执行2次免费的「贴充能」动作；且全队角色每当消耗充能指示物时，投掷1颗任意骰子，若点数为偶数，则该充能指示物不进入弃牌堆，继续留在充能区中。",
       "behaviourId": "truth_alchemy_matrix",
       "effects": [],
+      "formDeck": [
+        {
+          "card": "elemental_proliferation_bomb",
+          "count": 3
+        },
+        {
+          "card": "philosophers_stone_release",
+          "count": 3
+        },
+        {
+          "card": "aether_reassembly_crucible",
+          "count": 2
+        },
+        {
+          "card": "alchemical_protection_field",
+          "count": 2
+        }
+      ],
       "unmapped": {
         "ranged": false
       },
@@ -51,7 +87,7 @@
       "owner": "weiting",
       "category": "Class",
       "play": "Continuous",
-      "classId": "混沌法师",
+      "classId": "熵术士",
       "colors": [
         "Insight",
         "Willpower"
@@ -74,7 +110,7 @@
       "owner": "weiting",
       "category": "Class",
       "play": "Skill",
-      "classId": "混沌法师",
+      "classId": "熵术士",
       "colors": [
         "Willpower"
       ],
@@ -96,7 +132,7 @@
       "owner": "weiting",
       "category": "Class",
       "play": "Skill",
-      "classId": "混沌法师",
+      "classId": "熵术士",
       "colors": [
         "Insight"
       ],
@@ -116,9 +152,9 @@
       "id": "lucky_reversal",
       "name": "幸运改命",
       "owner": "weiting",
-      "category": "Armor",
+      "category": "Class",
       "play": "Timing",
-      "classId": "混沌法师",
+      "classId": "熵术士",
       "colors": [
         "Insight"
       ],
@@ -129,8 +165,6 @@
       "rulesText": "在你或任意队友投掷骰子后立即打出。将其中1颗骰子的结果直接改为7；若另一颗双色骰原本就是7，则直接达成双骰同面，触发×2【超暴击】。",
       "behaviourId": "lucky_reversal",
       "effects": [],
-      "armorBaseShield": 7,
-      "shieldKind": "Physical",
       "unmapped": {
         "ranged": false,
         "can_target_self": true
@@ -143,7 +177,7 @@
       "owner": "weiting",
       "category": "Class",
       "play": "Skill",
-      "classId": "混沌法师",
+      "classId": "熵术士",
       "colors": [
         "Insight",
         "Willpower"
@@ -172,7 +206,7 @@
       "owner": "weiting",
       "category": "Class",
       "play": "Skill",
-      "classId": "混沌法师",
+      "classId": "熵术士",
       "colors": [
         "Insight",
         "Willpower"
@@ -205,7 +239,7 @@
       "owner": "weiting",
       "category": "Class",
       "play": "Skill",
-      "classId": "混沌法师",
+      "classId": "熵术士",
       "colors": [
         "Insight",
         "Willpower"
@@ -238,7 +272,7 @@
       "owner": "weiting",
       "category": "Class",
       "play": "Skill",
-      "classId": "混沌法师",
+      "classId": "造物使",
       "colors": [
         "Insight"
       ],
@@ -264,9 +298,9 @@
       "id": "emergency_catalyst",
       "name": "应急催化剂",
       "owner": "weiting",
-      "category": "Armor",
+      "category": "Class",
       "play": "Timing",
-      "classId": "混沌法师",
+      "classId": "造物使",
       "colors": [
         "Insight"
       ],
@@ -277,8 +311,6 @@
       "rulesText": "在任意队友行动时或敌人阶段打出。将你手牌中的1张牌直接贴入该队友的充能区（不占用每轮1次的贴充能限额），并令该队友获得4点全能护盾，或使其本轮下一次暴击掷骰结果+1。",
       "behaviourId": "emergency_catalyst",
       "effects": [],
-      "armorBaseShield": 7,
-      "shieldKind": "Physical",
       "unmapped": {
         "ranged": false
       },
@@ -291,7 +323,6 @@
       "owner": "weiting",
       "category": "Weapon",
       "play": "Skill",
-      "classId": "混沌法师",
       "colors": [
         "Insight"
       ],
@@ -326,7 +357,6 @@
       "owner": "weiting",
       "category": "Weapon",
       "play": "Skill",
-      "classId": "混沌法师",
       "colors": [
         "Insight"
       ],
@@ -361,7 +391,6 @@
       "owner": "weiting",
       "category": "Armor",
       "play": "Skill",
-      "classId": "混沌法师",
       "colors": [],
       "ap": 1,
       "mp": 0,
@@ -393,7 +422,6 @@
       "owner": "weiting",
       "category": "Armor",
       "play": "Timing",
-      "classId": "混沌法师",
       "colors": [],
       "ap": 0,
       "mp": 0,
@@ -416,7 +444,6 @@
       "owner": "weiting",
       "category": "Treasure",
       "play": "Skill",
-      "classId": "混沌法师",
       "colors": [
         "Willpower"
       ],
@@ -439,7 +466,6 @@
       "owner": "weiting",
       "category": "Treasure",
       "play": "Skill",
-      "classId": "混沌法师",
       "colors": [
         "Insight",
         "Willpower"

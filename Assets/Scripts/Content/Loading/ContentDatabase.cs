@@ -222,17 +222,24 @@ namespace TCGinFU.Content.Loading
                 for (int i = 0; i < count; i++) deck.MainDeck.Add(def);
             }
 
-            foreach (FormDeckContent form in content.FormDecks)
+            // 形态卡组不写在卡组文件里，而是跟着升变牌走（§3.1）：
+            // 编入哪张升变牌，就自动带上它自带的那 10 张
+            foreach (CardDefinition transform in deck.TransformCards.Distinct())
             {
                 var cards = new List<CardDefinition>();
-                foreach ((string cardId, int count) in form.Cards)
+                foreach (FormDeckEntry entry in transform.FormDeck)
                 {
-                    CardDefinition def = Card(cardId);
-                    if (def == null) { report?.Errors.Add($"卡组 {deckId}：找不到形态牌 {cardId}"); continue; }
-                    for (int i = 0; i < count; i++) cards.Add(def);
+                    CardDefinition def = Card(entry.CardId);
+                    if (def == null)
+                    {
+                        report?.Errors.Add($"升变牌 {transform.Id} 的形态卡组：找不到形态牌 {entry.CardId}");
+                        continue;
+                    }
+
+                    for (int i = 0; i < entry.Count; i++) cards.Add(def);
                 }
 
-                deck.FormDecks[form.TransformCardId] = cards;
+                deck.FormDecks[transform.Id] = cards;
             }
 
             return deck;
@@ -245,15 +252,6 @@ namespace TCGinFU.Content.Loading
         public string DisplayName { get; init; }
         public string CharacterId { get; init; }
         public IReadOnlyList<(string CardId, int Count)> Main { get; init; }
-            = Array.Empty<(string, int)>();
-        public IReadOnlyList<FormDeckContent> FormDecks { get; init; }
-            = Array.Empty<FormDeckContent>();
-    }
-
-    public sealed class FormDeckContent
-    {
-        public string TransformCardId { get; init; }
-        public IReadOnlyList<(string CardId, int Count)> Cards { get; init; }
             = Array.Empty<(string, int)>();
     }
 }

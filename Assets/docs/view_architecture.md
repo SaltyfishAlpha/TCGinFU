@@ -131,7 +131,7 @@ BattleLayoutAsset (ScriptableObject)
 | 字段组 | 内容 |
 | ----- | ----- |
 | 标识 | `key`、`displayName`、`visible` |
-| 内容 | `source`（手牌 / 卡组 / 弃牌堆 / 充能区 / 持续区 / 形态卡组 / 已完成升变区 / 我方前排 / 我方后排 / 敌方前排 / 敌方后排 / 空）、`playerIndex` |
+| 内容 | `source`（手牌 / 卡组 / 弃牌堆 / 充能区 / 持续区 / 形态卡组 / 除外区 / 我方前排 / 我方后排 / 敌方前排 / 敌方后排 / 空 / 升变卡组）、`playerIndex` |
 | 位置 | `anchorMin/Max` + `offsetMin/Max`——锚点是 0–1 相对坐标，分辨率自适应 |
 | 排布 | `arrange`（横排 / 扇形 / 堆叠 / 网格 / 横置）、`cardScale`、`stackStep`、`spacing`、`fanAngle`、`fanArc`、`gridColumns`、`reservedSlots` |
 | 交互 | `draggable`、`acceptsDrop`、`faceDown`、`peekable` |
@@ -148,6 +148,7 @@ BattleLayoutAsset (ScriptableObject)
 
 **真要加一种全新的内容来源**（比如「秘宝展示区」），才需要动两处代码：
 `ZoneSource` 加一个枚举值，`BattleView.ResolveCards` / `ResolveCombatants` 加一个分支。
+枚举值**只能往末尾加**——布局资产里存的是整数下标，往中间插会把已有区域的来源整体串位。
 
 ### 默认布局（`BattleLayoutAsset.CreateDefault()`）
 
@@ -156,17 +157,20 @@ BattleLayoutAsset (ScriptableObject)
 | `enemy_back` / `enemy_front` | 敌方后排 / 前排 | 横排 | |
 | `party_front` / `party_back` | 我方前排 / 后排 | 横排 | 走位拖拽的落点 |
 | `hand` | 手牌 | 扇形 | `draggable` |
-| `deck` | 卡组 | 堆叠 | `faceDown`，不可查看 |
-| `discard` | 弃牌堆 | 堆叠 | 可查看 |
+| `deck` | 卡组 | 堆叠 | `faceDown`，不可查看。**主卡组与升变卡组共用这一块**：升变期间摆的是 `FormDeck`，标题自动换成「升变卡组」（`ResolveZoneTitle`） |
+| `discard` | 弃牌堆 | 堆叠 | 可查看。显示 `AllDiscards` = 形态弃牌 + 主弃牌，**两边的弃牌都在这一块里** |
 | `continuous` | 持续区 | 堆叠 | 可查看 |
-| `completed` | 已完成升变区 | 堆叠 | **`visible = false`**：升变期间升变牌已经盖在角色卡上，这块平时是空的 |
+| `exile` | 除外区 | 堆叠 | 可查看。一次性牌（卡面「消耗」）打出后进这儿，升变结束的整套升变牌与形态牌也进这儿 |
+
+默认布局**也没有独立的升变卡组区**：它和主卡组轮流用 `deck` 那一块。真想把两摞同时摆出来，
+在布局里另加一条 `source = ZoneSource.升变卡组` 的区域即可，引擎侧 `Deck` 与 `FormDeck` 本来就是并存的两摞。
 
 默认布局**没有独立充能区**：充能显示在角色卡背后（见下），`ZoneSource.充能区` 枚举仍保留，想要可以自己加。
 默认布局里也没有任何非角色区域开 `acceptsDrop`，所以拖拽的放置目标实际只有角色卡（和走位时的我方排位区）。
 
 > **注意布局资产的现状。** `ClockworkCollapse.unity` 里 `BattleView.layout` 目前是空的，
 > 运行时走 `CreateDefault()`，也就是上表。仓库里的 `Assets/Settings/BattleLayout.asset` 是旧版字段生成的
-> （有独立的「充能区」且 `acceptsDrop = 1`、没有「已完成升变」区、没有 3D 参数和 `cardScale` 等字段），
+> （有独立的「充能区」且 `acceptsDrop = 1`、没有除外区、没有 3D 参数和 `cardScale` 等字段），
 > 但**重新执行生成场景菜单会把这份旧资产绑进场景**（`BattleSceneBuilder.LoadOrCreateLayout`）。
 > 想用新默认值，先跑菜单 `TCGinFU → 重建默认布局资产`。
 

@@ -106,7 +106,7 @@ namespace TCGinFU.View
     }
 
     /// <summary>
-    /// 牌堆查看面板：点弃牌堆 / 持续区 / 已完成升变区这类叠放区域时弹出，
+    /// 牌堆查看面板：点弃牌堆 / 持续区 / 除外区这类叠放区域时弹出，
     /// 把里面的牌全部摊开。实体打牌时这些都是可以随时翻看的公开信息。
     /// </summary>
     public sealed class ZonePeekPanel : MonoBehaviour, IPointerClickHandler

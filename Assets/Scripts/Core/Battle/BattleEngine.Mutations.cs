@@ -147,19 +147,19 @@ namespace TCGinFU.Core
         }
 
         /// <summary>
-        /// 从卡组顶抽 1 张。牌堆空时：未升变则把弃牌堆洗回去再抽；
-        /// 升变期间形态卡组是有限的 10 张，抽空就是抽空，不续牌。
+        /// 从当前该抽的那摞牌顶抽 1 张。升变期间抽的是升变卡组——它只有有限的 10 张，
+        /// 抽空就是抽空，不续牌，这期间主卡组碰都不碰。
+        /// 未升变时主卡组抽空，把弃牌堆洗回去再抽。
         /// </summary>
         public CardInstance DrawFromDeck(PlayerCharacter player)
         {
             PlayerZones zones = player.Zones;
 
-            if (zones.Deck.IsEmpty && !player.Transform.Active)
+            if (player.Transform.Active) return zones.FormDeck.DrawTop();
+
+            if (zones.Deck.IsEmpty && zones.ReshuffleDiscardIntoDeck(State.Rng))
             {
-                if (zones.ReshuffleDiscardIntoDeck(State.Rng))
-                {
-                    Emit(new BattleEvent(BattleEventType.DeckReshuffled, player.Id) { Round = State.Round });
-                }
+                Emit(new BattleEvent(BattleEventType.DeckReshuffled, player.Id) { Round = State.Round });
             }
 
             return zones.Deck.DrawTop();
@@ -229,6 +229,16 @@ namespace TCGinFU.Core
                 Round = State.Round,
             });
 
+            ReturnEvictedCharge(zoneOwner, evicted);
+        }
+
+        /// <summary>
+        /// 被溢出顶替的充能回到**它自己原持有者**的弃牌堆（§4.1）。
+        /// 每个写充能区的地方都得走这里——漏一处那张牌就既不在充能区也不在弃牌堆，
+        /// 从本局凭空消失。
+        /// </summary>
+        private void ReturnEvictedCharge(PlayerCharacter zoneOwner, ChargeToken evicted)
+        {
             if (evicted == null) return;
 
             ReturnToOwnerDiscard(evicted.Card);
@@ -328,11 +338,15 @@ namespace TCGinFU.Core
 
             if (spend.Retained)
             {
-                player.Zones.Charges.Push(token, out ChargeToken _);
+                // 放回原位而不是当新贴的追加——它从没离开过充能区
+                player.Zones.Charges.Restore(token, out ChargeToken evicted);
+                ReturnEvictedCharge(player, evicted);
+
                 State.Stats.Add(BattleStatKeys.ChargesSpent, player.Id);
                 Emit(new BattleEvent(BattleEventType.ChargeRetained, player.Id, token.OwnerId)
                 {
                     CardId = token.Card.Definition.Id,
+                    Text = ChargeUseText(use),
                     Round = State.Round,
                 });
 

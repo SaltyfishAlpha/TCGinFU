@@ -142,15 +142,18 @@ namespace TCGinFU.Content.Loading
             chargeOptions.Sort();
 
             CardRole role = ReadRole(node, where, errors);
+            CardCategory category = node["category"].AsEnum(CardCategory.Class, $"{where} 的 category", errors);
 
             return new CardDefinition(
                 id,
                 node["name"].AsString(id),
-                node["category"].AsEnum(CardCategory.Class, $"{where} 的 category", errors),
+                category,
                 ReadPlay(node, role, where, errors))
             {
                 Role = role,
-                FormId = ReadFormId(node, role, where, errors),
+                FormDeck = ReadFormDeck(node, role, where, errors),
+                // 卡面写「消耗」/「使用后置入除外区」的一次性牌
+                ExileOnResolve = node["exile"].AsBool(),
                 IsHeroSkill = node["hero"].AsBool(),
                 Colors = colors,
                 ApCost = node["ap"].AsInt(),
@@ -164,7 +167,7 @@ namespace TCGinFU.Content.Loading
                     ? node["requiresBackRow"].AsBool()
                     : node["unmapped"]["requires_back_row"].AsBool(),
                 Targeting = node["targeting"].AsEnum(CardTargeting.Auto, $"{where} 的 targeting", errors),
-                ClassId = Blank(node["classId"].AsString()),
+                ClassId = ReadClassId(node, category, where, errors),
                 RulesText = node["rulesText"].AsString(),
                 ArtId = Blank(node["art"].AsString()),
                 BackArtId = Blank(node["backArt"].AsString()),
@@ -227,21 +230,62 @@ namespace TCGinFU.Content.Loading
             return node["play"].AsEnum(CardPlay.Skill, $"{where} 的 play", errors);
         }
 
-        /// <summary>读 <c>formId</c>：形态牌所属的形态卡组。两个方向都要对得上。</summary>
-        private static string ReadFormId(JsonValue node, CardRole role, string where, List<string> errors)
+        /// <summary>
+        /// 读 <c>formDeck</c>：升变牌自带的形态卡组（§3.1）。两个方向都要对得上。
+        /// <para>这里只管「有没有、格式对不对」；「列的是不是形态牌、合计是不是 10 张」
+        /// 要先把卡 Id 解析成卡才问得出来，归 <see cref="DeckValidator"/> 管。</para>
+        /// </summary>
+        private static IReadOnlyList<FormDeckEntry> ReadFormDeck(
+            JsonValue node, CardRole role, string where, List<string> errors)
         {
-            string formId = Blank(node["formId"].AsString());
-
-            if (role == CardRole.Form && formId == null)
+            if (!node["formDeck"].Exists)
             {
-                errors.Add($"{where}：形态牌缺少 formId，无法确认它属于哪一组形态");
-            }
-            else if (role != CardRole.Form && formId != null)
-            {
-                errors.Add($"{where}：只有 role 为 Form 的牌才能写 formId");
+                if (role == CardRole.Transform)
+                {
+                    errors.Add($"{where}：升变牌缺少 formDeck，没有形态卡组就升不了变");
+                }
+
+                return Array.Empty<FormDeckEntry>();
             }
 
-            return formId;
+            if (role != CardRole.Transform)
+            {
+                errors.Add($"{where}：只有 role 为 Transform 的牌才能写 formDeck");
+                return Array.Empty<FormDeckEntry>();
+            }
+
+            var entries = new List<FormDeckEntry>();
+            foreach (JsonValue entry in node["formDeck"].Items)
+            {
+                string cardId = Blank(entry["card"].AsString());
+                if (cardId == null) { errors.Add($"{where} 的 formDeck：有一项缺少 card"); continue; }
+
+                entries.Add(new FormDeckEntry(cardId, Math.Max(1, entry["count"].AsInt(1))));
+            }
+
+            return entries;
+        }
+
+        /// <summary>
+        /// 读 <c>classId</c>：§7.1「每张职业牌只归属 1 个职业；武器、防具、秘宝不带职业」。
+        /// <para>两头都要拦：职业牌没职业，构筑校验就没法判断角色学没学过它；
+        /// 非职业牌带职业，则是早期迁移把攻防牌硬塞给主职业留下的痕迹。</para>
+        /// </summary>
+        private static string ReadClassId(
+            JsonValue node, CardCategory category, string where, List<string> errors)
+        {
+            string classId = Blank(node["classId"].AsString());
+
+            if (category == CardCategory.Class && classId == null)
+            {
+                errors.Add($"{where}：职业牌必须写 classId");
+            }
+            else if (category != CardCategory.Class && classId != null)
+            {
+                errors.Add($"{where}：{category} 牌不带职业，不要写 classId");
+            }
+
+            return classId;
         }
 
         /// <summary>
@@ -558,11 +602,6 @@ namespace TCGinFU.Content.Loading
                 DisplayName = root["name"].AsString(id),
                 CharacterId = root["characterId"].AsString(),
                 Main = ReadEntries(root["main"]),
-                FormDecks = root["formDecks"].Items.Select(f => new FormDeckContent
-                {
-                    TransformCardId = f["transformCard"].AsString(),
-                    Cards = ReadEntries(f["cards"]),
-                }).ToArray(),
             });
         }
 

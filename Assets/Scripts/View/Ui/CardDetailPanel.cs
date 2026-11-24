@@ -404,8 +404,9 @@ namespace TCGinFU.View
             builder.AppendLine("<b>区域</b>");
             builder.AppendLine(
                 $"· 手牌 {player.Zones.Hand.Count}　卡组 {player.Zones.Deck.Count}"
-                + $"　弃牌堆 {player.Zones.Discard.Count}"
-                + $"　已完成升变 {player.Zones.CompletedTransform.Count}");
+                + (player.Zones.FormDeck.Count > 0 ? $"　升变卡组 {player.Zones.FormDeck.Count}" : "")
+                + $"　弃牌堆 {player.Zones.Discard.Count + player.Zones.FormDiscard.Count}"
+                + $"　除外区 {player.Zones.Exile.Count}");
             builder.AppendLine(
                 $"· 充能 {player.Zones.Charges.Count} / {player.Zones.Charges.Capacity}"
                 + $"　持续区 {player.Zones.Continuous?.Name ?? "空"}");

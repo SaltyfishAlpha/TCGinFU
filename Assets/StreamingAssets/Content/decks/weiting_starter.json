@@ -71,49 +71,5 @@
       "card": "mana_overload_ritual",
       "count": 2
     }
-  ],
-  "formDecks": [
-    {
-      "transformCard": "cosmic_collapse",
-      "cards": [
-        {
-          "card": "event_horizon_singularity",
-          "count": 3
-        },
-        {
-          "card": "grand_chaos_roulette",
-          "count": 3
-        },
-        {
-          "card": "soul_devouring_feast",
-          "count": 2
-        },
-        {
-          "card": "time_paradox",
-          "count": 2
-        }
-      ]
-    },
-    {
-      "transformCard": "truth_alchemy_matrix",
-      "cards": [
-        {
-          "card": "elemental_proliferation_bomb",
-          "count": 3
-        },
-        {
-          "card": "philosophers_stone_release",
-          "count": 3
-        },
-        {
-          "card": "aether_reassembly_crucible",
-          "count": 2
-        },
-        {
-          "card": "alchemical_protection_field",
-          "count": 2
-        }
-      ]
-    }
   ]
 }

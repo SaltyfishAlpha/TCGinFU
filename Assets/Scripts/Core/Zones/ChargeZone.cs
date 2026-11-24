@@ -66,6 +66,24 @@ namespace TCGinFU.Core
             _tokens.Add(token);
         }
 
+        /// <summary>
+        /// 把一个刚 <see cref="Pop"/> 出去、但结算下来「不进弃牌堆」的充能放回**原位**
+        /// （最早置入端），而不是当成新贴的追加到末尾——它逻辑上从没离开过充能区，
+        /// 顺序一变，下次溢出顶替谁就跟着变了。
+        ///
+        /// <para>放回时可能已经满了：只会是 Pop 与放回之间有钩子又贴了充能。
+        /// 被顶出去的是**那次贴入**（末尾），不是这个从没离开过的。</para>
+        /// </summary>
+        public void Restore(ChargeToken token, out ChargeToken evicted)
+        {
+            evicted = null;
+            _tokens.Insert(0, token);
+            if (_tokens.Count <= Capacity) return;
+
+            evicted = _tokens[^1];
+            _tokens.RemoveAt(_tokens.Count - 1);
+        }
+
         /// <summary>消耗 1 个充能（取最早置入的）。没有可用充能返回 null。</summary>
         public ChargeToken Pop()
         {

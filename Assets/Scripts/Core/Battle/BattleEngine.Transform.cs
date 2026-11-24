@@ -117,8 +117,8 @@ namespace TCGinFU.Core
         }
 
         /// <summary>
-        /// 进入升变（§6.2 ①②）：原手牌与主卡组暂存到场外，形态组洗入卡组区。
-        /// **持续区与充能区的牌保留不变**——它们不进暂存。
+        /// 进入升变（§6.2 ①②）：原手牌暂存到场外，形态组洗进升变卡组区。
+        /// **主卡组、持续区与充能区的牌都留在原位**——只是这期间不从主卡组抽牌。
         /// </summary>
         private void EnterTransform(PlayerCharacter player, CardInstance transformCard, bool fromDeck)
         {
@@ -127,12 +127,11 @@ namespace TCGinFU.Core
             if (fromDeck) zones.Deck.Remove(transformCard);
             else zones.Hand.Remove(transformCard);
 
-            zones.Stash.Hand.AddRange(zones.Hand.TakeAll());
-            zones.Stash.Deck.AddRange(zones.Deck.TakeAll());
+            zones.StashedHand.AddRange(zones.Hand.TakeAll());
 
             CardPile formDeck = zones.GetFormDeck(transformCard.Definition.Id);
-            zones.Deck.AddRange(formDeck.TakeAll());
-            zones.Deck.Shuffle(State.Rng);
+            zones.FormDeck.AddRange(formDeck.TakeAll());
+            zones.FormDeck.Shuffle(State.Rng);
 
             player.Transform.Enter(transformCard, transformCard.Definition.ClassId);
 
@@ -145,34 +144,34 @@ namespace TCGinFU.Core
         }
 
         /// <summary>
-        /// 退出升变（§6.2 ⑤⑥）：升变牌与全部形态牌移出本局，取回暂存的原手牌与原主卡组。
-        /// 本轮随后按常规抽 3 张。
+        /// 退出升变（§6.2 ⑤⑥）：升变牌与全部形态牌整套进除外区，取回暂存的原手牌。
+        /// 主卡组全程没动过，不需要还原。本轮随后按常规抽 3 张。
         /// </summary>
         private void ExitTransform(PlayerCharacter player)
         {
             PlayerZones zones = player.Zones;
-            CardPile completed = zones.CompletedTransform;
+            CardPile exile = zones.Exile;
 
-            // 卡组区与手牌里剩下的形态牌移出本局；万一混进了非形态牌，退回暂存区一起还原
-            foreach (CardInstance card in zones.Deck.TakeAll())
+            // 升变卡组与手牌里剩下的形态牌移出本局；万一混进了非形态牌，还回它们原本该在的区域
+            foreach (CardInstance card in zones.FormDeck.TakeAll())
             {
-                if (card.IsFormCard) completed.AddBottom(card);
-                else zones.Stash.Deck.Add(card);
+                if (card.IsFormCard) exile.AddBottom(card);
+                else zones.Deck.AddBottom(card);
             }
 
+            var strays = new List<CardInstance>();
             foreach (CardInstance card in zones.Hand.TakeAll())
             {
-                if (card.IsFormCard) completed.AddBottom(card);
-                else zones.Stash.Hand.Add(card);
+                if (card.IsFormCard) exile.AddBottom(card);
+                else strays.Add(card);
             }
 
-            completed.AddRange(zones.FormDiscard.TakeAll());
+            exile.AddRange(zones.FormDiscard.TakeAll());
 
-            if (player.Transform.TransformCard != null) completed.AddBottom(player.Transform.TransformCard);
+            if (player.Transform.TransformCard != null) exile.AddBottom(player.Transform.TransformCard);
 
-            zones.Hand.AddRange(zones.Stash.Hand);
-            zones.Deck.AddRange(zones.Stash.Deck);
-            zones.Stash.Clear();
+            zones.Hand.AddRange(zones.StashedHand.TakeAll());
+            zones.Hand.AddRange(strays);
 
             Emit(new BattleEvent(BattleEventType.TransformExited, player.Id)
             {

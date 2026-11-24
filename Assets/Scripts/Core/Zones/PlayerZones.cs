@@ -1,28 +1,19 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace TCGinFU.Core
 {
-    /// <summary>升变期间暂存到场外的原手牌与原主卡组（§6.2 ①）。</summary>
-    public sealed class StashedDeck
-    {
-        public List<CardInstance> Hand { get; } = new();
-        public List<CardInstance> Deck { get; } = new();
-        public bool HasContent => Hand.Count > 0 || Deck.Count > 0;
-
-        public void Clear()
-        {
-            Hand.Clear();
-            Deck.Clear();
-        }
-    }
-
     /// <summary>
-    /// 角色个人面板的全部区域（§4.1）。注意本规则**不设消耗/除外区**，
-    /// 唯一会离场的是升变结束后的形态牌，它们进「已完成升变区」。
+    /// 角色个人面板的全部区域（§4.1）。离场的牌统一进<b>除外区</b>（<see cref="Exile"/>）：
+    /// 卡面写「消耗」的一次性牌打出后直接进，升变牌与它那套形态牌则在弹出升变时整套进。
     /// </summary>
     public sealed class PlayerZones
     {
-        /// <summary>每张升变牌对应一组 10 张形态额外卡组，按升变牌的定义 Id 索引（§3.1）。</summary>
+        /// <summary>
+        /// 每张升变牌对应一组 10 张形态额外卡组，按升变牌的定义 Id 索引（§3.1）。
+        /// 这是**备着的卡池**，跟场上那块 <see cref="FormDeck"/> 不是一回事：
+        /// 发动升变时从这里取出对应的一组，洗进 <see cref="FormDeck"/> 才算上场。
+        /// </summary>
         private readonly Dictionary<string, CardPile> _formDecks = new();
 
         public PlayerZones(int chargeCapacity)
@@ -30,8 +21,14 @@ namespace TCGinFU.Core
             Charges = new ChargeZone(chargeCapacity);
         }
 
-        /// <summary>主卡组区 / 临时形态卡组区（升变期间这里装的是形态牌）。</summary>
+        /// <summary>
+        /// 主卡组区。**升变期间它不再被形态牌顶替**——形态牌进 <see cref="FormDeck"/>，
+        /// 这摞原封不动地留着，只是这期间不从它这里抽牌。
+        /// </summary>
         public CardPile Deck { get; } = new("卡组");
+
+        /// <summary>升变卡组区：升变期间实际抽牌的那一摞形态牌。不在升变中时是空的。</summary>
+        public CardPile FormDeck { get; } = new("升变卡组");
 
         public CardPile Hand { get; } = new("手牌");
 
@@ -40,15 +37,27 @@ namespace TCGinFU.Core
         /// <summary>升变期间打出的形态牌堆在这里，退出升变时随形态牌一起移出本局（裁定 R-14）。</summary>
         public CardPile FormDiscard { get; } = new("形态弃牌堆");
 
-        /// <summary>已完成升变区：本局用完的升变牌与形态牌，移出本局。</summary>
-        public CardPile CompletedTransform { get; } = new("已完成升变区");
+        /// <summary>
+        /// 墓地的全貌：形态弃牌 + 主弃牌。两者在规则上是两摞（退出升变时形态牌要整体移出本局），
+        /// 但对外——界面展示、以及将来「从墓地回收」这类同时够得着两边的效果——算同一个墓地。
+        /// 形态牌排在前面：升变期间刚打出去的就是它们，叠放区域要露在最上面。
+        /// </summary>
+        public IEnumerable<CardInstance> AllDiscards => FormDiscard.Concat(Discard);
+
+        /// <summary>
+        /// 除外区：移出本局的牌，不会再以任何方式回到卡组、手牌或弃牌堆。
+        /// <para>两条来源：卡面写「消耗」的一次性牌（<see cref="CardDefinition.ExileOnResolve"/>）
+        /// 打出结算完直接进；升变牌与它那 10 张形态牌在弹出升变时整套进（§6.2 ⑤，裁定 R-14）。</para>
+        /// </summary>
+        public CardPile Exile { get; } = new("除外区");
 
         /// <summary>持续区，上限 1 张。被顶替的旧持续牌进弃牌堆。</summary>
         public CardInstance Continuous { get; private set; }
 
         public ChargeZone Charges { get; }
 
-        public StashedDeck Stash { get; } = new();
+        /// <summary>升变期间暂存到场外的原手牌（§6.2 ①）。主卡组不进暂存，它留在原位。</summary>
+        public CardPile StashedHand { get; } = new("暂存手牌");
 
         public IReadOnlyDictionary<string, CardPile> FormDecks => _formDecks;
 

@@ -113,8 +113,14 @@ namespace TCGinFU.Scripting
                 "free_moves" => DynValue.NewNumber(p.FreeMoves),
                 "has_moved" => DynValue.NewBoolean(p.HasMovedThisRound),
                 "hand_count" => DynValue.NewNumber(p.Zones.Hand.Count),
-                "deck_count" => DynValue.NewNumber(p.Zones.Deck.Count),
-                "discard_count" => DynValue.NewNumber(p.Zones.Discard.Count),
+                // 升变期间抽的是升变卡组，所以 deck_count 报的是「正在抽的那一摞」；
+                // 要分开看就用下面两个
+                "deck_count" => DynValue.NewNumber(
+                    p.Transform.Active ? p.Zones.FormDeck.Count : p.Zones.Deck.Count),
+                "main_deck_count" => DynValue.NewNumber(p.Zones.Deck.Count),
+                "form_deck_count" => DynValue.NewNumber(p.Zones.FormDeck.Count),
+                // 墓地按一个算：主弃牌堆 + 形态弃牌堆
+                "discard_count" => DynValue.NewNumber(p.Zones.Discard.Count + p.Zones.FormDiscard.Count),
                 "form_attack" => DynValue.NewNumber(p.FormAttackBase),
                 "form_defense" => DynValue.NewNumber(p.FormDefenseBase),
                 "continuous" => DynValue.NewString(p.Zones.Continuous?.Definition.Id ?? ""),

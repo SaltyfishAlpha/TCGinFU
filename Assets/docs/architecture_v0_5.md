@@ -335,21 +335,28 @@ struct ValueExpr {
 ```csharp
 PlayerZones {
     CardPile Deck, Hand, Discard;
+    CardPile FormDeck;             // 升变卡组：升变期间实际在抽的那摞形态牌，平时为空
     IReadOnlyDictionary<string, CardPile> FormDecks; // 每张升变牌一组 10 张形态额外卡组，按升变牌 Id 索引
     CardPile FormDiscard;          // 升变期间打出的形态牌，退出升变时一起移出本局（R-14）
-    CardPile CompletedTransform;   // 已完成升变区
+    IEnumerable<CardInstance> AllDiscards; // FormDiscard + Discard，墓地对外算一个
+    CardPile Exile;                // 除外区：一次性牌 + 升变结束的整套升变牌与形态牌
     CardInstance Continuous;       // 持续区，上限 1，被顶替者进弃牌堆
     ChargeZone Charges;            // 充能区，内部是 ChargeToken 序列
-    StashedDeck Stash;             // 升变期间暂存的原手牌 + 原主卡组
+    CardPile StashedHand;          // 升变期间暂存的原手牌（主卡组不暂存，留在原位）
 }
 ```
+
+- **主卡组与升变卡组是并存的两摞，不是一摞切来切去**。升变期间 `Deck` 原封不动，只是 `DrawFromDeck` 这两轮改从 `FormDeck` 抽；升变卡组是有限的 10 张，抽空就是抽空，不洗弃牌堆续牌。（界面上两摞**共用卡组那一块地**显示，但那只是布局选择，见 [view_architecture.md](view_architecture.md) §3。）
+- **墓地在规则上是两摞、对外是一个**：形态牌必须单独堆在 `FormDiscard` 才能在退出升变时整体移出本局（R-14），但界面与「从墓地回收」这类效果一律走 `AllDiscards`，同时够得着两边。
 
 - **充能区容量** 默认 `ChargeZone.CapacityFor(玩家人数) = max(玩家人数 - 1, 2)`，是**每个角色各自**的区域；效果可临时调整（`AdjustChargeCapacity`）。
 - 溢出时，**最早**置入的那张被顶出，进入**该卡原持有者**的弃牌堆（不是充能区主人的）——所以 `ChargeToken` 必须记 `OwnerId`，不能只存卡。
 - 贴充能每角色每轮 1 次、0 AP，卡面可追加次数（`ExtraChargePlacements`，经 `GrantChargePlacement`）。消耗充能三选一（`ChargeUse`）：抵 5 点 MP / +1 AP / 支付卡面「消耗 X 充能」。
 - 敌人吞噬充能走 `DevourCharges`，**不算**玩家消耗：不记 `ChargesSpent` 统计、不触发 `ChargeSpent`，否则敌人一发虹吸就能替玩家满足「累计消耗充能」类条件。
 - 从某区搬牌进充能区统一走 `ChargeFromZone(from, to, ChargeSource)`，`ChargeSource` = `Discard`（弃牌堆顶）/ `DeckTop` / `HandBottom`。
-- 本规则**无除外区**，只有升变结束的形态牌移出本局（进已完成升变区）。
+- **除外区**（§4.1）收两类牌：卡面写「消耗」的一次性牌（`CardDefinition.ExileOnResolve`，内容包里写 `"exile": true`）打出结算完直接进；升变牌与它那 10 张形态牌在弹出升变时整套进。进了除外区的牌不会再回到卡组、手牌或弃牌堆。
+- `ExileOnResolve` 刻意做成**声明式字段而不是脚本钩子**：「打出后去哪」对绝大多数卡是无条件的静态归宿，引擎读一个 bool 就够，构筑校验与卡面 UI 也能读到它。等出现「有条件地除外」或「跨回合置入」的卡，再加一个 Lua 可调的除外原语（与 `ChargeFromZone` 同级），而不是让每张卡自己判断归宿。
+- 升变牌**没被打出**而是被弃掉时进主弃牌堆——那时它还只是一张普通手牌。
 
 ### 2.7 轮次状态机
 
@@ -384,12 +391,12 @@ RoundStart ──▶ Draw ──▶ PlayerPhase ──▶ EnemyPhase ──▶ R
 
 ```
 【进入】RoundStart 的 TransformDeclaration 窗口宣告（手牌里直接打出升变牌也等于宣告）
-       → 手牌+主卡组 暂存到 Stash（持续区与充能区原样保留）
-       → FormDecks 里对应的 10 张形态组洗入卡组区 → 升变牌的行为以 Transform 来源生效
-       → Draw 阶段从形态组抽 5（代替常规抽牌）
-【维持】下一轮 Draw：把形态组剩余 5 张全部抽上手；打出的形态牌进 FormDiscard
-【退出】第 3 轮 RoundStart：升变牌 + 全部形态牌（含 FormDiscard）→ 已完成升变区（移出本局）
-       → 从 Stash 取回原手牌与原主卡组 → 本轮正常抽 3
+       → 原手牌暂存到 StashedHand（主卡组、持续区与充能区都原样留在场上）
+       → FormDecks 里对应的 10 张形态组洗进 FormDeck → 升变牌的行为以 Transform 来源生效
+       → Draw 阶段从 FormDeck 抽 5（代替常规抽牌）
+【维持】下一轮 Draw：把 FormDeck 剩余 5 张全部抽上手；打出的形态牌进 FormDiscard
+【退出】第 3 轮 RoundStart：升变牌 + 全部形态牌（含 FormDiscard）→ 除外区（移出本局）
+       → 从 StashedHand 取回原手牌 → 本轮从主卡组正常抽 3
 ```
 
 三条触发路径（`TransformTrigger`）：
