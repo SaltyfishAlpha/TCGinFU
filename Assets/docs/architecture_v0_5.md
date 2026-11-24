@@ -346,7 +346,7 @@ PlayerZones {
 }
 ```
 
-- **主卡组与升变卡组是并存的两摞，不是一摞切来切去**。升变期间 `Deck` 原封不动，只是 `DrawFromDeck` 这两轮改从 `FormDeck` 抽；升变卡组是有限的 10 张，抽空就是抽空，不洗弃牌堆续牌。（界面上两摞**共用卡组那一块地**显示，但那只是布局选择，见 [view_architecture.md](view_architecture.md) §3。）
+- **主卡组与升变卡组是并存的两摞，不是一摞切来切去**。升变期间 `Deck` 原封不动，只是 `DrawFromDeck` 这两轮改从 `FormDeck` 抽、抽空了洗 `FormDiscard` 续牌。**两套牌各自循环，互不相通**：升变期间不碰主卡组与主弃牌堆，形态牌也绝不会被洗进主卡组。（界面上两摞**共用卡组那一块地**显示，但那只是布局选择，见 [view_architecture.md](view_architecture.md) §3。）
 - **墓地在规则上是两摞、对外是一个**：形态牌必须单独堆在 `FormDiscard` 才能在退出升变时整体移出本局（R-14），但界面与「从墓地回收」这类效果一律走 `AllDiscards`，同时够得着两边。
 
 - **充能区容量** 默认 `ChargeZone.CapacityFor(玩家人数) = max(玩家人数 - 1, 2)`，是**每个角色各自**的区域；效果可临时调整（`AdjustChargeCapacity`）。
@@ -372,7 +372,7 @@ RoundStart ──▶ Draw ──▶ PlayerPhase ──▶ EnemyPhase ──▶ R
 | 阶段 | 引擎做的事（按代码顺序） | 挂出的 `DecisionKind` |
 | ----- | ----- | ----- |
 | `RoundStart`（`BeginRound`） | 轮数 +1 → 各玩家 `BeginRound`（AP 重置、贴充能/走位次数重置、自动双盾按敏捷÷2 / 洞察÷2 重新授予）→ **结算退出升变** → **`RoundStart` 触发** → **敌人揭示意图** | `TransformDeclaration`（等能升变的人宣告或放弃，含第 3 轮保底） |
-| `Draw`（`ProceedToDraw`） | 常态：第 1 轮 5 张，之后每轮 3 张；升变首轮形态组抽 5；升变次轮把形态组剩余全抽（`DrawCountFor`） | — |
+| `Draw`（`ProceedToDraw`） | 常态：第 1 轮 5 张，之后每轮 3 张；升变期间两轮都从升变卡组抽 5（`DrawCountFor`） | — |
 | `PlayerPhase` | 每人 3 AP，全队自由穿插。逐个 `DeclareReady`，全员 ready 后推进 | `PlayerActions` |
 | `EnemyPhase`（`ProceedToEnemyPhase` / `OpenNextIntentWindow`） | 按意图自上而下：先把这次攻击摆成 `AttackContext`，发 `IntentDeclared`，开响应窗口；全员 Pass 后结算（重解析目标 → 援护改写 → `ResolveAttack` → 上状态 → `PlayIntentCard`） | 每条意图一次 `EnemyResponse`（R-11） |
 | `RoundEnd`（`BeginRoundEnd`） | 场景命刻 +1 → 轮末持续伤害/恢复 → **`RoundEnd` 触发** → 状态递减与过期 → 判胜负 | `HandLimitDiscard`（手牌超 7 的人，R-15） |
@@ -394,7 +394,8 @@ RoundStart ──▶ Draw ──▶ PlayerPhase ──▶ EnemyPhase ──▶ R
        → 原手牌暂存到 StashedHand（主卡组、持续区与充能区都原样留在场上）
        → FormDecks 里对应的 10 张形态组洗进 FormDeck → 升变牌的行为以 Transform 来源生效
        → Draw 阶段从 FormDeck 抽 5（代替常规抽牌）
-【维持】下一轮 Draw：把 FormDeck 剩余 5 张全部抽上手；打出的形态牌进 FormDiscard
+【维持】下一轮 Draw：同样从 FormDeck 抽 5；打出或弃掉的形态牌进 FormDiscard
+       FormDeck 抽空就把 FormDiscard 洗回去继续抽——这 10 张在升变期间一直循环
 【退出】第 3 轮 RoundStart：升变牌 + 全部形态牌（含 FormDiscard）→ 除外区（移出本局）
        → 从 StashedHand 取回原手牌 → 本轮从主卡组正常抽 3
 ```

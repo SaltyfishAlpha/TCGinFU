@@ -989,6 +989,18 @@ namespace TCGinFU.View
                 ? zone.Layout.displayName
                 : $"{owner.Name} 的{zone.Layout.displayName}";
 
+            // 弃牌堆在规则上是两摞，摊开看就得分开列：
+            // 不分的话升变期间点开是一堆分不清哪张属于哪个卡组的牌
+            if (zone.Layout.source == ZoneSource.弃牌堆 && owner != null)
+            {
+                _peekPanel.Open(title, new[]
+                {
+                    new PeekSection("形态弃牌堆", owner.Zones.FormDiscard.ToList()),
+                    new PeekSection("主弃牌堆", owner.Zones.Discard.ToList()),
+                });
+                return;
+            }
+
             _peekPanel.Open(title, cards);
         }
 

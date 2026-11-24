@@ -152,11 +152,14 @@ namespace TCGinFU.Core
             if (Pending.IsResolved) ProceedToEnemyPhase();
         }
 
-        /// <summary>第 1 轮 5 张，之后每轮 3 张；升变首轮形态组抽 5，次轮把剩余形态牌全抽（§8 ② / §6.2）。</summary>
+        /// <summary>
+        /// 第 1 轮 5 张，之后每轮 3 张；**升变期间每轮都是 5 张**（§8 ② / §6.2）。
+        /// <para>升变的两轮一律抽 5，不是「把剩下的全抽」：升变卡组自己会循环
+        /// （抽空就洗形态弃牌堆，见 <see cref="DrawFromDeck"/>），「剩下几张」已经不是个有意义的数了。</para>
+        /// </summary>
         public int DrawCountFor(PlayerCharacter player)
         {
-            if (player.Transform.IsFirstFormRound) return 5;
-            if (player.Transform.IsSecondFormRound) return player.Zones.FormDeck.Count;
+            if (player.Transform.Active) return 5;
             return State.Round == 1 ? 5 : 3;
         }
 

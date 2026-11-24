@@ -2,9 +2,8 @@ namespace TCGinFU.Core
 {
     /// <summary>
     /// 角色的升变状态（§6.2）。升变持续整整 2 轮：
-    /// 进入轮 <see cref="RoundsRemaining"/>=2（抽 5 张形态牌），
-    /// 维持轮 =1（把形态组剩余 5 张全抽上手），
-    /// 第 3 轮轮始 =0 时退出并归还原卡组。
+    /// 进入轮 <see cref="RoundsRemaining"/>=2，维持轮 =1，两轮都从升变卡组抽 5 张；
+    /// 第 3 轮轮始 =0 时退出，升变牌与形态牌整套进除外区、取回暂存的原手牌。
     /// </summary>
     public sealed class TransformState
     {
@@ -18,12 +17,6 @@ namespace TCGinFU.Core
 
         /// <summary>第 3 轮保底跳出是否已用掉（裁定 R-13：仅第 3 轮提供一次，错过不补）。</summary>
         public bool UsedThirdRoundGuarantee { get; internal set; }
-
-        /// <summary>升变的第 1 轮（抽 5 张）。</summary>
-        public bool IsFirstFormRound => Active && RoundsRemaining == 2;
-
-        /// <summary>升变的第 2 轮（形态组剩余牌全抽）。</summary>
-        public bool IsSecondFormRound => Active && RoundsRemaining == 1;
 
         /// <summary>轮始时应当结算退出。</summary>
         public bool ShouldExit => Active && RoundsRemaining <= 0;

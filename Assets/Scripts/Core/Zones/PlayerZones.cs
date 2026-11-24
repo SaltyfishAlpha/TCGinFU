@@ -82,12 +82,21 @@ namespace TCGinFU.Core
 
         public void ClearContinuous() => Continuous = null;
 
-        /// <summary>弃牌堆洗回卡组。本规则没有抽空惩罚，抽空时由引擎调用这里续牌。</summary>
-        public bool ReshuffleDiscardIntoDeck(IRng rng)
+        /// <summary>弃牌堆洗回主卡组。本规则没有抽空惩罚，抽空时由引擎调用这里续牌。</summary>
+        public bool ReshuffleDiscardIntoDeck(IRng rng) => Reshuffle(Discard, Deck, rng);
+
+        /// <summary>
+        /// 形态弃牌堆洗回升变卡组。升变期间那 10 张形态牌**同样循环**，
+        /// 和主卡组一个道理——只是两套牌各自循环，互不相通。
+        /// </summary>
+        public bool ReshuffleFormDiscardIntoFormDeck(IRng rng) => Reshuffle(FormDiscard, FormDeck, rng);
+
+        /// <returns>弃牌堆是空的（没得续）时返回 false。</returns>
+        private static bool Reshuffle(CardPile discard, CardPile deck, IRng rng)
         {
-            if (Discard.IsEmpty) return false;
-            Deck.AddRange(Discard.TakeAll());
-            Deck.Shuffle(rng);
+            if (discard.IsEmpty) return false;
+            deck.AddRange(discard.TakeAll());
+            deck.Shuffle(rng);
             return true;
         }
 

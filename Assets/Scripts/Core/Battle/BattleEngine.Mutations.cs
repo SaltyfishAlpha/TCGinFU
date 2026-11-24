@@ -147,22 +147,30 @@ namespace TCGinFU.Core
         }
 
         /// <summary>
-        /// 从当前该抽的那摞牌顶抽 1 张。升变期间抽的是升变卡组——它只有有限的 10 张，
-        /// 抽空就是抽空，不续牌，这期间主卡组碰都不碰。
-        /// 未升变时主卡组抽空，把弃牌堆洗回去再抽。
+        /// 从当前该抽的那摞牌顶抽 1 张。抽空了就把对应的弃牌堆洗回去再抽——
+        /// 本规则没有抽空惩罚。
+        /// <para>升变期间抽的是升变卡组、续的是形态弃牌堆：**两套牌各自循环，互不相通**。
+        /// 这期间主卡组与主弃牌堆碰都不碰。</para>
         /// </summary>
         public CardInstance DrawFromDeck(PlayerCharacter player)
         {
             PlayerZones zones = player.Zones;
+            bool transformed = player.Transform.Active;
+            CardPile deck = transformed ? zones.FormDeck : zones.Deck;
 
-            if (player.Transform.Active) return zones.FormDeck.DrawTop();
-
-            if (zones.Deck.IsEmpty && zones.ReshuffleDiscardIntoDeck(State.Rng))
+            if (deck.IsEmpty)
             {
-                Emit(new BattleEvent(BattleEventType.DeckReshuffled, player.Id) { Round = State.Round });
+                bool refilled = transformed
+                    ? zones.ReshuffleFormDiscardIntoFormDeck(State.Rng)
+                    : zones.ReshuffleDiscardIntoDeck(State.Rng);
+
+                if (refilled)
+                {
+                    Emit(new BattleEvent(BattleEventType.DeckReshuffled, player.Id) { Round = State.Round });
+                }
             }
 
-            return zones.Deck.DrawTop();
+            return deck.DrawTop();
         }
 
         public List<CardInstance> DrawCards(PlayerCharacter player, int count)

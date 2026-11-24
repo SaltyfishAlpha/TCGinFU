@@ -99,10 +99,10 @@ namespace TCGinFU.Core.Tests
             engine.Submit(new PlayCardAction(player.Id, player.Zones.Hand[0].Uid, enemy.Id));
             AdvanceOneRound(engine, player);
 
-            // ── 升变第 2 轮：形态组剩余 5 张全部抽上手 ──
+            // ── 升变第 2 轮：和首轮一样抽 5 张 ──
             Assert.AreEqual(2, engine.State.Round);
             Assert.IsTrue(player.Transform.Active);
-            Assert.AreEqual(9, player.Zones.Hand.Count, "4 张留存 + 剩余 5 张全抽");
+            Assert.AreEqual(9, player.Zones.Hand.Count, "4 张留存 + 本轮抽 5 张");
             Assert.AreEqual(0, player.Zones.FormDeck.Count);
             Assert.AreEqual(40, player.Zones.Deck.Count, "整个升变期间主卡组一张没动");
 
@@ -116,6 +116,64 @@ namespace TCGinFU.Core.Tests
             Assert.IsFalse(player.Zones.Hand.Any(c => c.IsFormCard));
             Assert.AreEqual(3, player.Zones.Hand.Count, "取回原手牌（空）后按常规抽 3 张");
             Assert.AreEqual(37, player.Zones.Deck.Count);
+        }
+
+        /// <summary>
+        /// 升变的两轮都是抽 5 张，不是「把升变卡组剩下的全抽」——
+        /// 卡组会循环，「剩下几张」已经不是个有意义的数。张数不够时途中就地洗回形态弃牌堆。
+        /// </summary>
+        [Test]
+        public void 升变次轮照抽五张而不是抽光剩余()
+        {
+            (BattleEngine engine, PlayerCharacter player, _) = Setup();
+            engine.Start();
+
+            CardInstance candidate = engine.TransformCandidates(player).Single();
+            engine.Submit(new DeclareTransformAction(player.Id, candidate.Uid));
+
+            // 做出「升变卡组只剩 2 张、形态弃牌堆攒了 4 张」的局面
+            engine.DiscardFromHand(player, 4);
+            engine.DrawCards(player, 3);
+            Assert.AreEqual(2, player.Zones.FormDeck.Count);
+            Assert.AreEqual(4, player.Zones.FormDiscard.Count);
+            Assert.AreEqual(4, player.Zones.Hand.Count);
+
+            AdvanceOneRound(engine, player);
+
+            // 按老规则这里只会抽 2 张（抽光剩余）；现在是抽满 5 张，中途把形态弃牌堆洗了回来
+            Assert.AreEqual(9, player.Zones.Hand.Count, "4 张留存 + 本轮抽满 5 张");
+            Assert.AreEqual(1, player.Zones.FormDeck.Count, "洗回 4 张后又抽走 3 张");
+            Assert.AreEqual(0, player.Zones.FormDiscard.Count);
+        }
+
+        /// <summary>
+        /// 升变卡组和主卡组一样循环：抽空了把形态弃牌堆洗回来，
+        /// 而且只动形态那两摞——主卡组与主弃牌堆全程不参与。
+        /// </summary>
+        [Test]
+        public void 升变卡组抽空后把形态弃牌堆洗回来()
+        {
+            (BattleEngine engine, PlayerCharacter player, Enemy enemy) = Setup();
+            engine.Start();
+
+            CardInstance candidate = engine.TransformCandidates(player).Single();
+            engine.Submit(new DeclareTransformAction(player.Id, candidate.Uid));
+
+            // 首轮抽 5，形态卡组剩 5
+            CardInstance played = player.Zones.Hand[0];
+            Assert.IsTrue(engine.Submit(new PlayCardAction(player.Id, played.Uid, enemy.Id)).Ok);
+            Assert.AreEqual(1, player.Zones.FormDiscard.Count);
+
+            // 把升变卡组抽干净
+            engine.DrawCards(player, 5);
+            Assert.AreEqual(0, player.Zones.FormDeck.Count);
+
+            // 再抽一张：形态弃牌堆洗回升变卡组，抽到的就是刚打出去的那张
+            CollectionAssert.AreEqual(new[] { played }, engine.DrawCards(player, 1));
+            Assert.AreEqual(0, player.Zones.FormDiscard.Count, "洗回去之后形态弃牌堆清空");
+
+            Assert.AreEqual(40, player.Zones.Deck.Count, "主卡组全程没被碰");
+            Assert.AreEqual(0, player.Zones.Discard.Count, "主弃牌堆也没被碰");
         }
 
         /// <summary>

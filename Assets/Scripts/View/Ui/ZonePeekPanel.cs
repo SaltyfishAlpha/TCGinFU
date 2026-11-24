@@ -106,14 +106,41 @@ namespace TCGinFU.View
     }
 
     /// <summary>
+    /// 查看面板里的一段。<see cref="Title"/> 为空表示不画小标题，整个面板就是一片连续的网格。
+    /// <para>存在的理由：弃牌堆在规则上是**两摞**（主弃牌堆 + 形态弃牌堆），
+    /// 摊开看的时候必须看得出哪张是哪摞的，否则升变期间点开就是一堆分不清来源的牌。</para>
+    /// </summary>
+    public readonly struct PeekSection
+    {
+        public PeekSection(string title, IReadOnlyList<CardInstance> cards)
+        {
+            Title = title;
+            Cards = cards ?? System.Array.Empty<CardInstance>();
+        }
+
+        public string Title { get; }
+        public IReadOnlyList<CardInstance> Cards { get; }
+    }
+
+    /// <summary>
     /// 牌堆查看面板：点弃牌堆 / 持续区 / 除外区这类叠放区域时弹出，
     /// 把里面的牌全部摊开。实体打牌时这些都是可以随时翻看的公开信息。
     /// </summary>
     public sealed class ZonePeekPanel : MonoBehaviour, IPointerClickHandler
     {
         private const int Columns = 6;
+        private const float Spacing = 12f;
+        private const float HeaderHeight = 30f;
+
+        /// <summary>分段小标题：一行字 + 一条横线。</summary>
+        private sealed class SectionHeader
+        {
+            public RectTransform Rect;
+            public Text Label;
+        }
 
         private readonly List<PeekCardView> _cards = new();
+        private readonly List<SectionHeader> _headers = new();
         private readonly List<CardInstance> _shown = new();
         private readonly List<CardInstance> _picked = new();
         private RectTransform _grid;
@@ -224,11 +251,18 @@ namespace TCGinFU.View
 
         /// <summary>只看不选：弃牌堆这类公开信息随时可以摊开。</summary>
         public void Open(string title, IReadOnlyList<CardInstance> cards)
+            => Open(title, new[] { new PeekSection(null, cards) });
+
+        /// <summary>
+        /// 只看不选，内容分几段列出（弃牌堆要把主弃牌堆与形态弃牌堆分开摆）。
+        /// 空的段整段跳过；最后只剩一段时不画小标题——常规牌局下看到的就和不分段时一样。
+        /// </summary>
+        public void Open(string title, IReadOnlyList<PeekSection> sections)
         {
             _selecting = false;
             _onConfirm = null;
             _onCancel = null;
-            Layout(title, cards);
+            Layout(title, sections);
         }
 
         /// <summary>
@@ -252,15 +286,25 @@ namespace TCGinFU.View
             _onCancel = onCancel;
             _picked.Clear();
 
-            Layout(title, cards);
+            Layout(title, new[] { new PeekSection(null, cards) });
         }
 
-        private void Layout(string title, IReadOnlyList<CardInstance> cards)
+        private void Layout(string title, IReadOnlyList<PeekSection> sections)
         {
-            _shown.Clear();
-            _shown.AddRange(cards);
+            // 空段不占地方；只剩一段时不画小标题，否则常规牌局点开弃牌堆
+            // 会白白多出一行「主弃牌堆」的字
+            var live = new List<PeekSection>();
+            foreach (PeekSection section in sections)
+            {
+                if (section.Cards.Count > 0) live.Add(section);
+            }
 
-            _title.text = $"{title}　共 {cards.Count} 张";
+            bool showHeaders = live.Count > 1;
+
+            _shown.Clear();
+            foreach (PeekSection section in live) _shown.AddRange(section.Cards);
+
+            _title.text = $"{title}　共 {_shown.Count} 张";
             gameObject.SetActive(true);
             transform.SetAsLastSibling();
 
@@ -268,44 +312,90 @@ namespace TCGinFU.View
             // 底栏挡住最后一行卡，所以选择模式下滚动区要让出这块高度
             _scroll.offsetMin = new Vector2(12f, _selecting ? 50f : 12f);
 
-            while (_cards.Count < cards.Count)
+            while (_cards.Count < _shown.Count)
             {
                 _cards.Add(PeekCardView.Create(_grid));
             }
 
-            const float spacing = 12f;
-            int rows = Mathf.Max(1, Mathf.CeilToInt(cards.Count / (float)Columns));
-            _grid.sizeDelta = new Vector2(0f, rows * (_cardSize.y + spacing) + spacing);
+            int cardIndex = 0;
+            int headerIndex = 0;
+            float top = Spacing;
 
-            for (int i = 0; i < _cards.Count; i++)
+            foreach (PeekSection section in live)
             {
-                PeekCardView view = _cards[i];
-                if (i >= cards.Count)
+                if (showHeaders && section.Title != null)
                 {
-                    view.gameObject.SetActive(false);
-                    continue;
+                    SectionHeader header = RentHeader(headerIndex++);
+                    header.Label.text = $"{section.Title}　{section.Cards.Count} 张";
+                    header.Rect.offsetMin = new Vector2(Spacing, -top - HeaderHeight);
+                    header.Rect.offsetMax = new Vector2(-Spacing, -top);
+                    top += HeaderHeight;
                 }
 
-                CardInstance card = cards[i];
-                view.gameObject.SetActive(true);
-                view.ClickHandler = _selecting ? Toggle : CardClickHandler;
-                view.Bind(card, _cardSize);
-                view.SetSelected(0);
+                for (int i = 0; i < section.Cards.Count; i++, cardIndex++)
+                {
+                    PlaceCard(
+                        _cards[cardIndex], section.Cards[i],
+                        column: i % Columns,
+                        y: top + (i / Columns) * (_cardSize.y + Spacing));
+                }
 
-                int column = i % Columns;
-                int row = i / Columns;
-
-                RectTransform rect = view.Rect;
-                rect.SetParent(_grid, false);
-                rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
-                rect.pivot = new Vector2(0f, 1f);
-                rect.localRotation = Quaternion.identity;
-                rect.anchoredPosition = new Vector2(
-                    spacing + column * (_cardSize.x + spacing),
-                    -(spacing + row * (_cardSize.y + spacing)));
+                int rows = Mathf.CeilToInt(section.Cards.Count / (float)Columns);
+                top += rows * (_cardSize.y + Spacing) + Spacing;
             }
 
+            _grid.sizeDelta = new Vector2(0f, Mathf.Max(top, _cardSize.y + Spacing * 2f));
+
+            for (int i = cardIndex; i < _cards.Count; i++) _cards[i].gameObject.SetActive(false);
+            for (int i = headerIndex; i < _headers.Count; i++) _headers[i].Rect.gameObject.SetActive(false);
+
             if (_selecting) RefreshSelectionState();
+        }
+
+        private void PlaceCard(PeekCardView view, CardInstance card, int column, float y)
+        {
+            view.gameObject.SetActive(true);
+            view.ClickHandler = _selecting ? Toggle : CardClickHandler;
+            view.Bind(card, _cardSize);
+            view.SetSelected(0);
+
+            RectTransform rect = view.Rect;
+            rect.SetParent(_grid, false);
+            rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0f, 1f);
+            rect.localRotation = Quaternion.identity;
+            rect.anchoredPosition = new Vector2(Spacing + column * (_cardSize.x + Spacing), -y);
+        }
+
+        private SectionHeader RentHeader(int index)
+        {
+            while (_headers.Count <= index)
+            {
+                // 顶端横向拉满，具体的纵向位置由 Layout 用 offsetMin/Max 给
+                RectTransform rect = UiBuilder.CreateRect("SectionHeader", _grid);
+                rect.anchorMin = new Vector2(0f, 1f);
+                rect.anchorMax = new Vector2(1f, 1f);
+                rect.pivot = new Vector2(0.5f, 1f);
+
+                Text label = UiBuilder.CreateText(
+                    "Label", rect, "", 15, TextAnchor.LowerLeft, new Color(1f, 0.85f, 0.5f, 0.95f));
+                label.rectTransform.Stretch();
+                label.rectTransform.offsetMin = new Vector2(0f, 6f);
+
+                // 一条横线把上一段隔开——只靠一行字的话，段与段的边界在满屏卡牌里看不出来
+                Image rule = UiBuilder.CreateImage("Rule", rect, new Color(1f, 1f, 1f, 0.18f));
+                rule.rectTransform.anchorMin = new Vector2(0f, 0f);
+                rule.rectTransform.anchorMax = new Vector2(1f, 0f);
+                rule.rectTransform.pivot = new Vector2(0.5f, 0f);
+                rule.rectTransform.sizeDelta = new Vector2(0f, 1f);
+                rule.rectTransform.anchoredPosition = Vector2.zero;
+
+                _headers.Add(new SectionHeader { Rect = rect, Label = label });
+            }
+
+            SectionHeader header = _headers[index];
+            header.Rect.gameObject.SetActive(true);
+            return header;
         }
 
         private void Toggle(CardInstance card)
