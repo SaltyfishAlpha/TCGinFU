@@ -1,7 +1,11 @@
 # 表现层待办 · 给负责 UI 的那位
 
+> **已归档（2026-11-25）**：界面部分都已做完，本文仅作历史参考。
+> 仍开放的事项已并入 [known_issues.md](../known_issues.md)（B-2 选牌后端、B-17、「掷骰后」窗口）；
+> 交互现状（含响应窗口的分摊菜单、待真人试手的几项）见 [view_architecture.md](../view_architecture.md) §4 / §9。
+
 > 配套：行为层交接 [behaviour_layer_handoff.md](behaviour_layer_handoff.md)（含现有操作约定）·
-> 表现层架构 [view_architecture.md](view_architecture.md) · 规则书 [v0_5.md](v0_5.md)
+> 表现层架构 [view_architecture.md](../view_architecture.md) · 规则书 [v0_5.md](../v0_5.md)
 >
 > **分工**：你负责表现层（`Assets/Scripts/View/**`），
 > 牌效逻辑那边负责 `Core` / `Scripting` / `StreamingAssets/Content`。
@@ -65,8 +69,8 @@
 「消耗几个充能」（键 `charge`）**不在那张表里**：它照卡面的 `chargeOptions` 字段自动生成，
 答案填进 `PlayCardAction.ChargeForEffect`（2026-11-23，旧 B-15 / B-16）。
 借道 `ChargeForMp` 的那条错链已经拆掉——拿充能抵 MP 现在是独立动作 `SpendChargeForMpAction`，
-转掉的充能不再计入 `ctx.charge_spent`。详见 [view_architecture.md](view_architecture.md) §5
-与 [data_architecture.md](data_architecture.md) §4.2。
+转掉的充能不再计入 `ctx.charge_spent`。详见 [view_architecture.md](../view_architecture.md) §5
+与 [data_architecture.md](../data_architecture.md) §4.2。
 
 > ⚠ 仍有两张形态牌的选择没登记（B-17）：元素增殖炸弹的 `element`、炼金防护力场的 `row`，
 > 现在永远用脚本默认值。
@@ -140,5 +144,5 @@ IMGUI 沙盒（`SandboxGui.DrawResponsePanel`）用的是同一个名单，不�
 ```bash
 bash Tools/check-asmdefs.sh          # 编译（按 asmdef 真实边界，别塞进一个 csproj）
 ```
-Unity MCP 的 `run_tests`（EditMode）。测试基线见 [README](../../README.md)，别添红的。
+Unity MCP 的 `run_tests`（EditMode）。测试基线见 [README](../../../README.md)，别添红的。
 改 View 也要跑——`BattleSessionTests` 里有依赖费用文案的断言。

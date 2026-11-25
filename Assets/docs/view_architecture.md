@@ -1,6 +1,6 @@
 # 表现层架构
 
-> 配套：[规则书](v0_5.md) · [引擎架构](architecture_v0_5.md) · [规则裁定](rulings_v0_5.md) · [UI 待办](ui_todo_handoff.md)
+> 配套：[规则书](v0_5.md) · [引擎架构](architecture_v0_5.md) · [规则裁定](rulings_v0_5.md) · [已知问题](known_issues.md)
 > 本文只讲 UI（`TCGinFU.View`）。规则一律在 `TCGinFU.Core` 里，表现层不做规则判断。
 >
 > 最后核对：2026-11-22（以当前工作区代码为准）
@@ -210,7 +210,9 @@ BattleLayoutAsset (ScriptableObject)
 - **横置**：卡旋转 90° 依次压住，充能堆用（见下）
 
 **动画只有一处**：角色区域里的角色卡通过 `SlideTween` 落位（0.22 秒缓出），
-走位时能看到角色从一排滑到另一排；首次摆放不动画。其他卡牌仍是瞬间刷新。
+走位时能看到角色从一排滑到另一排；首次摆放不动画。其他卡牌仍是瞬间刷新
+（手牌每次 Refresh 都整体重排，补间只会让扇形抖个不停）。
+跨 `ZoneView` 会重新挂父节点，所以要在改 `localPosition` **之前**取世界坐标，再换算成新父节点下的局部坐标做起点。
 
 ### 排位的朝向
 
@@ -284,6 +286,12 @@ MP 满了**不**禁用，只在文案里加「（MP 已满）」：玩家可能�
 
 充能的第三种用途（支付卡面「消耗 X 个充能」词条）不在这个菜单里，它跟着具体某张牌，在出牌时问（见 §5）。
 
+**「替 X 分摊」**（意图带 `shareable` 时，`ShareOptionsFor`）挂在**站出来的那个人**身上——主语是自己。
+候选名单一概问 `engine.ShareableTargetsFor(sharer)`（IMGUI 沙盒用同一个名单），是一串不是一个；
+菜单项直接写拆完各吃多少点（`PendingAttackOn(target).BaseAmount / 2`）；自己已经站出来过留一条不可点的「（已替 X 分摊）」。
+**别人**替谁分摊 / 援护了不进菜单，写在角色卡上（`ResponseTagFor`，窗口一关就消失）。
+提交 `ShareDamageAction`，不花 AP，也**不**算放弃响应。
+
 ### 顶栏
 
 从左到右：状态（轮次 · 阶段 · 命刻 · 胜负）、消息、**随阶段变化的主按钮**，然后是
@@ -317,6 +325,8 @@ MP 满了**不**禁用，只在文案里加「（MP 已满）」：玩家可能�
 ```
 
 开始拖拽会取消长按（`LongPress.Cancel`）：拖拽优先，否则拖久一点就会弹出详情挡住视线。
+长按触发过之后要吞掉随后的 `OnPointerClick`，否则抬手还会再触发一次选中。
+「指针动没动」只在拖拽侧判一次——两边各判一次迟早调出互相打架的阈值。
 
 **选充能目标期间整张手牌不可拖**，避免中途把别的牌打出去。
 
@@ -333,7 +343,7 @@ public interface IDropTarget {
 
 实现者两个：
 
-- **`CombatantView`**（角色卡）→ 打出 / 升变。`CombatantAcceptsCard` 做目标类型过滤：
+- **`CombatantView`**（角色卡）→ 打出 / 升变（升变牌在引擎里由 `HandlePlayCard` 转给 `HandleDeclareTransform`，没有第二套升变流程）。`CombatantAcceptsCard` 做目标类型过滤：
   单体敌方效果只接受敌人、单体友方效果只接受队友；升变宣告窗口里只接受升变候选牌、且只能放到持有者自己身上，
   其余窗口里升变牌不可放置。
 - **`ZoneView`**（`acceptsDrop = true` 且不是角色区域）→ 只处理 `ZoneSource.充能区`，接收即贴充能。
@@ -413,7 +423,13 @@ public interface IDropTarget {
 ### 费用文案
 
 棋盘上正面朝上的牌显示**持有者此刻的真实费用**：`BattleSession.CostText(def, engine, actor)`，
-被减免的项染绿（`DiscountColor`）、被加价的染红（`SurchargeColor`），减到 0 也照样显示。
+被减免的项染绿（`DiscountColor` `#7dff7d`）、被加价的染红（`SurchargeColor` `#ff9a9a`）。规则（炉石式）：
+
+- 零费印「0」，不写「免费」：费用位永远是数字才好横向比较，「免费」还容易被看成没加载出来。
+- 费用为 0 且没被改过的项整项省略；**只要被改过就一定显示**——减免到 0 恰恰最该让玩家看见。
+- 没被改过时不掺任何颜色标记，战报、测试断言这类纯文本场合才不会被 `<color=...>` 污染（`BattleSessionTests` 有依赖它的断言）。
+
+手牌和详情面板都要用带 `engine` / `actor` 的重载，否则详情印 5MP、手里那张印绿色 0MP，会让人以为看错了。
 背面朝上的牌不算费用。
 
 ### `CardDetailPanel`
@@ -423,7 +439,8 @@ public interface IDropTarget {
 
 - 卡牌：标题、副标题（含 `BattleSession.CostText` 算出的真实费用）、正文；
   公式按「这张牌所属角色」的面板算成具体数值。
-- 角色：排位、等级与职业、状态等。
+- 角色：排位、等级与职业、状态，以及叠在角色卡上的升变牌、持续牌、充能区。
+  充能是暗信息（§5.2），只报「有几个、谁贴的」（显示角色名），**不报是哪张牌**。
 - 每次 `Refresh()` 都把 `Engine` 重新指过去——重开一局会换掉引擎。
 
 ### 左侧卡图：`CardPreviewStage`
@@ -500,6 +517,7 @@ public interface IDropTarget {
 
 `Assets/Resources/Art/` 下只留 7 张 beta 兜底图。它们必须在一个内容包都没装时也存在，所以不跟着包走；
 正式卡图一律进内容包的 `art/`。
+卡面文字都加了 `Outline` 描边（`CardFace`）：铺上插画之后底色不再可控。
 
 ---
 
@@ -578,7 +596,8 @@ ApplyChargeTargetingHighlights()       选充能目标时的高亮（必须在�
 - **右键「打出」只能打给自己或当前选中的敌人**：要对某个队友打出指向队友的牌，用拖拽。
 - **动效只有角色走位的滑行**：抽牌、出牌、受击都是瞬间刷新。
 - **多人局只显示一套手牌**（当前选中角色的）。要同屏四人，在布局里复制四份手牌区、各自指定 `playerIndex`。
-- **长按阈值与走位拖拽的手感**还需要真人试手（`ui_todo_handoff.md` §4）。
+- **还没真人试过手**：长按阈值（`LongPress.Threshold`，不跟手就调它）、拖角色卡走位、
+  响应窗口里右键相邻队友的「替 X 分摊」菜单（二阶段的因果抹杀令）。EditMode 只测得到引擎那条路。
 - **仓库里的 `BattleLayout.asset` 是旧格式**，重新生成场景会被绑上，见 §3。
 - **字体靠系统字体**：uGUI 内置字体没有 CJK 字形，`UiBuilder.Font` 从微软雅黑 / 黑体 / 宋体 / Noto Sans CJK / 思源黑体里挑；
   都没有时退回内置字体，中文会显示成方块。

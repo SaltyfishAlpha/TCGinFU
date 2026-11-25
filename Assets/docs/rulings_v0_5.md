@@ -101,7 +101,7 @@
 - **窗口里还能做的**：兑现攒着的**免费移动**（`FreeMoves`，如翻滚披风给的那次）——
   只能换排，不能同排换位（R-17b）。常规走位（1 AP）仍然只能在玩家阶段。走位能否躲开攻击见 R-24。
 - **不确定度**：高。更细的粒度（命中后、伤害结算后、掷骰后）需要更复杂的优先权模型，v0.5 先不做。
-  「掷骰后」窗口（幸运改命要用）目前没有，见 [ui_todo_handoff.md](ui_todo_handoff.md) §3。
+  「掷骰后」窗口（幸运改命要用）目前没有，见 [known_issues.md](known_issues.md)「仍未实现的规则」。
 - **代码**：`BattleEngine.ProceedToEnemyPhase`（排队）/ `OpenNextIntentWindow`（逐条开窗）；
   走位时点放宽在 `HandleMoveRow`
 
@@ -239,7 +239,7 @@
 - **依据**：老版本（Godot）`card_resolver.gd` 本身有 bug，迁移时以卡面 `rulesText` 为准。
 - **已发现的不符**：压制连射（暴击投骰）、鹰眼锁定（多加了属性限制）、
   看破闪避（攻击者写死）、游击速射（强制移动）、先声夺人（定向移动）。
-  对照表见 [behaviour_layer_handoff.md](behaviour_layer_handoff.md) §5。
+  对照表见 [archive/behaviour_layer_handoff.md](archive/behaviour_layer_handoff.md) §5。
 - **不确定度**：低。
 
 ## R-23 多段攻击：`hits: N` 展开为 N 条效果，各自独立投暴击骰

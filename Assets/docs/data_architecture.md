@@ -1,9 +1,9 @@
 # 真实数据层架构 · v2
 
 > 最后核对：2026-11-22（按工作区代码）
-> 配套：规则书 [v0_5.md](v0_5.md) · 引擎架构 [architecture_v0_5.md](architecture_v0_5.md) · 裁定表 [rulings_v0_5.md](rulings_v0_5.md) · 行为层（Lua）[behaviour_layer_handoff.md](behaviour_layer_handoff.md)
+> 配套：规则书 [v0_5.md](v0_5.md) · 引擎架构 [architecture_v0_5.md](architecture_v0_5.md) · 裁定表 [rulings_v0_5.md](rulings_v0_5.md) · 已知问题 [known_issues.md](known_issues.md)
 > 范围：《最终物语·命刻之战》v1.0.0（Godot 版）的卡牌 / 角色 / 首领数据如何以 JSON 内容包接进本项目，
-> 以及内容包的加载、模式、对账和尚未实现的扩展口。行为逻辑（Lua）只在这里讲接口，细节见行为层文档。
+> 以及内容包的加载、模式、对账、Lua 行为脚本的写法和尚未实现的扩展口。
 
 ---
 
@@ -205,7 +205,58 @@ Content/
 
 `pack.json` 的 `scripts` 列出 Lua 文件；`ContentLoader` 只记路径，由 `TCGinFU.Scripting.LuaScriptHost` 执行。
 脚本用 `behaviour("<id>", { 钩子 = function ... })` 把自己挂到卡牌 / 意图 / 状态的 `behaviourId` 上。
-沙箱、钩子表、动词、超时看门狗见 [behaviour_layer_handoff.md](behaviour_layer_handoff.md)，这里不重复。
+沙箱、异常隔离、超时看门狗见 [architecture_v0_5.md](architecture_v0_5.md) §2.2。
+
+```lua
+behaviour("<behaviourId>", {
+  on_resolved = function(ctx) apply_status(ctx.target, "exposed", 1) end,
+})
+```
+
+**写了哪个钩子就挂哪个**，对应 `ICardBehaviour` 的成员（时机见 architecture §2.2）：
+
+| 钩子 | 对应 / 用途 |
+| ----- | ----- |
+| `can_play(ctx)` | `CanPlay`，`return false, "理由"` |
+| `on_play(ctx)` / `on_resolved(ctx)` | 数据效果之前 / 之后 |
+| `transform_condition(owner)` | 条件型升变牌 |
+| `on_attack(atk, me)` / `on_defend(atk, me)` | `ModifyAttack` 的攻方 / 守方 |
+| `on_crit_roll(roll, me)` | `ModifyCritRoll`。`roll.charge_spent` 可读，`roll.force_crit = true` 可写——只能抬成暴击、抬不成超暴击 |
+| `on_cost(cost, me)` | `ModifyCost` |
+| `on_charge_spend(spend, me)` | `ModifyChargeSpend`（全队广播） |
+| `on_<trigger>(ctx)` | `damage_taken` / `attack_resolved` / `damage_dealt` / `crit_dealt` / `card_played` / `charge_spent` / `round_start` / `round_end`。`attack_resolved` **掉 0 血也广播**（「完全抵消则反击」只能挂它），读 `ctx.hp_lost` / `ctx.absorbed` / `ctx.fully_absorbed` |
+
+动词（全局函数，`Scripting/LuaApi.cs`）：
+
+- 伤害与恢复：`damage` `pierce`（无视护盾）`heal`（返回实际回复量）`shield` `strip_shield`（削盾，不算伤害）`restore_mp` `gain_ap` `draw` `discard`
+- 状态：`apply_status` `has_status` `status_stacks` `remove_status` `remove_negative_status(who, n)`
+- 走位：`move_row`（切换）`move_to(who, "back")`（定向到排）`move_slot(who, "back", 2)`（定向到格）`choose_move(who, 范围)`（玩家挑落点）`grant_free_move(who, n, 范围)`（存额度，玩家自己兑现）`swap_rows`（整排互换，原子操作）。
+  范围：不写 = 哪都能去，`"switch"` = 必须换排，`"back"` / `"front", 2` = 指定排 / 格。**击退用 `move_to`，别用切换**——对已在后排的人切换会把他拉回前排
+- 充能：`charge_from(from, to, "discard"|"deck"|"hand", n)` `charge_this`（把正在打出的牌变成充能）`grant_charge_placement` `adjust_charge_cap` `devour_charges`（吞噬≠消耗）
+- 响应：`share_damage(站出来的人, 原目标)`；场景：`advance_clock`
+- 查询：`stat` `add_stat` `team_charges` `round` `weakness_of` `damaged_this_round_by`；阵营 `opponents(me)` / `same_side(me)`
+- 掷骰：`roll` `roll_attribute`；其它：`log`
+
+`ctx` 上容易用错的字段：
+
+- `ctx.damage_dealt`：本次数据效果**实际**打掉的 HP。「回复等同于实际伤害一半」读它，别拿卡面基础值算。
+- `ctx.cards_played_before`：本次打出**之前**本轮已打几张。「若本轮已打出过其他牌」用它，读角色计数会把自己算进去。
+- `ctx.charge_spent`：付给卡面词条的充能数（`charge` + `chargeOptions` 选的档，§4.2）。`can_play` 要问它，不是问 `ctx.caster.charges`。
+- `ctx.choice(key, 默认值)`：界面上的额外选择，键名与 `CardChoiceCatalog` 约定。**对不上不报错、只静默退回默认值**，所以一律写默认值。
+
+敌人的牌用同一张钩子表，但 `ctx.caster` 是敌人：要用 `opponents(me)` / `same_side(me)`，**不要**用玩家视角写死的 `enemies()` / `allies()`。
+意图宣告的那段伤害先结算（响应窗口里可改写），之后才跑 `on_resolved`。
+
+硬规矩：
+
+1. **状态变更只走动词**。参战者句柄只读；动词才发 `BattleEvent`，绕过去战报和 UI 就对不上。
+2. **不自带随机源**，掷骰一律 `roll` / `roll_attribute`（走引擎 `IRng`），否则同种子复盘不出同一局。
+3. **能用 `EffectData` 表达的就别写脚本**：数据效果将来能被可视化编辑器生成，脚本不能。例：先声夺人的「移动 1 次并抽 1 张」是 `MoveRow` + `Draw`，只有「第 1 轮免除 5MP、+1AP」进脚本。
+4. **`on_cost` 必须无副作用**：校验与 UI 显示费用都会反复调它，牌也未必真打出。要记账的折扣在 `on_card_played` 里挂状态记。
+5. **以卡面文字为准**，不照抄老版 `card_resolver.gd`（裁定 R-22）。
+
+验收测试要**直接断言后半句**（回血、抽牌、削盾、净化……）：这类漏写不会让战斗崩，只断言伤害的话照样全绿。
+`CardEffectFixTests` 专盯这一类，`LuaBehaviourTests` 覆盖宿主与各卡主要词条。
 
 `LuaScriptHost.BuildRegistry` 拿 `db.DeclaredBehaviourIds`（卡 + 状态 + 意图声明的全部 `behaviourId`）对账，写进 `ScriptLoadReport.Warnings`：
 声明了却没有脚本、脚本注册了却没人引用、行为一个钩子都没挂。当前内容包**常驻 2 条警告**：
@@ -589,14 +640,13 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 | # | 缺口 | 位置 |
 | ----- | ----- | ----- |
 | B-5 | 对账只剩 2 条警告（§3.4），但**警告仍然不进游戏内报告**——只有直接看 `ScriptLoadReport` 才看得到 | `LuaScriptHost.BuildRegistry` / `ContentScenario.CreateEngine` |
-| B-6 | 构建产物入口和玩家包入口未实现；只加载一个包，无跨包覆盖 | `FileContentSource.cs`（`ContentPaths`） |
+| B-6 | 只加载一个包，无跨包覆盖；玩家目录只对美术生效（§3.1） | `FileContentSource.cs`（`ContentPaths`） |
 | B-8 | 维汀「魔法盾 +1」只在 `legacy.autoMagicShieldBonus`，加载器不读，未生效 | `characters/heroes.json` |
-| — | 卡图走 `Resources/Art/`，内容包无法自带图片 | `CardArtLibrary` |
 | — | 重跑 `to_content.js` 会覆盖手工增补（§1） | `Tools/godot-legacy-extract/` |
 | — | 类型错误静默取默认值，不报错（§3） | `JsonValue.AsInt/AsBool/AsString` |
 
 仍未见实现的场景机制：部位破坏（镇压重盾臂被击破后的首领变化）、倒地 / 复苏 / 淘汰、魔力激发卷轴开关、
-「掷骰后」响应窗口（幸运改命）。行为层待办见 [behaviour_layer_handoff.md](behaviour_layer_handoff.md) §7。
+「掷骰后」响应窗口（幸运改命）。统一记在 [known_issues.md](known_issues.md)。
 
 ---
 
@@ -628,7 +678,7 @@ art id 是 `Assets/Resources/Art/` 下的相对路径（不带扩展名），由
 | T-7 | 用真实数据开局，且整局能推进到分出胜负而不卡死 |
 
 T-1 只看 `LoadReport.Errors`，§3.4 的脚本警告不会让它变红。
-Unity 外跑 `dotnet test` 的方法与坑见 [behaviour_layer_handoff.md](behaviour_layer_handoff.md) §8；内容包放在仓库外时设 `TCGINFU_CONTENT_DIR`。
+Unity 外跑测试的方法与坑见 [README](../../README.md)「跑测试」；内容包放在仓库外时设 `TCGINFU_CONTENT_DIR`。
 
 **测试场景**：菜单 `TCGinFU → 生成命刻之战场景` → `Assets/Scenes/ClockworkCollapse.unity`，
 按 Play 即为米阔阔 + 维汀 对 克洛诺斯-IV型 + 镇压重盾臂。沙盒窗口的预设列表里也有「命刻之战」。
@@ -646,7 +696,7 @@ Unity 外跑 `dotnet test` 的方法与坑见 [behaviour_layer_handoff.md](behav
 5. **自带卡图 / 立绘**——图丢进包的 `art/` 子目录，JSON 的 `art` / `portrait` 字段填相对路径（不带扩展名），见 §3.3。
 
 Lua 运行在 MoonSharp 硬沙箱里（无 io / os / require），所以玩家**可以**新增行为逻辑，不需要重新编译；
-一个脚本写坏只影响它挂的卡。写法见 [behaviour_layer_handoff.md](behaviour_layer_handoff.md) §3–§4。
+一个脚本写坏只影响它挂的卡。写法见 §3.4。
 
 **做不到的**（§6 的缺口）：
 

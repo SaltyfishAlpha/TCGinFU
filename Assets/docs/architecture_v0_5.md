@@ -2,7 +2,7 @@
 
 > 最后核对：2026-11-22（按工作区代码）
 > 配套规则书：[v0_5.md](v0_5.md) · 裁定表：[rulings_v0_5.md](rulings_v0_5.md)
-> 内容包格式：[data_architecture.md](data_architecture.md) · Lua 行为层：[behaviour_layer_handoff.md](behaviour_layer_handoff.md) · 表现层：[view_architecture.md](view_architecture.md)
+> 内容包格式与 Lua 写法：[data_architecture.md](data_architecture.md) · 表现层：[view_architecture.md](view_architecture.md)
 > 本文只讲**引擎架构和设计取舍的理由**。卡怎么写、JSON 字段、界面操作请看上面几份。
 
 ---
@@ -211,10 +211,21 @@ EffectData {
 | `ModifyCost(CostContext, PlayerCharacter host)` | 常驻：费用校验前改 AP/MP/充能费。**必须无副作用**（UI 显示费用也会调，且牌可能最终没打出） |
 | `ModifyChargeSpend(ChargeSpendContext, PlayerCharacter host)` | 常驻、**全队广播**：充能离开充能区、尚未进弃牌堆时，可置 `Retained` 留在区里 |
 
-`BattleTrigger`：`DamageTaken` / `DamageDealt` / `CritDealt` / `CardPlayed` / `ChargeSpent` / `RoundStart` / `RoundEnd`。
+`BattleTrigger`：`DamageTaken` / `AttackResolved`（一次攻击结算完毕，掉 0 血也广播）/ `DamageDealt` / `CritDealt` / `CardPlayed` / `ChargeSpent` / `RoundStart` / `RoundEnd`。
 
 `CardBehaviour` 是全空默认实现的抽象基类（C# 行为可从它派生；样例实现已移除，目前内容包不用它）。
-**`LuaCardBehaviour`（`TCGinFU.Scripting`，internal）直接实现 `ICardBehaviour`**，把各钩子转给 Lua 函数，内容包里的卡全部走它。Lua API、动词表、看门狗、容错规则见 [behaviour_layer_handoff.md](behaviour_layer_handoff.md)，本文不重复。
+**`LuaCardBehaviour`（`TCGinFU.Scripting`，internal）直接实现 `ICardBehaviour`**，把各钩子转给 Lua 函数，内容包里的卡全部走它。钩子名、动词表与写卡规矩见 [data_architecture.md](data_architecture.md) §3.4。
+
+Lua 宿主（`LuaScriptHost`）的几条取舍——目标是官方卡和玩家 mod 走同一条路径，且一张写坏的 mod 卡不能让游戏进不去：
+
+- **硬沙箱** `CoreModules.Preset_HardSandbox`：没有 `io` / `os` / `debug` / `dofile` / `require`。
+- **手写 API 绑定，不用 `UserData.RegisterType` 反射**：反射绑定在 IL2CPP/AOT 下要靠 link.xml 保活，
+  而且会把 C# 对象的全部公开成员暴露出去（顺着 `engine.State` 能摸到一切），等于没有沙箱。
+- **每次钩子调用异常隔离**：抛错只产出一条 `BehaviourFaulted` 事件，该钩子本次失效，战斗继续。
+- **看门狗** `ScriptWatchdog`：沙箱挡不住 `while true do end`。借 MoonSharp 按指令轮询的
+  `IDebugger.IsPauseRequested()` 在超时后抛 `ScriptRuntimeException`，再走上面的异常隔离。
+  **两档预算**：钩子 100ms、加载 5000ms（加载要编译整个文件，真实的 `miku.lua` 就超过 50ms）。
+  两档都刻意放宽——要拦的是「永不返回」，误杀一张写对的卡比超时难查得多。
 
 「常驻」钩子问的是 `BattleEngine.ActiveBehaviours(host)`——此刻挂在某角色身上、处于生效中的全部行为：持续区的牌、升变期间的升变牌、身上的状态（敌人也有）。来源用 `BehaviourSource`（`Card` / `Continuous` / `Transform` / `Status`）区分。
 
@@ -326,7 +337,7 @@ struct ValueExpr {
 
 **默认仇恨**（§4.2，`BattleState.DefaultAggroTarget`）：前排有人 → 前排；前排全空 → 后排**上一轮造成伤害最高**者。所以 `Combatant` 同时记 `DamageDealtThisRound` 和 `DamageDealtLastRound`，在轮末滚动。
 
-**走位**：`MoveRowAction` 每轮 1 次、1 AP；`GrantFreeMove` 给的免费移动（`PlayerCharacter.FreeMoves`）不受每轮一次的限制，也可以在 `EnemyResponse` 窗口里兑现，轮末清零。效果侧还有 `MoveRow`（定向或切换）和 `SwapRows`（整排互换、保持各自的列）。
+**走位**：`MoveRowAction` 每轮 1 次、1 AP；`GrantFreeMove` 给的免费移动（`PlayerCharacter.FreeMoves`）不受每轮一次的限制，也可以在 `EnemyResponse` 窗口里兑现，轮末清零。效果侧还有 `MoveRow`（定向或切换）和 `SwapRows`（整排互换、保持各自的列）。`SwapRows` 必须原子：逐个切换会让先动的人占掉对排槽位，后动的人被挤到别的列，「正前方」相邻关系就乱了。
 
 **意图索敌**（`IntentTargeting`）：`DefaultSingle` / `FrontRowAoe` / `BackRowAoe` / `AllPlayers` / `DesignatedRowSingle` / `HighestHpSingle`。不锁定目标的意图（`EnemyIntent.LocksTarget` 为假）在**结算时**按此刻站位重新解析（R-24），所以响应窗口里的走位能真的躲开。
 

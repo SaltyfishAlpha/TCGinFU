@@ -1,8 +1,15 @@
 # 行为层交接 · 给下一个 agent
 
-> 配套：规则书 [v0_5.md](v0_5.md) · 引擎架构 [architecture_v0_5.md](architecture_v0_5.md) ·
-> 裁定表 [rulings_v0_5.md](rulings_v0_5.md) · 数据层 [data_architecture.md](data_architecture.md) ·
-> 表现层 [view_architecture.md](view_architecture.md)
+> **已归档（2026-11-25）**：迁移已完成，本文仅作历史参考。仍然有效的内容已搬走：
+> Lua 写法（钩子、动词、`ctx` 字段、硬规矩）→ [data_architecture.md](../data_architecture.md) §3.4；
+> 沙箱、异常隔离、看门狗 → [architecture_v0_5.md](../architecture_v0_5.md) §2.2；
+> 操作约定与费用文案 → [view_architecture.md](../view_architecture.md) §4–§5；
+> 工程坑 → [README](../../../README.md)「跑测试」；未修的缺陷与未实现的规则 → [known_issues.md](../known_issues.md)。
+> 下文的现状、待办与「已发现的不符」均为 2026-11-22 时的记录（如 §5 的 B-1 已修）。
+
+> 配套：规则书 [v0_5.md](../v0_5.md) · 引擎架构 [architecture_v0_5.md](../architecture_v0_5.md) ·
+> 裁定表 [rulings_v0_5.md](../rulings_v0_5.md) · 数据层 [data_architecture.md](../data_architecture.md) ·
+> 表现层 [view_architecture.md](../view_architecture.md)
 >
 > **你的任务**：49 张卡只剩 2 张哑火；11 条敌人意图都已是敌人的牌（见 §1）。
 > **先修 B-2（玩家挑的牌被忽略）**，再做场景机制的剩余部分
@@ -160,7 +167,7 @@ behaviour("<卡的 behaviourId>", {
 - `ctx.cards_played_before`：本次打出**之前**本轮已经打过几张牌。
   「若本轮已打出过**其他**牌」要用它；读角色身上的计数会把这张牌自己算进去。
 - `ctx.charge_spent`：本次打出**付给卡面词条**的充能数（卡面硬费用 + 玩家额外选的那几个）。
-  玩家能选几个由卡面的 `chargeOptions` 声明（见 [data_architecture.md](data_architecture.md) §4.2）。
+  玩家能选几个由卡面的 `chargeOptions` 声明（见 [data_architecture.md](../data_architecture.md) §4.2）。
   拿充能换 MP / 换 AP 是独立动作，**不**计入这里（§5.2 三选一）——所以 `can_play` 要问的是
   「这次打算付几个」（`ctx.charge_spent`），不是「充能区里有几个」（`ctx.caster.charges`）。
 - `ctx.choice(key, 默认值)`：玩家在界面上做的额外选择。键名由卡自己定，和 `CardChoiceCatalog`
@@ -342,7 +349,7 @@ behaviour("<卡的 behaviourId>", {
 
 ## 7. 待办（按优先级）
 
-**最高优先：文档说好了、游戏里不对的真实缺陷**（编号同 [known_issues.md](known_issues.md)，都是小改动）
+**最高优先：文档说好了、游戏里不对的真实缺陷**（编号同 [known_issues.md](../known_issues.md)，都是小改动）
 
 - **B-2 玩家选的牌被忽略**：View 已经把选中的 uid 写进 `Choices`（`card0`…、`card_count`），
   但 `BattleEngine.ChargeFromZone` 只认 `Discard` 取顶 / `HandBottom` 取末位，Lua 也没读。
@@ -365,7 +372,7 @@ behaviour("<卡的 behaviourId>", {
 4. **加载期警告（B-5）已降到 2 条**，就是上面那 2 张哑火卡，等各自的前置做完即可。
    ~~从纯数据卡上删掉 `behaviourId`~~ / ~~让对账对「纯数据卡」不报~~ —— **这两个方向都别走**：
    当初正是把这 21 条当成「纯数据卡的多余声明」整类放过，才让它们半实现的状态藏了这么久
-   （详见 [data_architecture.md](data_architecture.md) 对账表下面那段）。
+   （详见 [data_architecture.md](../data_architecture.md) 对账表下面那段）。
 5. **R-21 要规则设计者拍板**：老数据的 `arcane`（奥术）伤害属性，规则书 §7.4 只有九大属性。
    当前暂时映射成 `Light`（对本场 Boss 行为等价，但语义是错的）。正解可能是新增 `DamageElement.Arcane`。
 6. 小出入：`Enemy.IntentFullyVisible` 只区分「小怪 / 其他」，于是首领显示成「半公开」；
@@ -417,7 +424,7 @@ bash Tools/check-asmdefs.sh
 
 ### 8.2 当前测试基线
 
-测试数量与最近一次运行结果统一记在 [README](../../README.md)（行为层迁移开始前是 175 个）。
+测试数量与最近一次运行结果统一记在 [README](../../../README.md)（行为层迁移开始前是 175 个）。
 跑法：Unity MCP 的 `run_tests`（EditMode）。
 表现层改动也要跑——`BattleSessionTests` 里有依赖费用文案的断言。
 

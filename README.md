@@ -4,11 +4,11 @@
 
 设计上，跑团式的探索、交涉、休整沿用 FU 规则；进入战斗冲突后切换成本项目的卡牌系统，小队协同打牌，
 战斗结束后 HP、MP 与持续状态直接带回跑团。
-**目前只实现了战斗部分**：探索 / 叙事 / 战役层都还没有。
+**目前只实现了战斗部分**，地图探索第一版已写好交接单、待开发（见 [交接单](Assets/docs/map_exploration_handoff.md)）；叙事 / 战役层还没有。
 
 > Unity 6000.3.8f1 · URP · Input System Package
 >
-> 最后核对：2026-11-22
+> 最后核对：2026-11-25
 
 ---
 
@@ -79,39 +79,18 @@
 `[OneTimeTearDown]` 这些没有完全复刻），**以 Unity 里跑出来的为准**。
 **测试数量只在这里维护**，其他文档不再各写一份。
 
-规则书近两天的改动里，角色被动与角色专属牌代码还没跟上，
-见 [`known_issues.md`](Assets/docs/known_issues.md)。
-
 ### 已知问题
 
 全部缺陷、规则书与代码的差距、未实现的规则，统一记在 [`known_issues.md`](Assets/docs/known_issues.md)，**只维护这一份**。
-目前最急的是 B-2（玩家挑的牌被忽略），以及 B-17（两张形态牌的选择没有入口）。
+目前最急的是 B-2（玩家挑的牌被忽略）、B-17（两张形态牌的选择没有入口），以及规则书新加的角色被动 / 专属牌代码还没跟上。
 
 ---
 
 ## 代码结构
 
-```
-Assets/Scripts/
-  Core/           TCGinFU.Core            规则引擎（noEngineReferences）
-  Content/        TCGinFU.Content         内容包加载（Loading/、Json/）（noEngineReferences）
-  Scripting/      TCGinFU.Scripting       Lua 行为层，MoonSharp 只出现在这里（noEngineReferences）
-  Presentation/   TCGinFU.Presentation    BattleSession / ContentScenario：引擎 + 选中状态 + 开局（noEngineReferences）
-  View/           TCGinFU.View            3D 战斗界面
-    Editor/       TCGinFU.View.Editor     场景与布局资产生成
-  Sandbox/        TCGinFU.Sandbox         调试沙盒（IMGUI）
-    Editor/       TCGinFU.Sandbox.Editor  编辑器窗口
-  Tests/EditMode/ TCGinFU.Core.Tests      EditMode 测试
-
-Assets/StreamingAssets/Content/   内容包「命刻之战」
-  pack.json  statuses.json  cards/  characters/  enemies/  decks/  scripts/*.lua
-Assets/Resources/Art/             卡图（Resources 加载）
-Assets/Plugins/MoonSharp/         Lua 解释器
-```
-
-`BattleSession` 是唯一的推进逻辑，正式 UI 和沙盒共用。引擎同步、单线程：需要玩家决策时挂出
-`Pending` 等下一个动作；非法动作原样拒绝、不改状态，所以 UI 可以乐观提交、失败了显示原因。
-状态变更全部产出 `BattleEvent`。
+`Assets/Scripts/` 下按 asmdef 分为 Core（规则引擎）/ Content（内容包加载）/ Scripting（Lua，MoonSharp 只在这里）/
+Presentation（组局）四个 `noEngineReferences` 程序集，加 View（3D 界面）、Sandbox（IMGUI 沙盒）与 EditMode 测试；
+内容包在 `Assets/StreamingAssets/Content/`。程序集边界与目录树见 [引擎架构 §1](Assets/docs/architecture_v0_5.md)。
 
 ---
 
@@ -126,11 +105,10 @@ Assets/Plugins/MoonSharp/         Lua 解释器
 | [`design_backlog.md`](Assets/docs/design_backlog.md) | 设计待办：还没写进规则书的方向、提议、待定问题（含数值基准） | 常驻 |
 | [`known_issues.md`](Assets/docs/known_issues.md) | 已知问题：缺陷、规则书与代码的差距、未实现的规则 | 常驻 |
 | [`architecture_v0_5.md`](Assets/docs/architecture_v0_5.md) | 引擎架构、分层理由 | 当前 |
-| [`data_architecture.md`](Assets/docs/data_architecture.md) | 内容包格式与加载 | 当前 |
+| [`data_architecture.md`](Assets/docs/data_architecture.md) | 内容包格式与加载、Lua 行为脚本写法（钩子、动词） | 当前 |
 | [`view_architecture.md`](Assets/docs/view_architecture.md) | 表现层：3D 桌面、布局数据、交互 | 当前 |
-| [`behaviour_layer_handoff.md`](Assets/docs/behaviour_layer_handoff.md) | Lua 行为层交接：钩子、动词、迁移状态、工程坑 | 当前 |
-| [`ui_todo_handoff.md`](Assets/docs/ui_todo_handoff.md) | UI 待办交接 | 当前 |
-| [`archive/`](Assets/docs/archive/) | 一次性记录：讨论纪要、核对报告、已执行的交接单 | 已归档，仅供查历史 |
+| [`map_exploration_handoff.md`](Assets/docs/map_exploration_handoff.md) | 交接单：地图探索第一版（地图、小队、路标、角色面板、卡组配置） | 待执行，做完归档 |
+| [`archive/`](Assets/docs/archive/) | 一次性记录：讨论纪要、核对报告、已执行的交接单（含行为层、UI 待办两份交接） | 已归档，仅供查历史 |
 
 改规则前先看裁定表。
 
@@ -169,6 +147,12 @@ Unity 的 asmdef 引用不是），按依赖顺序逐个编译、只引用显式
   各自备了一份 `internal` shim（跨程序集看不见别人的 internal）——别删。
 - **NUnit 版本**：Unity 自带 NUnit 3.5，**没有 `Assert.Multiple`**（3.6 才加）。
   用 NuGet 新版在 Unity 外验证会编译通过、到 Unity 里报 `CS0117`。
+- **改 View 也要跑测试**：`BattleSessionTests` 里有依赖费用文案的断言。
+- **测血量别跨轮末**：自动双盾轮末清零、轮始刷新，跨轮 diff `Hp` / `Shields` 会被刷新骗到，
+  直接断言 `BattleEvent` 里的 `DamageResult` 分解。
+- **新增序列化字段在旧资产上是零值**：Unity 给已存在的资产补字段用类型零值，不是 C# 字段初始值。
+  写 `Normalize()` 自愈（如 `BattleLayoutAsset`），或别依赖会静默默认错的 bool。
+- **Python 在 conda 里**：本机 `python` 不在 PATH，用 `D:\miniconda3\python.exe`；打印中文要设 `PYTHONIOENCODING=utf-8`。
 
 ---
 
